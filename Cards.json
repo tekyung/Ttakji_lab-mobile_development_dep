@@ -1,0 +1,72 @@
+[
+    {
+        "id": "card_001",
+        "name": "화염구",
+        "cost": 2,
+        "description": "적에게 5의 데미지를 줍니다.",
+        "effects": [
+            {
+                "type": "Damage",
+                "params": {
+                    "target": "Opponent",
+                    "amount": 5
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_002",
+        "name": "지혜의 축복",
+        "cost": 3,
+        "description": "카드 2장을 드로우하고, 체력을 3 회복합니다.",
+        "effects": [
+            {
+                "type": "DrawCard",
+                "params": {
+                    "count": 2
+                }
+            },
+            {
+                "type": "Heal",
+                "params": {
+                    "target": "Self",
+                    "amount": 3
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_003",
+        "name": "역전의 치유",
+        "cost": 4,
+        "description": "체력을 5 회복합니다. 만약 내 체력이 상대보다 낮다면 3만큼 더 회복합니다.",
+        "effects": [
+            {
+                "type": "Heal",
+                "params": {
+                    "target": "Self",
+                    "amount": 5
+                }
+            },
+            {
+                "type": "Conditional",
+                "params": {
+                    "condition": {
+                        "type": "CompareHealth",
+                        "params": {
+                            "operator": "LowerThan",
+                            "target": "Opponent"
+                        }
+                    },
+                    "successEffect": {
+                        "type": "Heal",
+                        "params": {
+                            "target": "Self",
+                            "amount": 3
+                        }
+                    }
+                }
+            }
+        ]
+    }
+]
