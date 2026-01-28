@@ -1,0 +1,109 @@
+[
+    {
+        "id": "card_001",
+        "name": "파이어 볼",
+        "cost": 3,
+        "description": "적에게 5의 데미지를 줍니다.",
+        "effects": [
+            {
+                "type": "Damage",
+                "params": {
+                    "target": "Opponent",
+                    "amount": 5
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_002",
+        "name": "지혜의 축복",
+        "cost": 3,
+        "description": "카드 1장을 드로우하고, 체력을 2 회복합니다.",
+        "effects": [
+            {
+                "type": "DrawCard",
+                "params": {
+                    "count": 1
+                }
+            },
+            {
+                "type": "Heal",
+                "params": {
+                    "target": "Self",
+                    "amount": 2
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_003",
+        "name": "일발역전",
+        "cost": 4,
+        "description": "체력을 5 회복합니다. 만약 내 체력이 상대보다 낮다면 3만큼 더 회복합니다.",
+        "effects": [
+            {
+                "type": "Conditional",
+                "params": {
+                    "condition": {
+                        "type": "CompareHealth",
+                        "params": {
+                            "operator": "LowerThan",
+                            "target": "Opponent"
+                        }
+                    },
+                    "successEffect": {
+                        "type": "Heal",
+                        "params": {
+                            "target": "Self",
+                            "amount": 3
+                        }
+                    }
+                }
+            },
+            {
+                "type": "Heal",
+                "params": {
+                    "target": "Self",
+                    "amount": 5
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_004",
+        "name": "싸이크론",
+        "cost": 4,
+        "description": "적에게 6의 데미지를 줍니다.",
+        "effects": [
+            {
+                "type": "Damage",
+                "params": {
+                    "target": "Opponent",
+                    "amount": 6
+                }
+            }
+        ]
+    },
+    {
+        "id": "card_005",
+        "name": "낙석",
+        "cost": 2,
+        "description": "양 플레이어는 3의 데미지를 받습니다.",
+        "effects": [
+            {
+                "type": "Damage",
+                "params": {
+                    "target": "Self",
+                    "amount": 3
+                }
+            },
+            {
+                "type": "Damage",
+                "params": {
+                    "target": "Opponent",
+                    "amount": 3
+                }
+            }
+        ]
+    }
+]
