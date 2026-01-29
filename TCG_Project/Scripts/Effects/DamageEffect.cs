@@ -1,27 +1,33 @@
-using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Systems;
 
-// 1. 데미지 주는 효과
-namespace TCG_Project.Scripts.Effects // 이 부분이 필수입니다!
+namespace TCG_Project.Scripts.Effects
 {
     public class DamageEffect : ICardEffect
     {
-        private int amount;
-        private string targetType; // "Self" or "Opponent"
+        private object amountParam;
+        private object targetParam; // [변경] string -> object (유연성)
 
         public void Initialize(Dictionary<string, object> parameters)
         {
-            // JSON 파싱 (안전한 타입 변환 로직 필요, 여기선 간략화)
-            amount = Convert.ToInt32(parameters["amount"]);
-            targetType = parameters["target"].ToString();
+            amountParam = parameters["amount"];
+            // 타겟 파라미터가 없으면 기본값 'Opponent' (안전장치)
+            targetParam = parameters.ContainsKey("target") ? parameters["target"] : "Opponent";
         }
 
         public void Execute(GameContext context)
         {
-            Player target = (targetType == "Opponent") ? context.Opponent : context.Player;
-            target.TakeDamage(amount);
+            int finalAmount = FormulaEvaluator.Evaluate(amountParam, context);
+
+            // [핵심] 타겟 판별기를 통해 리스트를 받아옴 (1명 또는 다수)
+            List<Player> targets = TargetEvaluator.Evaluate(targetParam, context);
+
+            foreach (Player target in targets)
+            {
+                target.TakeDamage(finalAmount);
+            }
         }
     }
 }

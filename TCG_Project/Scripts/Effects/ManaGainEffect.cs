@@ -5,7 +5,7 @@ using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
 {
-    public class HealEffect : ICardEffect
+    public class ManaGainEffect : ICardEffect
     {
         private object amountParam;
         private object targetParam;
@@ -23,7 +23,7 @@ namespace TCG_Project.Scripts.Effects
 
             foreach (Player target in targets)
             {
-                target.Heal(finalAmount);
+                target.ManaGain(finalAmount);
             }
         }
     }

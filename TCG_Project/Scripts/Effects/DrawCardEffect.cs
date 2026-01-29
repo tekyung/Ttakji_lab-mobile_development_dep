@@ -1,25 +1,29 @@
-using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Systems;
 
-namespace TCG_Project.Scripts.Effects // 이 부분이 필수입니다!
+namespace TCG_Project.Scripts.Effects
 {
-    // 2. 카드를 드로우하는 효과
     public class DrawCardEffect : ICardEffect
     {
-        private int count;
+        private object countParam;
+        private object targetParam;
 
         public void Initialize(Dictionary<string, object> parameters)
         {
-            count = Convert.ToInt32(parameters["count"]);
+            countParam = parameters["count"];
+            targetParam = parameters.ContainsKey("target") ? parameters["target"] : "Self";
         }
 
         public void Execute(GameContext context)
         {
-            for (int i = 0; i < count; i++)
+            int count = FormulaEvaluator.Evaluate(countParam, context);
+            List<Player> targets = TargetEvaluator.Evaluate(targetParam, context);
+
+            foreach (Player target in targets)
             {
-                context.Player.Draw();
+               target.DrawCard(count);
             }
         }
     }

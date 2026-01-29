@@ -5,7 +5,7 @@ using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
 {
-    public class HealEffect : ICardEffect
+    public class HandDropEffect : ICardEffect
     {
         private object amountParam;
         private object targetParam;
@@ -18,12 +18,14 @@ namespace TCG_Project.Scripts.Effects
 
         public void Execute(GameContext context)
         {
-            int finalAmount = FormulaEvaluator.Evaluate(amountParam, context);
+            int amount = FormulaEvaluator.Evaluate(amountParam, context);
             List<Player> targets = TargetEvaluator.Evaluate(targetParam, context);
 
             foreach (Player target in targets)
             {
-                target.Heal(finalAmount);
+                // 랜덤하게 버리거나 앞장부터 버리는 로직 (여기선 단순화하여 0번 인덱스부터)
+                target.DropHand(amount);
+                
             }
         }
     }

@@ -1,36 +1,54 @@
 using System;
 using System.Collections.Generic;
-using Newtonsoft.Json.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Systems; // FormulaEvaluator 사용
 
-namespace TCG_Project.Scripts.Conditions // 이 부분이 필수입니다!
+namespace TCG_Project.Scripts.Conditions
 {
-    //  조건 비교 효과 예시: 플레이어 체력 비교
     public class CompareHealthCondition : ICardCondition
     {
-        private string comparisonOperator; // "LowerThan", "HigherThan"
-        private string targetType;         // "Opponent"
+        private string targetType; // "Self" or "Opponent"
+        private string op;         // "Greater", "Less", "Equal"...
+        private object valueParam; // [변경] int -> object (수식 문자열 지원)
 
         public void Initialize(Dictionary<string, object> parameters)
         {
-            comparisonOperator = parameters["operator"].ToString();
             targetType = parameters["target"].ToString();
+            op = parameters["operator"].ToString();
+
+            // 값이 없으면 0으로 처리, 있으면 저장 (문자열일 수도 있음)
+            if (parameters.ContainsKey("value"))
+                valueParam = parameters["value"];
+            else
+                valueParam = 0;
         }
 
         public bool IsMet(GameContext context)
         {
-            int myHp = context.Player.Health;
-            int targetHp = (targetType == "Opponent") ? context.Opponent.Health : context.Player.Health;
+            // 1. 비교 대상(주체) 가져오기
+            List<Player> targets = TargetEvaluator.Evaluate(targetType, context);
+            if (targets.Count == 0) return false;
+            Player subject = targets[0]; // 보통 단일 타겟 비교
 
-            switch (comparisonOperator)
+            int subjectHp = subject.Health;
+
+            // 2. [핵심] 비교할 값 계산 (고정값 OR 수식)
+            // 예: "value": 10  -> 10
+            // 예: "value": "opponent.Health" -> 상대 체력값
+            int compareValue = FormulaEvaluator.Evaluate(valueParam, context);
+
+            // 3. 비교 연산
+            switch (op)
             {
-                case "LowerThan": return myHp < targetHp;
-                case "HigherThan": return myHp > targetHp;
-                case "Equal": return myHp == targetHp;
+                case "Greater": return subjectHp > compareValue;
+                case "GreaterOrEqual": return subjectHp >= compareValue;
+                case "Less": return subjectHp < compareValue;
+                case "LessOrEqual": return subjectHp <= compareValue;
+                case "Equal": return subjectHp == compareValue;
+                case "NotEqual": return subjectHp != compareValue;
                 default: return false;
             }
         }
     }
 }
-

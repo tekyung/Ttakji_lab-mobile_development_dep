@@ -1,0 +1,9 @@
+[
+    { "id": "dmg", "type": "Damage", "default": 1, "params": {"amount": 1} },
+    { "id": "heal", "type": "Heal", "default": 1, "params": {"amount": 1} },
+    { "id": "managain", "type": "ManaGain", "default": 1, "params": {"amount": 1} },
+    { "id": "draw", "type": "DrawCard", "default": 1, "params": { "count": 1 } },
+    { "id": "discard", "type": "HandDrop", "default": 1, "params": {"amount": 1} },
+    { "id": "draw_2", "type": "DrawCard", "default": 1, "params": { "count": 2 } },
+    { "id": "cond_branch", "type": "Conditional", "default": 1, "params": {} }
+]

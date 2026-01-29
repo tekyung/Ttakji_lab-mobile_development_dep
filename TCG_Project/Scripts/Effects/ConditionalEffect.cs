@@ -1,9 +1,8 @@
-using System;
-using Newtonsoft.Json.Linq; // JObject 사용
-using TCG_Project.Scripts.Systems; // CardFactory 접근
 using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -11,30 +10,50 @@ namespace TCG_Project.Scripts.Effects
     {
         private ICardCondition condition;
         private ICardEffect successEffect;
+        private ICardEffect failEffect; // [신규] 실패 시 실행할 효과
 
         public void Initialize(Dictionary<string, object> parameters)
         {
-            // Dictionary -> JObject로 다시 변환 (중첩된 구조를 쉽게 다루기 위함)
             var paramJson = JObject.FromObject(parameters);
 
-            // 1. 조건 생성 (CardFactory 위임)
-            var condData = (JObject)paramJson["condition"];
-            string condType = condData["type"].ToString();
-            var condParams = (JObject)condData["params"];
+            // 1. 조건 생성
+            if (paramJson["condition"] != null)
+            {
+                var condData = (JObject)paramJson["condition"];
+                // 조건 자체가 문자열 수식인 경우와 객체인 경우 구분 가능하지만, 
+                // 현재 구조에서는 ConditionEvaluator가 문자열을 처리하므로 파라미터 구조에 맞춤
+                // (여기서는 기존 ConditionFactory 로직을 따름)
+                string type = condData["type"].ToString();
+                JObject p = (JObject)condData["params"];
+                this.condition = EffectFactory.CreateCondition(type, p);
+            }
 
-            this.condition = CardFactory.CreateCondition(condType, condParams);
+            // 2. 성공 효과
+            if (paramJson["successEffectId"] != null)
+            {
+                this.successEffect = EffectFactory.CreateEffect(paramJson["successEffectId"].ToString());
+            }
 
-            // 2. 효과 생성 (CardFactory 위임 -> 여기서 재귀 발생 가능)
-            var effectData = (JObject)paramJson["successEffect"];
-            // Factory의 헬퍼 메서드 재사용
-            this.successEffect = CardFactory.CreateEffectFromJObject(effectData);
+            // 3. [신규] 실패 효과 (Else)
+            if (paramJson["failEffectId"] != null)
+            {
+                this.failEffect = EffectFactory.CreateEffect(paramJson["failEffectId"].ToString());
+            }
         }
 
         public void Execute(GameContext context)
         {
-            if (condition != null && condition.IsMet(context))
+            if (condition != null)
             {
-                successEffect?.Execute(context);
+                if (condition.IsMet(context))
+                {
+                    successEffect?.Execute(context);
+                }
+                else
+                {
+                    // 조건 불만족 시 실행
+                    failEffect?.Execute(context);
+                }
             }
         }
     }
