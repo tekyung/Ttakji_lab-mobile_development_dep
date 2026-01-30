@@ -1,7 +1,7 @@
 [
   {
     "id": 11001,
-    "pirze": 1,
+    "prize": 1,
     "arts_cost": 1,
     "power": 300,
     "on_play_condition_type": "None",
