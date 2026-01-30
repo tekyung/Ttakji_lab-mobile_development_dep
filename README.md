@@ -18,3 +18,5 @@ Targeting 시스템 구현(N개의 데이터베이스에서 M개 지정)
 MoveCardEffect(카드 이동 효과)으로 각종 카드 이동 효과 구현 및 대체
 
 ModifyCardEffect(카드 수정 효과)으로 각종 카드 스탯 수정 효과 구현
+
+현재 과도기로 사용하지 않는 Effect.cs 들이 혼재되어 있음. 추후 정리 필요.
