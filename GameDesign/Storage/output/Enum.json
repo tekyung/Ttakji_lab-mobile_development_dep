@@ -1,0 +1,57 @@
+[
+  {
+    "enum_category": "ECardType",
+    "enum_value": "None",
+    "enum_index": 0
+  },
+  {
+    "enum_category": "ECardType",
+    "enum_value": "Unit",
+    "enum_index": 1
+  },
+  {
+    "enum_category": "ECardType",
+    "enum_value": "Skill",
+    "enum_index": 2
+  },
+  {
+    "enum_category": "ECardCondition",
+    "enum_value": "None",
+    "enum_index": 0
+  },
+  {
+    "enum_category": "ECardCondition",
+    "enum_value": "EnemyUnitExist",
+    "enum_index": 1
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "None",
+    "enum_index": 0
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OppentUnit",
+    "enum_index": 1
+  },
+  {
+    "enum_category": "ECardEffectTargetCondition",
+    "enum_value": "None",
+    "enum_index": 0
+  },
+  {
+    "enum_category": "ECardEffectTargetCondition",
+    "enum_value": "PowerUnderOrEqual",
+    "enum_index": 1
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "None",
+    "enum_index": 0
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "KillUnit",
+    "enum_index": 1
+  }
+]

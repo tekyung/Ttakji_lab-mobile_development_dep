@@ -1,0 +1,42 @@
+[
+  {
+    "Name": "first_player_first_turn_having_energy",
+    "Value": "0"
+  },
+  {
+    "Name": "second_player_first_turn_having_energy",
+    "Value": "1"
+  },
+  {
+    "Name": "basic_having_envergy",
+    "Value": "3"
+  },
+  {
+    "Name": "prize_count_to_win",
+    "Value": "7"
+  },
+  {
+    "Name": "max_unit_size_to_field",
+    "Value": "3"
+  },
+  {
+    "Name": "min_deck_card_count",
+    "Value": "20"
+  },
+  {
+    "Name": "max_deck_card_count",
+    "Value": "20"
+  },
+  {
+    "Name": "max_hand_size",
+    "Value": "20"
+  },
+  {
+    "Name": "room_session_time",
+    "Value": "60000"
+  },
+  {
+    "Name": "choose_wait_time",
+    "Value": "2000"
+  }
+]

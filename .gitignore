@@ -2,3 +2,5 @@
 bin/
 obj/
 *.user
+GameDesign/SubTool/ExcelToJsonConverter/dev/build/ExcelToJsonConverter/localpycs
+GameDesign/SubTool/ExcelToJsonConverter/dev/__pycache__

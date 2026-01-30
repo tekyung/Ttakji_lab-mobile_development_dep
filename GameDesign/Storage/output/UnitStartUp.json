@@ -1,0 +1,11 @@
+[
+  {
+    "id": 9999,
+    "use_count_per_turn": 1,
+    "desc": "카드의 스킬 설명 텍스트",
+    "card_condition_type": "EnemyUnitExist",
+    "card_condition_value1": 1,
+    "card_condition_value2": 1,
+    "card_effect_id": 9999
+  }
+]

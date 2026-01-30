@@ -1,0 +1,16 @@
+[
+  {
+    "id": 11001,
+    "name": "슬라임",
+    "type": "Unit",
+    "max_deck_count": 2,
+    "skin_res": "asset/m1_tmp/card_img/u_slime.png"
+  },
+  {
+    "id": 21001,
+    "name": "파이어볼",
+    "type": "Skill",
+    "max_deck_count": 2,
+    "skin_res": "asset/m1_tmp/card_img/s_fire_ball.png"
+  }
+]
