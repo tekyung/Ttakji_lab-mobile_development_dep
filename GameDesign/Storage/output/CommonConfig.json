@@ -8,7 +8,7 @@
     "Value": "1"
   },
   {
-    "Name": "basic_having_envergy",
+    "Name": "basic_having_energy",
     "Value": "3"
   },
   {
@@ -16,7 +16,7 @@
     "Value": "7"
   },
   {
-    "Name": "max_unit_size_to_field",
+    "Name": "max_field_unit_count",
     "Value": "3"
   },
   {
