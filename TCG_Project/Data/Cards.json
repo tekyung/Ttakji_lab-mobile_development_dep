@@ -1,0 +1,210 @@
+[
+    {
+        "id": "c_001",
+        "name": "화염구",
+        "cost": 3,
+        "description": "적에게 5 데미지",
+        "effects": [
+            {
+                "id": "dmg",
+                "args": {
+                    "target": "Opponent",
+                    "amount": 5
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_002",
+        "name": "지혜의 축복",
+        "cost": 3,
+        "description": "1장 드로우하고 3 회복",
+        "playCondition": "activePlayer.Deck.Count > 0",
+        "effects": [
+            {
+                "id": "draw",
+                "args": {
+                    "target": "ActivePlayer",
+                    "count": 1
+                }
+            },
+            {
+                "id": "heal",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": 3
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_003",
+        "name": "분노의 일격",
+        "cost": 4,
+        "description": "내 잃은 체력만큼 적에게 데미지",
+        "playCondition": "activePlayer.Health < startingHealth",
+        "effects": [
+            {
+                "id": "dmg",
+                "args": {
+                    "target": "Opponent",
+                    "amount": "startingHealth - activePlayer.Health"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_004",
+        "name": "비전 마력",
+        "cost": 5,
+        "description": "이 카드를 포함한 내 패 장수 x 2 만큼 적에게 데미지",
+        "playCondition": "activePlayer.Hand.Count > 1",
+        "effects": [
+            {
+                "id": "dmg",
+                "args": {
+                    "target": "Opponent",
+                    "amount": "activePlayer.Hand.CountInclusive * 2"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_005",
+        "name": "시간의 흐름",
+        "cost": 6,
+        "description": "현재 턴 수만큼 체력 회복",
+        "effects": [
+            {
+                "id": "heal",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": "turnCount"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_006",
+        "name": "도박수",
+        "cost": 2,
+        "description": "상대 패가 나보다(이 카드 포함) 많으면 3장, 아니면 1장 드로우",
+        "effects": [
+            {
+                "id": "draw",
+                "args": {
+                    "count": {
+                        "type": "Select",
+                        "condition": "opponent.Hand.Count > activePlayer.Hand.CountInclusive",
+                        "trueValue": 3,
+                        "falseValue": 1
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_complex_math",
+        "name": "수학자의 분노",
+        "cost": 5,
+        "description": "(내 패 + 1) * 2 만큼 데미지를 줍니다.",
+        "playCondition": null,
+        "effects": [
+            {
+                "id": "dmg",
+                "args": {
+                    "amount": "(activePlayer.Hand.Count + 1) * 2"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_006_ex",
+        "name": "도박수 (Action)",
+        "cost": 2,
+        "description": "상대 패가 나보다(이 카드 포함) 많으면 2장 드로우, 적으면 패를 1장 버림",
+        "effects": [
+            {
+                "id": "cond_branch",
+                "args": {
+                    "condition": {
+                        "type": "HandCount",
+                        "params": {
+                            "target": "Opponent",
+                            "operator": "Greater",
+                            "value": "activePlayer.Hand.CountInclusive"
+                        }
+                    },
+                    "successEffectId": "draw_2",
+                    "failEffectId": "discard"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_016",
+        "name": "기적의 드로우",
+        "cost": 2,
+        "description": "이 카드를 제외한 자신 패가 상대 패의 절반 이하일 경우 3장을 뽑습니다.",
+        "playCondition": "activePlayer.Hand.Count == opponent.Hand.Count * 0.5 || activePlayer.Hand.Count < opponent.Hand.Count * 0.5",
+        "effects": [
+            {
+                "id": "draw",
+                "args": { "count": 3 }
+            }
+        ]
+    },
+    {
+        "id": "c_self_damage",
+        "name": "피의 대가",
+        "cost": 0,
+        "description": "3 데미지를 받고 마나를 4 회복합니다.",
+        "effects": [
+            {
+                "id": "dmg",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": 3
+                }
+            },
+            {
+                "id": "managain",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": 4
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_heal_opponent",
+        "name": "자비로운 손길",
+        "cost": 2,
+        "description": "상대 LP를 3 회복시킵니다. (왜?)",
+        "effects": [
+            {
+                "id": "heal",
+                "args": {
+                    "target": "Opponent",
+                    "amount": 5
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_global_draw",
+        "name": "축제",
+        "cost": 3,
+        "description": "모든 플레이어 카드를 1장 뽑습니다.",
+        "playCondition": "activePlayer.Deck.Count > 1 && opponent.Deck.Count > 1",
+        "effects": [
+            {
+                "id": "draw",
+                "args": {
+                    "target": "All",
+                    "count": 2
+                }
+            }
+        ]
+    }
+]

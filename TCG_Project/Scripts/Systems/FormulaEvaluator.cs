@@ -1,0 +1,93 @@
+using System;
+using System.Data;
+using Newtonsoft.Json.Linq; // JObject 사용 필수
+using TCG_Project.Scripts.Core;
+
+namespace TCG_Project.Scripts.Systems
+{
+    public static class FormulaEvaluator
+    {
+        public static int Evaluate(object value, GameContext context)
+        {
+            // 1. 이미 숫자면 반환
+            if (value is int || value is long || value is double)
+                return Convert.ToInt32(value);
+
+            // 2. Selector 객체 처리 ({ "type": "Select", ... })
+            if (value is JObject obj)
+            {
+                if (obj["type"]?.ToString() == "Select")
+                {
+                    // 조건 확인
+                    string condition = obj["condition"].ToString();
+                    bool isTrue = ConditionEvaluator.Evaluate(condition, context);
+
+                    // 조건에 따라 trueValue 또는 falseValue 선택
+                    var selectedValue = isTrue ? obj["trueValue"] : obj["falseValue"];
+
+                    // 선택된 값이 또 수식일 수 있으므로 재귀 호출
+                    return Evaluate(selectedValue, context);
+                }
+            }
+
+            // 3. 문자열 수식 처리 (기존 로직)
+            string formula = value.ToString();
+            formula = ReplaceVariables(formula, context);
+
+            try
+            {
+                DataTable table = new DataTable();
+                var result = table.Compute(formula, "");
+                return Convert.ToInt32(result);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"[Error] 수식 계산 실패: {formula} / {e.Message}");
+                return 0;
+            }
+        }
+
+        private static string ReplaceVariables(string formula, GameContext context)
+        {
+            Player p = context.ActivePlayer;
+            Player opp = context.GetOpponent(p);
+
+            // [규칙] 더 긴 문자열을 먼저 치환해야 부분 일치 오류를 막을 수 있습니다.
+            // 예: "Hand.Count"를 먼저 치환하면 "Hand.CountInclusive"가 "5Inclusive"가 되어버림!
+            // 1. Inclusive (내고 있는 카드 포함) 변수 계산 및 치환
+            int myHandInc = p.Hand.Count + (p.PlayingCard != null ? 1 : 0);
+            formula = formula.Replace("activePlayer.Hand.CountInclusive", myHandInc.ToString());
+
+            int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
+            formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
+
+            // [Turn]
+            formula = formula.Replace("turnCount", Program.turnCount.ToString());
+
+            // [Active Player]
+            formula = formula.Replace("activePlayer.Health", p.Health.ToString());
+            formula = formula.Replace("activePlayer.Mana", p.Mana.ToString());
+            formula = formula.Replace("activePlayer.Hand.Count", p.Hand.Count.ToString());
+            formula = formula.Replace("activePlayer.Graveyard.Count", p.Graveyard.Count.ToString());
+            formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
+
+            // [Opponent]
+            formula = formula.Replace("opponent.Health", opp.Health.ToString());
+            formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
+            formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
+            formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
+            formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
+
+            // [Rules]
+            formula = formula.Replace("maxHandSize", GameRules.MaxHandSize.ToString());
+            formula = formula.Replace("manaGainPerTurn", GameRules.ManaGainPerTurn.ToString());
+            formula = formula.Replace("drawPerTurn", GameRules.DrawPerTurn.ToString());
+            formula = formula.Replace("startingHealth", GameRules.StartingHealth.ToString());
+            formula = formula.Replace("startingMana", GameRules.StartingMana.ToString());
+            formula = formula.Replace("maxMana", GameRules.MaxMana.ToString());
+
+            // 필요하다면 더 많은 변수 추가 가능
+            return formula;
+        }
+    }
+}
