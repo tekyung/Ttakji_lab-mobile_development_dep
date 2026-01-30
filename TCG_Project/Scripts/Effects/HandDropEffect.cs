@@ -24,7 +24,7 @@ namespace TCG_Project.Scripts.Effects
             foreach (Player target in targets)
             {
                 // 랜덤하게 버리거나 앞장부터 버리는 로직 (여기선 단순화하여 0번 인덱스부터)
-                target.DropHand(amount);
+                // target.DropHand(amount);
                 
             }
         }

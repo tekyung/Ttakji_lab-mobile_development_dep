@@ -8,7 +8,7 @@
             {
                 "id": "dmg",
                 "args": {
-                    "target": "Opponent",
+                    "target": "opponent",
                     "amount": 5
                 }
             }
@@ -18,7 +18,7 @@
         "id": "c_002",
         "name": "지혜의 축복",
         "cost": 3,
-        "description": "1장 드로우하고 3 회복",
+        "description": "1장 드로우하고 2 회복",
         "playCondition": "activePlayer.Deck.Count > 0",
         "effects": [
             {
@@ -32,7 +32,7 @@
                 "id": "heal",
                 "args": {
                     "target": "ActivePlayer",
-                    "amount": 3
+                    "amount": 2
                 }
             }
         ]
@@ -41,14 +41,14 @@
         "id": "c_003",
         "name": "분노의 일격",
         "cost": 4,
-        "description": "내 잃은 체력만큼 적에게 데미지",
+        "description": "내 잃은 체력의 절반만큼 적에게 데미지",
         "playCondition": "activePlayer.Health < startingHealth",
         "effects": [
             {
                 "id": "dmg",
                 "args": {
                     "target": "Opponent",
-                    "amount": "startingHealth - activePlayer.Health"
+                    "amount": "(startingHealth - activePlayer.Health)/2"
                 }
             }
         ]
@@ -58,7 +58,6 @@
         "name": "비전 마력",
         "cost": 5,
         "description": "이 카드를 포함한 내 패 장수 x 2 만큼 적에게 데미지",
-        "playCondition": "activePlayer.Hand.Count > 1",
         "effects": [
             {
                 "id": "dmg",
@@ -72,7 +71,7 @@
     {
         "id": "c_005",
         "name": "시간의 흐름",
-        "cost": 6,
+        "cost": 5,
         "description": "현재 턴 수만큼 체력 회복",
         "effects": [
             {
@@ -108,7 +107,6 @@
         "name": "수학자의 분노",
         "cost": 5,
         "description": "(내 패 + 1) * 2 만큼 데미지를 줍니다.",
-        "playCondition": null,
         "effects": [
             {
                 "id": "dmg",
@@ -123,6 +121,7 @@
         "name": "도박수 (Action)",
         "cost": 2,
         "description": "상대 패가 나보다(이 카드 포함) 많으면 2장 드로우, 적으면 패를 1장 버림",
+        "playCondition": "activePlayer.Hand.Count >= 2",
         "effects": [
             {
                 "id": "cond_branch",
@@ -130,7 +129,7 @@
                     "condition": {
                         "type": "HandCount",
                         "params": {
-                            "target": "Opponent",
+                            "target": "opponent",
                             "operator": "Greater",
                             "value": "activePlayer.Hand.CountInclusive"
                         }
@@ -144,7 +143,7 @@
     {
         "id": "c_016",
         "name": "기적의 드로우",
-        "cost": 2,
+        "cost": 4,
         "description": "이 카드를 제외한 자신 패가 상대 패의 절반 이하일 경우 3장을 뽑습니다.",
         "playCondition": "activePlayer.Hand.Count == opponent.Hand.Count * 0.5 || activePlayer.Hand.Count < opponent.Hand.Count * 0.5",
         "effects": [
@@ -158,7 +157,7 @@
         "id": "c_self_damage",
         "name": "피의 대가",
         "cost": 0,
-        "description": "3 데미지를 받고 마나를 4 회복합니다.",
+        "description": "3 데미지를 받고 마나를 6 회복합니다.",
         "effects": [
             {
                 "id": "dmg",
@@ -171,7 +170,7 @@
                 "id": "managain",
                 "args": {
                     "target": "ActivePlayer",
-                    "amount": 4
+                    "amount": 6
                 }
             }
         ]
@@ -185,8 +184,8 @@
             {
                 "id": "heal",
                 "args": {
-                    "target": "Opponent",
-                    "amount": 5
+                    "target": "opponent",
+                    "amount": 3
                 }
             }
         ]
@@ -195,15 +194,109 @@
         "id": "c_global_draw",
         "name": "축제",
         "cost": 3,
-        "description": "모든 플레이어 카드를 1장 뽑습니다.",
+        "description": "모든 플레이어는 카드를 1장 뽑습니다.",
         "playCondition": "activePlayer.Deck.Count > 1 && opponent.Deck.Count > 1",
         "effects": [
             {
                 "id": "draw",
                 "args": {
                     "target": "All",
-                    "count": 2
+                    "count": 1
                 }
+            }
+        ]
+    },
+    {
+        "id": "c_GameSet",
+        "name": "시시한 게임",
+        "cost": 4,
+        "description": "서로의 패의 카드를 전부 묘지로 버립니다.",
+        "playCondition": "activePlayer.Hand.Count + opponent.Hand.Count > 1",
+        "effects": [
+            {
+                "id": "discard",
+                "args": {
+                    "target": "activePlayer",
+                    "count": "activePlayer.Hand.Count"
+                }
+            },
+            {
+                "id": "discard",
+                "args": {
+                    "srcTarget": "Opponent",
+                    "destTarget": "Opponent",
+                    "count": "opponent.Hand.Count"
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_snipe",
+        "name": "저격",
+        "cost": 2,
+        "description": "상대 패의 카드 1장을 골라 파괴합니다.",
+        "playCondition": "opponent.Hand.Count > 0",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Hand",
+                    "dest": "Graveyard",
+                    "target": {
+                        "controller": "opponent",
+                        "zones": [ "Hand" ],
+                        "mode": "Manual", // <--- 직접 선택, 봇은 랜덤
+                        "count": 1
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_discount",
+        "name": "마력 축적",
+        "cost": 1,
+        "description": "내 패에 있는 모든 카드의 코스트를 1 줄입니다.",
+        "playCondition": "activePlayer.Hand.Count >= 2",
+        "effects": [
+            {
+                "type": "ModifyStat",
+                "params": {
+                    "stat": "Cost",
+                    "amount": -1,
+                    "target": {
+                        "controller": "Self",
+                        "zones": [ "Hand" ],
+                        //"filter": "target.Cost >= 4",
+                        "mode": "All"
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_replaceHand",
+        "name": "새로운 시작",
+        "cost": 3,
+        "description": "내 패를 2장 버리고 같은 수만큼 뽑습니다.",
+        "playCondition": "activePlayer.Hand.Count >= 3",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Hand",
+                    "dest": "Graveyard",
+                    "target": {
+                        "controller": "Self",
+                        "zones": [ "Hand" ],
+                        "mode": "Manual",
+                        "count": 2
+                    }
+                }
+            },
+            {
+                "id": "draw",
+                "args": { "count": 2 }
             }
         ]
     }

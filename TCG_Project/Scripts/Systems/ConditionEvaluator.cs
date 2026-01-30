@@ -12,7 +12,7 @@ namespace TCG_Project.Scripts.Systems
                 return true;
 
             // 1. 변수 치환
-            string parsedFormula = ReplaceVariables(conditionFormula, context);
+            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context);
 
             // 2. C# 스타일 연산자를 DataTable 문법으로 변환
             parsedFormula = parsedFormula.Replace("&&", " AND ");
@@ -76,6 +76,59 @@ namespace TCG_Project.Scripts.Systems
             formula = formula.Replace("maxMana", GameRules.MaxMana.ToString());
 
             return formula;
+        }
+
+        // [신규] 특정 타겟(Target)을 기준으로 조건 검사
+        public static bool EvaluateTarget(Target target, string condition, GameContext context)
+        {
+            if (string.IsNullOrWhiteSpace(condition) || condition.Trim().ToLower() == "true")
+                return true;
+
+            string parsed = condition;
+
+            // 1. 타겟 내부 변수 치환
+            if (target.Type == TargetType.Card)
+            {
+                Card c = target.CardVal;
+                parsed = parsed.Replace("target.Cost", c.Cost.ToString());
+                parsed = parsed.Replace("target.Name", $"'{c.Name}'");
+
+                // [요청 기능] 효과 타입 검사 (예: target.HasEffect('Damage'))
+                // 문자열 파싱으로 처리: 'HasEffect('Damage')' 패턴을 찾아서 결과(true/false)로 치환
+                if (parsed.Contains("target.HasEffect"))
+                {
+                    // 단순화를 위해 'Damage', 'Heal' 등 키워드가 포함되어 있는지 확인하는 로직으로 대체
+                    // 실제로는 정규식으로 ('Type') 내부를 추출해야 함. 여기선 예시로 하드코딩 지원.
+                    bool hasDamage = c.HasEffectType("Damage");
+                    bool hasHeal = c.HasEffectType("Heal");
+
+                    parsed = parsed.Replace("target.HasEffect('Damage')", hasDamage.ToString().ToLower());
+                    parsed = parsed.Replace("target.HasEffect('Heal')", hasHeal.ToString().ToLower());
+                }
+            }
+            else if (target.Type == TargetType.Player)
+            {
+                Player p = target.PlayerVal;
+                parsed = parsed.Replace("target.Health", p.Health.ToString());
+                parsed = parsed.Replace("target.Mana", p.Mana.ToString());
+                parsed = parsed.Replace("target.Hand.Count", p.Hand.Count.ToString());
+            }
+
+            // 2. 전역 변수 치환 (기존 로직 재사용)
+            parsed = ReplaceVariables(parsed, context);
+
+            // 3. 연산자 변환
+            parsed = parsed.Replace("&&", " AND ").Replace("||", " OR ").Replace("==", "=").Replace("!=", "<>");
+
+            // 4. 계산
+            try
+            {
+                System.Data.DataTable table = new System.Data.DataTable();
+                var result = table.Compute(parsed, "");
+                if (result is bool b) return b;
+                return false;
+            }
+            catch { return false; }
         }
     }
 }

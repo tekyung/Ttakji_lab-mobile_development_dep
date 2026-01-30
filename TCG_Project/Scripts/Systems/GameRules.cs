@@ -8,11 +8,13 @@ namespace TCG_Project.Scripts.Systems
     {
         public int StartingHealth { get; set; }
         public int StartingMana { get; set; }
+        public int StartingHand { get; set; }
         public int MaxMana { get; set; }
         public int ManaGainPerTurn { get; set; }
         public int StartingDrawCount { get; set; }
         public int DrawPerTurn { get; set; }
         public int MaxHandSize { get; set; }
+        public int MaxSameCardInDeck { get; set; }
     }
 
     public static class GameRules
@@ -40,5 +42,7 @@ namespace TCG_Project.Scripts.Systems
         public static int StartingDrawCount => currentRules.StartingDrawCount;
         public static int DrawPerTurn => currentRules.DrawPerTurn;
         public static int MaxHandSize => currentRules.MaxHandSize;
+        public static int StatingHand => currentRules.StartingHand;
+        public static int MaxSameCardInDeck => currentRules.MaxSameCardInDeck;
     }
 }

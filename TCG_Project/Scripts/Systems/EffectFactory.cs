@@ -30,6 +30,8 @@ namespace TCG_Project.Scripts.Systems
             { "DrawCard", typeof(DrawCardEffect) },
             { "HandDrop", typeof(HandDropEffect) },
             { "ManaGain", typeof(ManaGainEffect) },
+            { "MoveCard", typeof(MoveCardEffect) },
+            {  "ModifyStat", typeof(ModifyStatEffect) },
             { "Conditional", typeof(ConditionalEffect) }
         };
 
@@ -79,6 +81,12 @@ namespace TCG_Project.Scripts.Systems
             return CreateEffectInstance(data.Type, finalParams);
         }
 
+        // [신규] Type 이름으로 직접 생성 (인라인 방식 지원용)
+        public static ICardEffect CreateEffectByType(string typeName, JObject parameters)
+        {
+            return CreateEffectInstance(typeName, parameters);
+        }
+
         // ID를 받아 새로운 효과 인스턴스를 생성
         public static ICardEffect CreateEffect(string effectId)
         {
@@ -97,10 +105,28 @@ namespace TCG_Project.Scripts.Systems
         {
             if (effectTypeRegistry.ContainsKey(typeName))
             {
-                ICardEffect effect = (ICardEffect)Activator.CreateInstance(effectTypeRegistry[typeName]);
-                effect.Initialize(parameters.ToObject<Dictionary<string, object>>());
-                return effect;
+                try
+                {
+                    ICardEffect effect = (ICardEffect)Activator.CreateInstance(effectTypeRegistry[typeName]);
+
+                    // 여기서 오류가 나면 catch로 넘어갑니다.
+                    effect.Initialize(parameters.ToObject<Dictionary<string, object>>());
+
+                    return effect;
+                }
+                catch (Exception e)
+                {
+                    // 범인 색출! 어떤 효과가 문제를 일으켰는지 로그로 알려줍니다.
+                    Console.WriteLine($"[Critial Error] 효과 생성 실패!");
+                    Console.WriteLine($" - Type: {typeName}");
+                    Console.WriteLine($" - Params: {parameters.ToString()}");
+                    Console.WriteLine($" - 원인: {e.Message}");
+                    // throw; // 프로그램을 멈추고 싶으면 주석 해제
+                    return null; // 해당 효과만 무시하고 게임 계속 진행
+                }
             }
+
+            Console.WriteLine($"[Error] 알 수 없는 효과 타입: {typeName}");
             return null;
         }
 

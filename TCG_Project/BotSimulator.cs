@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Systems;
+using TCG_Project.Scripts.Effects;
+using System.ComponentModel;
 
 namespace TCG_Project
 {
@@ -59,30 +61,45 @@ namespace TCG_Project
             // 시작 마나와 체력을 룰 파일에서 가져옴
             Player p1 = new Player
             {
-                Name = "Player 1",
+                Name = "Player 1 Bot",
                 Health = GameRules.StartingHealth,
                 Mana = GameRules.StartingMana
             };
 
             Player p2 = new Player
             {
-                Name = "Player 2",
+                Name = "Player 2 Bot",
                 Health = GameRules.StartingHealth,
                 Mana = GameRules.StartingMana
             };
 
-            int maxSameCard = 3;
-
             // 3. 덱 생성 (Deep Copy 적용)
             // 주의: P1과 P2는 서로 다른 덱 인스턴스를 가져야 하므로 BuildDeck을 각각 호출
-            p1.SetDeck(BuildDeck(cardDatabase, 20, maxSameCard));
-            p2.SetDeck(BuildDeck(cardDatabase, 20, maxSameCard));
+            p1.SetDeck(BuildDeck(cardDatabase, 20, GameRules.MaxSameCardInDeck));
+            p2.SetDeck(BuildDeck(cardDatabase, 20, GameRules.MaxSameCardInDeck));
 
             // 4. 게임 시작 준비 (초기 핸드 드로우)
             int startDraw = GameRules.StartingDrawCount;
             Console.WriteLine($"--- 게임 준비: 초기 핸드 {startDraw}장 드로우 ---");
-            p1.DrawCard(startDraw); 
-            p2.DrawCard(startDraw);
+
+            // 첫 패 드로우 (MoveCardEffect 사용)
+            // 턴 진행 중이 아니므로, 각 플레이어별로 Context를 임시로 만들어 실행합니다.
+            var startingDraw = new MoveCardEffect();
+            startingDraw.Initialize(new Dictionary<string, object>
+            {
+                { "src", "Deck" },
+                { "dest", "Hand" },
+                { "count", startDraw }, // 초기 핸드 2장 (룰에 따라 변경 가능)
+                { "srcTarget", "ActivePlayer" }, // Context에서 주입된 플레이어를 대상으로 함
+                { "destTarget", "ActivePlayer" }
+            });
+
+            // Player 1 드로우
+            startingDraw.Execute(new GameContext { ActivePlayer = p1, TargetPlayer = p2 });
+
+            // Player 2 드로우
+            startingDraw.Execute(new GameContext { ActivePlayer = p2, TargetPlayer = p1 });
+
             Console.WriteLine("--------------------------------------\n");
 
             // 5. 게임 루프 변수 설정
@@ -90,10 +107,10 @@ namespace TCG_Project
 
             while (true)
             {
-                Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {currentMaxMana} ==========");
+                Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {GameRules.StartingMana} ==========");
 
                 // --- Player 1 턴 ---
-                if (!ProcessTurn(p1, p2, currentMaxMana)) break;
+                if (!ProcessTurn(p1, p2, GameRules.StartingMana)) break;
 
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
@@ -101,13 +118,13 @@ namespace TCG_Project
                 Console.WriteLine("--------------------------------------");
 
                 // --- Player 2 턴 ---
-                if (!ProcessTurn(p2, p1, currentMaxMana)) break;
+                if (!ProcessTurn(p2, p1, GameRules.StartingMana)) break;
 
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
 
                 // 턴 종료 처리
-                // 룰에 따라 최대 마나 증가
+                // 룰에 따라 최대 마나 증가 (당장은 보류로 활용 안 됨)
                 if (currentMaxMana < GameRules.MaxMana)
                 {
                     currentMaxMana += GameRules.ManaGainPerTurn;
@@ -157,31 +174,37 @@ namespace TCG_Project
         public static bool ProcessTurn(Player activePlayer, Player opponent, int currentTurnMaxMana)
         {
             // 1. 마나 충전 (현재 턴의 최대 마나로 리필)
-            // * 룰 변경: 보통 TCG는 턴 시작 시 마나가 '회복'되므로 할당(=)이 일반적입니다.
-            // * 기존 로직(+=)을 원하시면 activePlayer.Mana += GameRules.ManaGainPerTurn; 으로 변경 가능
-            if (turnCount != 1) activePlayer.Mana += GameRules.ManaGainPerTurn;
+            // 보통 TCG는 턴 시작 시 마나가 '회복'되므로 할당(=)이 일반적입니다.
+            if (turnCount != 1) activePlayer.Mana = GameRules.StartingMana;
 
             Console.WriteLine($"\n--- [{activePlayer.Name}] 의 턴 / 체력 : {activePlayer.Health} / 마나 : {activePlayer.Mana} ---");
 
-            // 2. 드로우 페이즈 (룰에 따른 장수만큼 드로우)
-            for (int i = 0; i < GameRules.DrawPerTurn; i++)
-            {
-                if (activePlayer.Hand.Count >= GameRules.MaxHandSize)
-                {
-                    Console.WriteLine("패가 가득 차서 드로우할 수 없습니다 (Burn).");
-                    // 덱에서는 한 장 태워야 하는 룰이라면 DrawCard() 호출 후 핸드에 안 넣는 로직 필요
-                    // 여기서는 단순 스킵
-                    break;
-                }
+            // 2. [통합된 드로우 로직]
+            // 룰 드로우도 'MoveCardEffect'를 사용합니다.
+            Console.WriteLine($"\n--- {activePlayer.Name} 드로우 페이즈 ---");
 
-                bool canDraw = activePlayer.DrawCard(1);
-                if (!canDraw)
-                {
-                    Console.WriteLine($"[{activePlayer.Name}] 의 덱이 바닥났습니다. 패배합니다.");
-                    activePlayer.Health = 0;
-                    return false;
-                }
+            if (activePlayer.Deck.Count == 0)
+            {
+                Console.WriteLine($"{activePlayer.Name} 이 드로우하지 못해 패배합니다.");
+                return false;
             }
+
+            var turnDrawEffect = new MoveCardEffect();
+            turnDrawEffect.Initialize(new Dictionary<string, object>
+            {
+                { "src", "Deck" },
+                { "dest", "Hand" },
+                { "count", GameRules.DrawPerTurn }, // 룰에서 정한 장수만큼
+                { "srcTarget", "ActivePlayer" },
+                { "destTarget", "ActivePlayer" }
+            });
+
+            // 시스템이 발동하므로 Context만 넘김
+            turnDrawEffect.Execute(new GameContext
+            {
+                ActivePlayer = activePlayer,
+                TargetPlayer = activePlayer
+            });
 
             // 판별을 위해 임시 Context 생성
             GameContext checkContext = new GameContext
@@ -195,24 +218,35 @@ namespace TCG_Project
             Console.WriteLine($"[{activePlayer.Name}] 의 패: {string.Join(", ", activePlayer.Hand.Select(c => c.Name))}");
 
             // 3. 메인 페이즈
-            Card cardToPlay = activePlayer.EnableCardList.FirstOrDefault();
 
-            if (cardToPlay != null)
+            int playCount = 0;
+            const int MAX_PLAYS_PER_TURN = 3; // 최대 행동 횟수 제한
+
+            // [조건 변경] 마나가 있고 && 낼 카드가 있고 && 3번 미만으로 행동했으면 반복
+            while (activePlayer.Mana > 0 && playCount < MAX_PLAYS_PER_TURN)
             {
-                // 실제 사용 Context
-                GameContext playContext = new GameContext
+                // 1. 낼 수 있는 카드 목록 갱신
+                activePlayer.UpdatePlayableCards(checkContext);
+                if (activePlayer.EnableCardList.Count == 0) break; // 낼 카드가 없으면 턴 종료
+
+                Card cardToPlay = activePlayer.EnableCardList.FirstOrDefault();
+
+                // 3. 카드 발동
+                activePlayer.PlayCard(cardToPlay, new GameContext
                 {
                     Players = new List<Player> { activePlayer, opponent },
                     ActivePlayer = activePlayer,
                     TargetPlayer = opponent
-                };
+                });
 
-                activePlayer.PlayCard(cardToPlay, playContext);
+                // 4. 행동 횟수 증가
+                playCount++;
+
+                // (선택 사항: 너무 빨리 지나가면 보기 힘드니 딜레이)
+                System.Threading.Thread.Sleep(500);
             }
-            else
-            {
-                Console.WriteLine($"[{activePlayer.Name}] 사용할 수 있는 카드가 없어 턴을 넘깁니다.");
-            }
+
+            Console.WriteLine($"\n--- {activePlayer.Name} 턴 종료 (사용 카드: {playCount}장 / LP: {activePlayer.Health}장 / 패: {activePlayer.Hand.Count} / 덱: {activePlayer.Deck.Count}장 / 묘지: {activePlayer.Graveyard.Count}장) ---");
 
             return true;
         }

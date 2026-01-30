@@ -47,7 +47,8 @@ namespace TCG_Project.Scripts.Systems
             }
         }
 
-        private static string ReplaceVariables(string formula, GameContext context)
+        // 변수 치환 메서드
+        public static string ReplaceVariables(string formula, GameContext context)
         {
             Player p = context.ActivePlayer;
             Player opp = context.GetOpponent(p);

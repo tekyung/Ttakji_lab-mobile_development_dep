@@ -76,5 +76,20 @@ namespace TCG_Project.Scripts.Core
 
             return newCard;
         }
+
+        // Card 클래스 내부에 추가
+        public bool HasEffectType(string typeName)
+        {
+            // 효과 리스트를 순회하며 타입 이름이 포함되는지 검사
+            foreach (var effect in effects)
+            {
+                // 예: DamageEffect -> "Damage" 포함됨
+                if (effect.GetType().Name.Contains(typeName)) return true;
+
+                // 원자적 효과의 경우 JSON의 "type" 필드를 별도로 저장하고 있다면 그것을 비교하는 것이 더 정확함
+                // 현재는 클래스 이름(DamageEffect) 기반으로 약식 구현
+            }
+            return false;
+        }
     }
 }
