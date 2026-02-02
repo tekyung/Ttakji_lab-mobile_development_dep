@@ -1,0 +1,11 @@
+[
+  {
+    "id": 21001,
+    "skill_cost": 1,
+    "use_condition_type": "None",
+    "use_condition_value1": -1,
+    "use_condition_value2": -1,
+    "use_play_effect_id": -1,
+    "use_effect_id": 210011
+  }
+]

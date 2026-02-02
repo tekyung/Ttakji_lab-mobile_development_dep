@@ -1,0 +1,106 @@
+[
+    {
+        "id": "dmg",
+        "type": "Damage",
+        "default": 1,
+        "params": { "amount": 1 }
+    },
+    {
+        "id": "heal",
+        "type": "Heal",
+        "default": 1,
+        "params": { "amount": 1 }
+    },
+    {
+        "id": "managain",
+        "type": "ManaGain",
+        "default": 1,
+        "params": { "amount": 1 }
+    },
+    {
+        "id": "draw_2",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+            "src": "Deck",
+            "dest": "Hand",
+            "srcTarget": "Self",
+            "destTarget": "Self",
+            "count": 2
+        }
+    },
+    {
+        "id": "cond_branch",
+        "type": "Conditional",
+        "default": 1,
+        "params": {}
+    },
+    {
+        "id": "draw",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+          "src": "Deck",
+          "dest": "Hand",
+          "srcTarget": "Self",
+          "destTarget": "Self",
+          "count": 1
+      }
+    },
+    {
+        "id": "discard",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+            "src": "Hand",
+            "dest": "Graveyard",
+            "srcTarget": "Self",
+            "destTarget": "Self",
+            "count": 1
+        }
+    },
+    {
+        "id": "summon_from_hand",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+          "src": "Hand",
+          "dest": "Field",
+          "count": 1
+        }
+    },
+    {
+        "id": "return_to_hand",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+          "src": "Field",
+          "dest": "Hand",
+          "srcTarget": "opponent",
+          "destTarget": "opponent"
+        }
+    },
+    {
+        "id": "steal_card",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+            "src": "Hand",
+            "dest": "Hand",
+            "srcTarget": "Opponent",
+            "destTarget": "Self"
+        }
+    },
+    {
+        "id": "Dumping",
+        "type": "MoveCard",
+        "default": 1,
+        "params": {
+            "src": "Deck",
+            "dest": "Graveyard",
+            "srcTarget": "Self",
+            "destTarget": "Self",
+            "count": 1
+        }
+    }
+]

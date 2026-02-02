@@ -1,33 +1,6 @@
-/[Ll]ibrary/
-/[Tt]emp/
-/[Oo]bj/
-/[Build]/
-/[Builds]/
-/[Logs]/
-/[MemoryCaptures]/
-
-# Visual Studio 프로젝트 파일들
-*.csproj
-*.unityproj
-*.sln
-*.suo
-*.tmp
+.vs/
+bin/
+obj/
 *.user
-*.userprefs
-*.pidb
-*.booproj
-*.svd
-*.pdb
-*.opendb
-*.VC.db
-
-# 유니티 에디터 설정 및 캐시
-.DS_Store
-sysinfo.txt
-*.apk
-*.unitypackage
-
-# OS 관련 임시 파일
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+GameDesign/SubTool/ExcelToJsonConverter/dev/build/ExcelToJsonConverter/localpycs
+GameDesign/SubTool/ExcelToJsonConverter/dev/__pycache__

@@ -1,0 +1,11 @@
+{
+    "StartingHealth": 20,
+    "StartingMana": 10,
+    "StartingHand": 2,
+    "MaxMana": 20,
+    "ManaGainPerTurn": 3,
+    "StartingDrawCount": 2,
+    "DrawPerTurn": 1,
+    "MaxHandSize": 5,
+    "MaxSameCardInDeck": 3
+}

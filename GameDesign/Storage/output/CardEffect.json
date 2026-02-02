@@ -1,0 +1,13 @@
+[
+  {
+    "id": 210011,
+    "effect_target_type": "OppentUnit",
+    "effect_target_value": 1,
+    "effect_target_condition": "PowerUnderOrEqual",
+    "effect_target_condition_value1": 300,
+    "effect_target_condition_value2": -1,
+    "effect_function_type": "KillUnit",
+    "effect_function_value1": 0,
+    "effect_function_value2": -1
+  }
+]
