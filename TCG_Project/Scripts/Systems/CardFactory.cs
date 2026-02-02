@@ -36,17 +36,32 @@ namespace TCG_Project.Scripts.Systems
                     JArray effectsArr = (JArray)data["effects"];
                     foreach (JObject effData in effectsArr)
                     {
-                        string effId = effData["id"].ToString();
+                        ICardEffect effect = null;
 
-                        // args가 있으면 가져오고 없으면 null
-                        JObject args = effData["args"] as JObject;
+                        // [CASE 1] "id"가 있는 경우 (Effects.json 참조)
+                        if (effData["id"] != null)
+                        {
+                            string effId = effData["id"].ToString();
+                            JObject args = effData["args"] as JObject;
+                            effect = EffectFactory.CreateEffect(effId, args);
+                        }
+                        // [CASE 2] "type"이 있는 경우 (인라인 직접 정의) -> 여기서 c_snipe 처리됨!
+                        else if (effData["type"] != null)
+                        {
+                            string typeName = effData["type"].ToString();
+                            JObject parameters = effData["params"] as JObject; // args가 아니라 params임에 주의
+                            effect = EffectFactory.CreateEffectByType(typeName, parameters);
+                        }
 
-                        // Factory에 오버라이드 정보 전달
-                        ICardEffect effect = EffectFactory.CreateEffect(effId, args);
-
+                        // 효과 생성 성공 시 추가
                         if (effect != null)
                         {
                             newCard.AddEffect(effect);
+                        }
+                        else
+                        {
+                            // 디버깅용 로그 (어떤 카드에서 실패했는지 알면 편함)
+                            Console.WriteLine($"[Warning] 효과 생성 실패. Card: {newCard.Name}");
                         }
                     }
                 }

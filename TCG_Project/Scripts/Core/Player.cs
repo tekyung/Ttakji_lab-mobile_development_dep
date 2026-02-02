@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Core
 {
@@ -14,11 +15,29 @@ namespace TCG_Project.Scripts.Core
         public List<Card> Hand { get; private set; } = new List<Card>();
         public List<Card> Graveyard { get; private set; } = new List<Card>();
 
-        // [신규] 효과 처리 중인 카드를 잠시 보관하는 장소 (스택)
+        // 효과 처리 중인 카드를 잠시 보관하는 장소 (스택)
         public Card PlayingCard { get; set; } = null;
 
         // 현재 사용 가능한 카드 목록
         public List<Card> EnableCardList { get; private set; } = new List<Card>();
+
+        // 필드 존 (예: 5칸 고정). null이면 빈 공간.
+        public Card[] Field { get; private set; } = new Card[5];
+
+        // [유틸] 존 타입에 따라 해당 컨테이너(List)를 반환하거나 처리하는 헬퍼가 필요함
+        // 하지만 Field가 배열이라 타입이 다르므로, MoveCardEffect 내부에서 처리하거나
+        // 별도의 인터페이스(ICardContainer)를 만드는 방법이 있습니다.
+        // 이번 단계에서는 Effect 내부에서 분기 처리하는 방식을 사용하겠습니다.
+
+        // 필드의 빈 자리 찾기 (-1이면 꽉 참)
+        public int GetEmptyFieldSlot()
+        {
+            for (int i = 0; i < Field.Length; i++)
+            {
+                if (Field[i] == null) return i;
+            }
+            return -1;
+        }
 
         public void SetDeck(List<Card> newDeck)
         {
@@ -50,13 +69,13 @@ namespace TCG_Project.Scripts.Core
             Deck = Deck.OrderBy(x => rng.Next()).ToList();
         }
 
-        // 1장만 드로우
+        // 1장만 드로우, 지금은 안 씀
         public void Draw()
         {
             DrawCard(1);
         }
 
-        // 덱에서 카드 드로우(복수)
+        // 덱에서 카드 드로우(복수형), 안 씀
         public bool DrawCard(int n)
         {
             if (Deck.Count - n < 0) return false;
@@ -76,11 +95,11 @@ namespace TCG_Project.Scripts.Core
             // 1. [자원 소모] 코스트 지불
             Mana -= card.Cost;
 
+            Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 발동 (Cost: {card.Cost}) / 남은 마나: {Mana}");
             // 2. [물리적 이동] Hand -> PlayingCard (패에서 안전하게 대피)
             Hand.Remove(card);
             PlayingCard = card;
-            Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 발동 (Cost: {card.Cost})");
-
+            
             // [중요] 효과 발동 전에 손패에서 먼저 제거합니다!
             // 이렇게 해야 '패를 버리는 효과'가 자기 자신을 버리지 않습니다.
             // 3. 효과 발동
@@ -89,7 +108,7 @@ namespace TCG_Project.Scripts.Core
             // 4. [종료 처리] PlayingCard -> Graveyard
             PlayingCard = null; // 존 비우기
             Graveyard.Add(card);
-            Console.WriteLine($"   (묘지에 '{card.Name}' 카드가 쌓였습니다. / 현재 묘지 {Graveyard.Count}장)");
+            Console.WriteLine($"   (묘지에 '{card.Name}' 카드가 쌓였습니다. / 현재 묘지 {Graveyard.Count}장 / 남은 덱 : {Deck.Count}장");
         }
 
         // DamageEffect에서 호출할 메서드
@@ -113,21 +132,116 @@ namespace TCG_Project.Scripts.Core
             Console.WriteLine($"+ [{Name}] 가 {amount}의 마나를 회복했습니다. (현재 마나: {Mana})");
         }
 
-        // HandDropEffect에서 호출할 메서드
-        public void DropHand(int amount)
+        // 카드 이동 로직
+        // ---------------------------------------------------------
+        // 1. 공간 확인 (이동 전 필수 체크)
+        // ---------------------------------------------------------
+        public bool HasSpaceInZone(ZoneType zone)
         {
-            List<Card> droppedCards = new List<Card>();
-            Random rng = new Random();
-            for (int i = 0; i < amount && Hand.Count > 0; i++)
+            switch (zone)
             {
-                int index = rng.Next(Hand.Count);
-                Card card = Hand[index];
-                Hand.RemoveAt(index);
-                Graveyard.Add(card);
-                droppedCards.Add(card);
+                case ZoneType.Hand: return Hand.Count < GameRules.MaxHandSize;
+                case ZoneType.Field: return GetEmptyFieldSlot() != -1;
+                default: return true; // 덱/묘지는 무제한
             }
-            Console.WriteLine($"🗑️ [{Name}] 가 {droppedCards.Count}장의 카드를 버렸습니다: {string.Join(", ", droppedCards.Select(c => c.Name))}");
-            droppedCards.Clear();
         }
+
+        // ---------------------------------------------------------
+        // 2. 카드 삽입 (Insert) - 외부에서 카드가 들어올 때
+        // ---------------------------------------------------------
+        public bool InsertCard(ZoneType zone, Card card)
+        {
+            if (card == null) return false;
+
+            switch (zone)
+            {
+                case ZoneType.Deck:
+                    Deck.Add(card); // 맨 뒤에 추가 (필요 시 Shuffle 별도 호출)
+                    break;
+
+                case ZoneType.Hand:
+                    Hand.Add(card);
+                    break;
+
+                case ZoneType.Field:
+                    int slot = GetEmptyFieldSlot();
+                    if (slot != -1) Field[slot] = card;
+                    break;
+
+                case ZoneType.Graveyard:
+                    Graveyard.Add(card);
+                    break;
+            }
+            return true;
+        }
+
+        // ---------------------------------------------------------
+        // 3. 카드 추출 (Extract) - 외부로 카드가 나갈 때
+        // ---------------------------------------------------------
+        // 특정 카드를 지정해서 뺄 때
+        public bool ExtractCard(ZoneType zone, Card card)
+        {
+            if (card == null) return false;
+
+            switch (zone)
+            {
+                case ZoneType.Deck: return Deck.Remove(card);
+                case ZoneType.Hand: return Hand.Remove(card);
+                case ZoneType.Graveyard: return Graveyard.Remove(card);
+                case ZoneType.Field:
+                    // 배열에서 해당 카드를 찾아 비움
+                    for (int i = 0; i < Field.Length; i++)
+                    {
+                        if (Field[i] == card)
+                        {
+                            Field[i] = null;
+                            return true;
+                        }
+                    }
+                    return false;
+            }
+            return false;
+        }
+
+        // (오버로딩) 특정 위치/조건으로 뺄 때 (Top, Random 등)
+        public Card ExtractCard(ZoneType zone, string strategy = "Top")
+        {
+            Card target = null;
+
+            switch (zone)
+            {
+                case ZoneType.Deck:
+                    if (Deck.Count > 0) target = Deck[0]; // 덱은 무조건 맨 위(Top)
+                    break;
+
+                case ZoneType.Hand:
+                    if (Hand.Count > 0)
+                    {
+                        // 전략에 따라 선택 (여기선 임시로 Random)
+                        // 추후 "Choice"(유저 선택) 등이 들어갈 자리
+                        int idx = new Random().Next(Hand.Count);
+                        target = Hand[idx];
+                    }
+                    break;
+
+                case ZoneType.Field:
+                    // 필드는 앞에서부터 있는 거 가져옴 (임시)
+                    target = Field.FirstOrDefault(c => c != null);
+                    break;
+
+                case ZoneType.Graveyard:
+                    if (Graveyard.Count > 0) target = Graveyard[Graveyard.Count - 1]; // 가장 최근 것
+                    break;
+            }
+
+            // 찾았으면 추출 실행
+            if (target != null)
+            {
+                ExtractCard(zone, target);
+            }
+
+            return target;
+        }
+        
     }
 }
