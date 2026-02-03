@@ -2,10 +2,11 @@
   {
     "id": 21001,
     "skill_cost": 1,
+    "desc": "pow 300 이하 적 1장 파괴(승점 x)",
     "use_condition_type": "None",
     "use_condition_value1": -1,
     "use_condition_value2": -1,
-    "use_play_effect_id": -1,
-    "use_effect_id": 210011
+    "before_use_effect_id": -1,
+    "after_use_effect_id": 210011
   }
 ]

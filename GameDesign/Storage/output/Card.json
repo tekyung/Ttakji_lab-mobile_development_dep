@@ -3,7 +3,7 @@
     "id": 11001,
     "name": "슬라임",
     "type": "Unit",
-    "max_deck_count": 2,
+    "max_deck_count": 20,
     "skin_res": "asset/m1_tmp/card_img/u_slime.png"
   },
   {
