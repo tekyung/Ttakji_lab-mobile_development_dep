@@ -2,6 +2,13 @@ using System.Collections.Generic;
 using System.Linq; // 리스트 검색용 기능
 using UnityEngine;
 using TMPro; // 텍스트 사용
+using System.IO; //파일 저장
+
+[System.Serializable]
+public class DeckSaveData
+{
+    public List<int> cardIdList;
+}
 
 public class DeckBuilderManager : MonoBehaviour
 {
@@ -11,8 +18,13 @@ public class DeckBuilderManager : MonoBehaviour
     public GameObject cardPrefab;       // CardSlot 프리팹
     public TextMeshProUGUI deckCountText; // 20/20 텍스트 (없으면 연결 안 해도 됨)
 
+    [Header("팝업 연결")]
+    public GameObject warningPopup; // 20장 안될 때 팝업
+    public GameObject okPopup; //덱 저장 완료시 팝업
+
     // 실제 데이터 (덱에 들어있는 카드 ID 목록)
     private List<int> myDeck = new List<int>();
+    private const int MAX_DECK_COUNT = 20;
 
     // 화면에 떠 있는 카드 슬롯들을 관리하는 리스트 (Collection 쪽)
     private List<CardUI> collectionSlots = new List<CardUI>();
@@ -53,7 +65,7 @@ public class DeckBuilderManager : MonoBehaviour
     public void AddCard(int id)
     {
         // 1. 전체 20장 제한 체크
-        if (myDeck.Count >= 20)
+        if (myDeck.Count >= MAX_DECK_COUNT)
         {
             Debug.Log("덱이 가득 찼습니다!");
             return;
@@ -78,6 +90,18 @@ public class DeckBuilderManager : MonoBehaviour
             RefreshAllUI(); // 화면 갱신
         }
     }
+    // ---------------------------------------------------
+    //  텍스트 갱신
+    // ---------------------------------------------------
+    void UpdateDeckCountText()
+    {
+        if (deckCountText != null)
+        {
+            int currenCount = myDeck.Count;
+
+            deckCountText.text = $"{currenCount} / {MAX_DECK_COUNT}";
+        }
+    }
 
     // ---------------------------------------------------
     // 화면 갱신 로직
@@ -87,6 +111,8 @@ public class DeckBuilderManager : MonoBehaviour
     {
         RefreshDeckUI();       // 위쪽 화면 다시 그리기
         RefreshCollectionUI(); // 아래쪽 화면 숫자 바꾸기
+
+        UpdateDeckCountText();
 
         // 덱 장수 텍스트 갱신 (예: 12/20)
         if (deckCountText) deckCountText.text = $"{myDeck.Count}/20";
@@ -124,5 +150,59 @@ public class DeckBuilderManager : MonoBehaviour
             // 숫자만 갱신 (깜빡임 없음)
             slot.UpdateCount(count, data.maxDeckCount);
         }
+    }
+    // ---------------------------------------------------
+    // 덱 저장
+    // ---------------------------------------------------
+    // 다른데서 덱 가져올 때 사용
+    public List<int> GetCurrentDeck()
+    {
+        return myDeck;
+    }
+
+    //저장 버튼 클릭
+    public void OnClickSaveDeck()
+    {
+        // 1. 장수 체크 (20장인지 확인)
+        if (myDeck.Count != MAX_DECK_COUNT)
+        {
+            // 20장이 아니면 경고 팝업 띄우기
+            if (warningPopup != null) warningPopup.SetActive(true);
+
+            Debug.Log("저장 실패: 덱이 완성되지 않았습니다.");
+            return;
+        }
+
+        // 2. 20장이면 저장 진행
+        SaveDeckToJson();
+    }
+
+    // JSON 저장
+    void SaveDeckToJson()
+    {
+        // 저장할 데이터 객체 만들기
+        DeckSaveData data = new DeckSaveData();
+        data.cardIdList = new List<int>(myDeck); // 현재 덱 복사
+
+        // JSON 문자열로 변환
+        string json = JsonUtility.ToJson(data);
+
+        // 저장할 경로 설정 (PC, 모바일 모두 작동하는 경로)
+        string path = Path.Combine(Application.dataPath, "MyDeck.json");
+
+        // 파일 쓰기
+        File.WriteAllText(path, json);
+
+        Debug.Log("저장 완료! 경로: " + path);
+
+        if (okPopup != null) okPopup.SetActive(true);
+    }
+
+    // 팝업 닫기
+    public void ClosePopup()
+    {
+        if (warningPopup != null) warningPopup.SetActive(false);
+
+        if (okPopup != null) okPopup.SetActive(false);
     }
 }
