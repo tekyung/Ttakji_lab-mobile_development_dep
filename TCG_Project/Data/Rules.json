@@ -7,5 +7,7 @@
     "StartingDrawCount": 2,
     "DrawPerTurn": 1,
     "MaxHandSize": 5,
-    "MaxSameCardInDeck": 3
+    "MaxSameCardInDeck": 3,
+    "DeckSize": 20,
+    "MaxPlaysPerTurn": 3
 }

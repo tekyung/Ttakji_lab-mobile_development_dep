@@ -62,6 +62,23 @@ namespace TCG_Project.Scripts.Systems
             int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
 
+            // [신규] Context 변수 치환
+            if (context.Variables.Count > 0)
+            {
+                foreach (var kvp in context.Variables)
+                {
+                    // 예: "var.moved_count" -> "2"
+                    string key = $"var.{kvp.Key}";
+                    if (formula.Contains(key))
+                    {
+                        formula = formula.Replace(key, kvp.Value.ToString());
+                    }
+                }
+            }
+
+            // (선택 사항) 정의되지 않은 변수(var.xxx)가 남았다면 0으로 처리하여 에러 방지
+            // if (formula.Contains("var.")) return "0"; 
+
             // [Turn]
             formula = formula.Replace("turnCount", Program.turnCount.ToString());
 
