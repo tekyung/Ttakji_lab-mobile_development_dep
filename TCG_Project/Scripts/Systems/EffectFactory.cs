@@ -27,8 +27,6 @@ namespace TCG_Project.Scripts.Systems
         {
             { "Damage", typeof(DamageEffect) },
             { "Heal", typeof(HealEffect) },
-            { "DrawCard", typeof(DrawCardEffect) },
-            { "HandDrop", typeof(HandDropEffect) },
             { "ManaGain", typeof(ManaGainEffect) },
             { "MoveCard", typeof(MoveCardEffect) },
             {  "ModifyStat", typeof(ModifyStatEffect) },

@@ -42,6 +42,10 @@ namespace TCG_Project.Scripts.Core
         public void SetDeck(List<Card> newDeck)
         {
             Deck = new List<Card>(newDeck);
+            foreach (var card in Deck)
+            {
+                card.SetOwner(this); // "이 카드는 내 것이다!" 각인
+            }
             ShuffleDeck();
         }
 
@@ -89,26 +93,33 @@ namespace TCG_Project.Scripts.Core
             return true;
         }
 
+        // [핵심 수정] PlayCard
         public void PlayCard(Card card, GameContext context)
         {
             if (!Hand.Contains(card)) return;
-            // 1. [자원 소모] 코스트 지불
-            Mana -= card.Cost;
 
+            // 1. 자원 소모
+            Mana -= card.Cost;
             Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 발동 (Cost: {card.Cost}) / 남은 마나: {Mana}");
-            // 2. [물리적 이동] Hand -> PlayingCard (패에서 안전하게 대피)
+
+            // 2. 패에서 PlayingCard 존으로 이동
             Hand.Remove(card);
             PlayingCard = card;
-            
-            // [중요] 효과 발동 전에 손패에서 먼저 제거합니다!
-            // 이렇게 해야 '패를 버리는 효과'가 자기 자신을 버리지 않습니다.
+
             // 3. 효과 발동
             card.Play(context);
 
-            // 4. [종료 처리] PlayingCard -> Graveyard
-            PlayingCard = null; // 존 비우기
-            Graveyard.Add(card);
-            Console.WriteLine($"   (묘지에 '{card.Name}' 카드가 쌓였습니다. / 현재 묘지 {Graveyard.Count}장 / 남은 덱 : {Deck.Count}장");
+            // 4. [종료 처리] PlayingCard -> Graveyard (원래 주인 묘지로!)
+            PlayingCard = null;
+
+            // [수정된 부분] 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
+            Player owner = card.OriginalOwner ?? this; // 안전장치
+            owner.Graveyard.Add(card);
+
+            // 상태 초기화 (묘지로 가니까)
+            card.ResetState();
+
+            Console.WriteLine($" ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
         }
 
         // DamageEffect에서 호출할 메서드

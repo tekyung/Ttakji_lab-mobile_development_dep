@@ -1,6 +1,6 @@
 [
     {
-        "id": "dmg",
+        "id": "damage",
         "type": "Damage",
         "default": 1,
         "params": { "amount": 1 }
@@ -24,8 +24,6 @@
         "params": {
             "src": "Deck",
             "dest": "Hand",
-            "srcTarget": "Self",
-            "destTarget": "Self",
             "count": 2
         }
     },
@@ -40,12 +38,10 @@
         "type": "MoveCard",
         "default": 1,
         "params": {
-          "src": "Deck",
-          "dest": "Hand",
-          "srcTarget": "Self",
-          "destTarget": "Self",
-          "count": 1
-      }
+            "src": "Deck",
+            "dest": "Hand",
+            "count": 1
+        }
     },
     {
         "id": "discard",
@@ -64,9 +60,9 @@
         "type": "MoveCard",
         "default": 1,
         "params": {
-          "src": "Hand",
-          "dest": "Field",
-          "count": 1
+            "src": "Hand",
+            "dest": "Field",
+            "count": 1
         }
     },
     {
@@ -74,10 +70,10 @@
         "type": "MoveCard",
         "default": 1,
         "params": {
-          "src": "Field",
-          "dest": "Hand",
-          "srcTarget": "opponent",
-          "destTarget": "opponent"
+            "src": "Field",
+            "dest": "Hand",
+            "srcTarget": "opponent",
+            "destTarget": "opponent"
         }
     },
     {
@@ -101,6 +97,86 @@
             "srcTarget": "Self",
             "destTarget": "Self",
             "count": 1
+        }
+    },
+    {
+        "id": "discard_random_1",
+        "name": "무작위 패 1장 버리기",
+        "type": "MoveCard",
+        "params": {
+            "src": "Hand",
+            "dest": "Graveyard",
+            "target": {
+                "zones": [ "Hand" ],
+                "mode": "Random",
+                "count": 1
+            }
+        }
+    },
+    {
+        "id": "mill_2",
+        "name": "덱 덤핑 (2장)",
+        "description": "덱 맨 위에서 카드 2장을 묘지로 보냄",
+        "type": "MoveCard",
+        "params": {
+            "src": "Deck",
+            "dest": "Graveyard",
+            "count": 2
+        }
+    },
+    {
+        "id": "destroy_target",
+        "name": "지정 파괴",
+        "description": "필드의 카드 1장을 지정해 파괴 (카드에서 target 지정 필요)",
+        "type": "MoveCard",
+        "params": {
+            "src": "Field",
+            "dest": "Graveyard"
+            // target은 카드를 만들 때 args로 넘겨줘야 함 (예: opponent field manual)
+        }
+    },
+    {
+        "id": "bounce_target",
+        "name": "바운스",
+        "description": "필드의 카드 1장을 지정해 주인의 패로 되돌림",
+        "type": "MoveCard",
+        "params": {
+            "src": "Field",
+            "dest": "Hand"
+            // target은 카드를 만들 때 args로 넘겨줘야 함
+        }
+    },
+    {
+        "id": "salvage_random_1",
+        "name": "샐비지 (무작위)",
+        "description": "묘지에서 무작위 주문 1장을 패로 가져옴",
+        "type": "MoveCard",
+        "params": {
+            "src": "Graveyard",
+            "dest": "Hand",
+            "target": {
+                "zones": [ "Graveyard" ], // 묘지를 뒤짐
+                "mode": "Random",
+                "count": 1
+            }
+        }
+    },
+    {
+        "id": "steal_random_1",
+        "name": "패 털기 (1장)",
+        "description": "상대 패에서 무작위 1장을 내 패로 가져옴",
+        "type": "MoveCard",
+        "params": {
+            "src": "Hand",
+            "dest": "Hand",
+            "srcTarget": "Opponent", // 뺏어올 대상
+            "destTarget": "Self", // 가질 대상
+            "target": { // srcTarget 상세 설정
+                "controller": "Opponent",
+                "zones": [ "Hand" ],
+                "mode": "Random",
+                "count": 1
+            }
         }
     }
 ]
