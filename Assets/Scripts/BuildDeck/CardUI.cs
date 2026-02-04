@@ -1,6 +1,7 @@
+using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 public class CardUI : MonoBehaviour
 {
@@ -77,6 +78,33 @@ public class CardUI : MonoBehaviour
     public void OnClickMinus()
     {
         deckManager.RemoveCard(myCardID);
+    }
+
+    public void SetupForZoom(int id)
+    {
+        myCardID = id;
+
+        // 1. 데이터 불러오기
+        CardData data = CardDataManager.Instance.GetCard(id);
+        if (data == null) return;
+
+        // 2. 텍스트 & 이미지 적용 (기존 로직과 동일)
+        if (nameText) nameText.text = data.name;
+        //if (descText) descText.text = data.description; // 설명도 있다면 표시
+
+        // 이미지 로드
+        string path = data.skinPath.Replace(".png", "").Replace("asset/m1_tmp/", "");
+        Sprite sp = Resources.Load<Sprite>(path);
+        if (sp && cardImage) cardImage.sprite = sp;
+
+        // 3. [중요] 확대 화면에서는 필요 없는 것들 숨기기
+
+        // 개수 텍스트 숨기기
+        if (countText) countText.text = "";
+
+        // 버튼들 비활성화 (눌러도 반응 안 하게)
+        if (plusButton) plusButton.gameObject.SetActive(false);
+        if (minusButton) minusButton.gameObject.SetActive(false);
     }
 
 }
