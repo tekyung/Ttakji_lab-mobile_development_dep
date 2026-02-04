@@ -1,7 +1,7 @@
 [
   {
     "id": 11001,
-    "pirze": 1,
+    "prize": 1,
     "arts_cost": 1,
     "power": 300,
     "on_play_condition_type": "None",
@@ -21,7 +21,7 @@
   },
   {
     "id": 11002,
-    "pirze": 2,
+    "prize": 2,
     "arts_cost": 2,
     "power": 500,
     "on_play_condition_type": "None",
@@ -41,7 +41,7 @@
   },
   {
     "id": 11003,
-    "pirze": 3,
+    "prize": 3,
     "arts_cost": 3,
     "power": 800,
     "on_play_condition_type": "None",
@@ -61,7 +61,7 @@
   },
   {
     "id": 11004,
-    "pirze": 1,
+    "prize": 1,
     "arts_cost": 1,
     "power": 200,
     "on_play_condition_type": "None",
@@ -81,7 +81,7 @@
   },
   {
     "id": 11005,
-    "pirze": 1,
+    "prize": 1,
     "arts_cost": 1,
     "power": 200,
     "on_play_condition_type": "None",
@@ -101,7 +101,7 @@
   },
   {
     "id": 11006,
-    "pirze": 2,
+    "prize": 2,
     "arts_cost": 2,
     "power": 300,
     "on_play_condition_type": "None",
