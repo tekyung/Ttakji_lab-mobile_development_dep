@@ -2,20 +2,5 @@
 2.Skill - CardSkill 테이블",,
 id,name,type,max_deck_count,skin_res
 int32,string(64),ECardType,byte,String(128)
-11001,슬라임,Unit,2,asset/m1_tmp/card_img/u_slime.png
+11001,슬라임,Unit,20,asset/m1_tmp/card_img/u_slime.png
 21001,파이어볼,Skill,2,asset/m1_tmp/card_img/s_fire_ball.png
-31001,이거,Unit,2,asset/m1_tmp/card_img/s_fire_ball2.png
-41001,이거2,Unit,2,asset/m1_tmp/card_img/s_fire_ball3.png
-51001,이거3,Unit,2,asset/m1_tmp/card_img/s_fire_ball4.png
-61001,이거4,Unit,2,asset/m1_tmp/card_img/s_fire_ball5.png
-71001,이거5,Unit,2,asset/m1_tmp/card_img/s_fire_ball6.png
-81001,이거6,Unit,2,asset/m1_tmp/card_img/s_fire_ball7.png
-91001,이거7,Unit,2,asset/m1_tmp/card_img/s_fire_ball8.png
-101001,이거8,Unit,2,asset/m1_tmp/card_img/s_fire_ball9.png
-111001,이거9,Unit,2,asset/m1_tmp/card_img/s_fire_ball10.png
-121001,이거10,Unit,2,asset/m1_tmp/card_img/s_fire_ball11.png
-131001,이거11,Unit,2,asset/m1_tmp/card_img/s_fire_ball12.png
-141001,이거12,Unit,2,asset/m1_tmp/card_img/s_fire_ball13.png
-151001,이거13,Unit,2,asset/m1_tmp/card_img/s_fire_ball14.png
-161001,이거14,Unit,2,asset/m1_tmp/card_img/s_fire_ball15.png
-171001,이거15,Unit,2,asset/m1_tmp/card_img/s_fire_ball16.png
