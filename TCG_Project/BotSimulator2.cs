@@ -69,7 +69,7 @@ public class BotSimulator2
 		// [수정 4] 턴 시작 시 상태 및 HP 초기화
 		me.OnTurnStart();
 		DrawCards(me, 1);
-		Console.WriteLine($"--- Status: HP {me.Health} / Mana {me.Mana} (Max {maxMana}) / Hand {me.Hand.Count}---");
+		Console.WriteLine($"--- Status: HP {me.Health} / Mana {me.Mana} (Max {maxMana}) / Hand {me.Hand.Count} ---");
 
 		// [수정 3] 메인 페이즈: 가능한 모든 행동 반복
         bool actionTaken = true;
