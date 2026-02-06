@@ -68,9 +68,18 @@ namespace TCG_Project.Scripts.Effects
                 else if (t.Type == TargetType.Card)
                 {
                     Card c = t.CardVal;
+                    // [수정] Power 케이스 추가
+                    if (statName == "Power")
+                    {
+                        int prev = c.Power;
+                        c.Power += amount;
+                        if (c.Power < 0) c.Power = 0; // 음수 방지 (선택 사항)
+                        actualChange = c.Power - prev;
 
+                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Power {amount} 변동 -> {c.Power}");
+                    }
                     // [수정] 중복 호출 제거하고 여기서 한 번만 처리
-                    if (statName == "Cost")
+                    else if (statName == "Cost")
                     {
                         int prev = c.Cost;
                         c.Cost += amount;

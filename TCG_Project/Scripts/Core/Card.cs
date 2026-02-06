@@ -38,8 +38,8 @@ namespace TCG_Project.Scripts.Core
             IsExhausted = false;
         }
 
-        // 카드는 여러 개의 효과를 가질 수 있습니다.
-        private List<ICardEffect> effects = new List<ICardEffect>();
+        // 카드는 여러 개의 효과를 가질 수 있습니다.(구형)
+        // private List<ICardEffect> effects = new List<ICardEffect>();
 
         // 불변 스탯(초기화용 원본 데이터)
         public int OriginalCost { get; set; } // 원래 코스트 기억
@@ -91,7 +91,7 @@ namespace TCG_Project.Scripts.Core
 
         public void AddEffect(ICardEffect effect)
         {
-            effects.Add(effect);
+            Effects.Add(effect);
         }
 
         // 카드를 사용할 때 호출
@@ -107,7 +107,7 @@ namespace TCG_Project.Scripts.Core
             }
 
             Console.WriteLine($"--- {Name} / {Cost} / {Description} ---\n");
-            foreach (var effect in effects)
+            foreach (var effect in Effects)
             {
                 effect.Execute(context);
             }
@@ -160,7 +160,7 @@ namespace TCG_Project.Scripts.Core
             // 효과 리스트도 새로 만들어서 독립성 보장
             // (주의: Effect 객체 자체도 상태를 가진다면 Effect.Clone()이 필요하지만, 
             // 현재 단계에서는 리스트만 새로 파도 충분합니다.)
-            foreach (var effect in this.effects)
+            foreach (var effect in this.Effects)
             {
                 newCard.AddEffect(effect);
             }
@@ -172,7 +172,7 @@ namespace TCG_Project.Scripts.Core
         public bool HasEffectType(string typeName)
         {
             // 효과 리스트를 순회하며 타입 이름이 포함되는지 검사
-            foreach (var effect in effects)
+            foreach (var effect in Effects)
             {
                 // 예: DamageEffect -> "Damage" 포함됨
                 if (effect.GetType().Name.Contains(typeName)) return true;
