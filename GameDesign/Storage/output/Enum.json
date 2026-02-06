@@ -35,6 +35,41 @@
     "enum_index": 1
   },
   {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OwnUnit",
+    "enum_index": 2
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OwnDeck",
+    "enum_index": 3
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OppentDeck",
+    "enum_index": 4
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OwnHand",
+    "enum_index": 5
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OppentHand",
+    "enum_index": 6
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OwnMana",
+    "enum_index": 7
+  },
+  {
+    "enum_category": "ECardEffectTarget",
+    "enum_value": "OppentMana",
+    "enum_index": 8
+  },
+  {
     "enum_category": "ECardEffectTargetCondition",
     "enum_value": "None",
     "enum_index": 0
@@ -45,6 +80,11 @@
     "enum_index": 1
   },
   {
+    "enum_category": "ECardEffectTargetCondition",
+    "enum_value": "DeckHighOrEqual",
+    "enum_index": 2
+  },
+  {
     "enum_category": "ECardEffectFunctionType",
     "enum_value": "None",
     "enum_index": 0
@@ -53,5 +93,25 @@
     "enum_category": "ECardEffectFunctionType",
     "enum_value": "KillUnit",
     "enum_index": 1
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "DamegeToUnit",
+    "enum_index": 2
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "Power_Up",
+    "enum_index": 3
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "Gain_Mana",
+    "enum_index": 4
+  },
+  {
+    "enum_category": "ECardEffectFunctionType",
+    "enum_value": "Draw",
+    "enum_index": 5
   }
 ]

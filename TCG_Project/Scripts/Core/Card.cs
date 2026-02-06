@@ -21,6 +21,45 @@ namespace TCG_Project.Scripts.Core
         // 카드는 여러 개의 효과를 가질 수 있습니다.
         private List<ICardEffect> effects = new List<ICardEffect>();
 
+        // 불변 스탯(초기화용 원본 데이터)
+        public int OriginalCost { get; private set; } // 원래 코스트 기억
+        
+        // 원래 주인 (게임 시작 시 덱의 주인, 불변)
+        public Player OriginalOwner { get; private set; }
+
+        // 현재 컨트롤러 (누구 필드/패에 있는가, 가변)
+        public Player Controller { get; set; }
+
+
+        // 팩토리에서 카드 생성 시 호출 (최초 1회)
+        public void InitializeData(int baseCost)
+        {
+            this.OriginalCost = baseCost;
+            this.Cost = baseCost;
+        }
+
+        // 게임 시작 시 덱 세팅할 때 호출
+        public void SetOwner(Player owner)
+        {
+            OriginalOwner = owner;
+            Controller = owner;
+        }
+
+        // [핵심] 상태 초기화 (묘지행, 바운스 등)
+        public void ResetState()
+        {
+            // 1. 코스트 복구
+            this.Cost = this.OriginalCost;
+
+            // 2. 소유권 복구 (원래 주인에게 돌아감)
+            this.Controller = this.OriginalOwner;
+
+            // 추후 공격력/체력/상태이상 초기화 로직이 여기에 추가됨
+            // 예: this.Attack = this.OriginalAttack;
+
+            // 주의: Effects 리스트는 건드리지 않음 (카드 고유 능력이므로)
+        }
+
         public void AddEffect(ICardEffect effect)
         {
             effects.Add(effect);
@@ -29,6 +68,9 @@ namespace TCG_Project.Scripts.Core
         // 카드를 사용할 때 호출
         public void Play(GameContext context)
         {
+            // [중요] 새 카드를 발동할 때 컨텍스트 변수 초기화
+            context.ClearVariables();
+
             Console.WriteLine($"--- {Name} / {Cost} / {Description} ---\n");
             foreach (var effect in effects)
             {

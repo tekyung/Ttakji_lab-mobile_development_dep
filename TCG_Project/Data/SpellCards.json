@@ -6,7 +6,7 @@
         "description": "적에게 5 데미지",
         "effects": [
             {
-                "id": "dmg",
+                "id": "damage",
                 "args": {
                     "target": "opponent",
                     "amount": 5
@@ -45,11 +45,12 @@
         "playCondition": "activePlayer.Health < startingHealth",
         "effects": [
             {
-                "id": "dmg",
+                "id": "damage",
                 "args": {
                     "target": "Opponent",
                     "amount": "(startingHealth - activePlayer.Health)/2"
                 }
+
             }
         ]
     },
@@ -60,7 +61,7 @@
         "description": "이 카드를 포함한 내 패 장수 x 2 만큼 적에게 데미지",
         "effects": [
             {
-                "id": "dmg",
+                "id": "damage",
                 "args": {
                     "target": "Opponent",
                     "amount": "activePlayer.Hand.CountInclusive * 2"
@@ -109,7 +110,7 @@
         "description": "(내 패 + 1) * 2 만큼 데미지를 줍니다.",
         "effects": [
             {
-                "id": "dmg",
+                "id": "damage",
                 "args": {
                     "amount": "(activePlayer.Hand.Count + 1) * 2"
                 }
@@ -158,9 +159,10 @@
         "name": "피의 대가",
         "cost": 0,
         "description": "3 데미지를 받고 마나를 6 회복합니다.",
+        "playCondition": "activePlayer.Health > 3",
         "effects": [
             {
-                "id": "dmg",
+                "id": "damage",
                 "args": {
                     "target": "ActivePlayer",
                     "amount": 3
@@ -179,12 +181,12 @@
         "id": "c_heal_opponent",
         "name": "자비로운 손길",
         "cost": 2,
-        "description": "상대 LP를 3 회복시킵니다. (왜?)",
+        "description": "서로의 LP를 3 회복시킵니다.",
         "effects": [
             {
                 "id": "heal",
                 "args": {
-                    "target": "opponent",
+                    "target": "All",
                     "amount": 3
                 }
             }
@@ -200,12 +202,20 @@
             {
                 "id": "draw",
                 "args": {
-                    "target": "All",
+                    "target": "activePlayer",
+                    "count": 1
+                }
+            },
+            {
+                "id": "draw",
+                "args": {
+                    "target": "opponent",
                     "count": 1
                 }
             }
         ]
     },
+    /*
     {
         "id": "c_GameSet",
         "name": "시시한 게임",
@@ -230,6 +240,7 @@
             }
         ]
     },
+    */
     {
         "id": "c_snipe",
         "name": "저격",
@@ -267,7 +278,7 @@
                     "target": {
                         "controller": "Self",
                         "zones": [ "Hand" ],
-                        //"filter": "target.Cost >= 4",
+                        //"filter": "target.Cost >= 4", 원래 효과는 4코 이상만 감소
                         "mode": "All"
                     }
                 }
@@ -289,7 +300,7 @@
                     "target": {
                         "controller": "Self",
                         "zones": [ "Hand" ],
-                        "mode": "Manual",
+                        "mode": "Manual", // 봇은 랜덤
                         "count": 2
                     }
                 }
@@ -297,6 +308,132 @@
             {
                 "id": "draw",
                 "args": { "count": 2 }
+            }
+        ]
+    },
+    {
+        "id": "c_sacrifice_for_mana",
+        "name": "마나 변환",
+        "cost": 0,
+        "description": "내 패를 1장 골라 버리고 마나를 3 회복합니다.",
+        "playCondition": "activePlayer.Hand.Count > 1",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Hand",
+                    "dest": "Graveyard",
+                    "target": {
+                        "controller": "Self",
+                        "zones": [ "Hand" ],
+                        "mode": "Manual",
+                        "count": 1
+                    }
+                }
+            },
+            {
+                "id": "managain",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": 3
+                }
+            }
+        ]
+    },
+    /*
+    {
+        "id": "c_removPlayingcondition",
+        "name": "임시 허가", (당장은 미완성)
+        "cost": 3,
+        "description": " 서로의 패에 있는 모든 카드의 플레이 조건을 무시합니다.",
+        "playCondition": "activePlayer.Hand.Count + opponent.Hand.Count >= 2",
+        "effects": [
+            {
+                "type": "ModifyStat",
+                "params": {
+                    "stat": "IgnorePlayCondition",
+                    "amount": 1,
+                    "target": {
+                        "controller": "All",
+                        "zones": [ "Hand" ],
+                        "mode": "All"
+                    }
+                }
+            }
+        ]
+    }
+    */
+    {
+        "id": "c_card_steal",
+        "name": "선임의 긴빠이",
+        "cost": 4,
+        "description": "상대 패 1장을 무작위로 자신의 패에 넣습니다.",
+        "playCondition": "opponent.Hand.Count > 0",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Hand",
+                    "dest": "Hand",
+                    "srcTarget": "opponent",
+                    "destTarget": "self",
+                    "target": {
+                        "controller": "opponent",
+                        "zones": [ "Hand" ],
+                        "mode": "Random",
+                        "count": 1
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_mana_recycle",
+        "name": "마나 재활용",
+        "cost": 1,
+        "description": "패를 1장 버리고, 그 카드의 코스트만큼 마나를 회복합니다.",
+        "playingCondition": "activePlayer.Hand.Count >= 2",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Hand",
+                    "dest": "Graveyard",
+                    "target": {
+                        "controller": "Self",
+                        "zones": [ "Hand" ],
+                        "mode": "Manual", // 직접 선택
+                        "count": 1
+                    },
+                    "recordStat": "Cost", // <--- [핵심] 코스트를 추출하라!
+                    "outVar": "recycle_amount" // <--- 그 값을 여기에 저장
+                }
+            },
+            {
+                "id": "managain",
+                "args": {
+                    "target": "ActivePlayer",
+                    "amount": "var.recycle_amount" // <--- 저장된 값만큼 회복
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_soul_exchange",
+        "name": "영혼의 맞교환",
+        "cost": 5,
+        "description": "자신과 상대방의 패를 모두 바꿉니다.",
+        "playCondition": "activePlayer.Hand.Count > 0 && opponent.Hand.Count > 0",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "operation": "Swap", // <--- [핵심] 교환 모드
+                    "src": "Hand",
+                    "dest": "Hand", // Hand <-> Hand 교환
+                    "srcTarget": "Self", // 나
+                    "destTarget": "Opponent" // 상대
+                }
             }
         ]
     }
