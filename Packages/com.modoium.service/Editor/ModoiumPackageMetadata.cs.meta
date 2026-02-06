@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 62fc7e58100b5ed40b23306c670312a3
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/Editor/ModoiumPackageMetadata.cs
+  uploadId: 737216

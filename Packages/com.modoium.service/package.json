@@ -1,0 +1,27 @@
+{
+    "name": "com.modoium.service",
+    "version": "1.0.7",
+    "displayName": "Modoium Remote",
+    "description": "Modoium Remote is a productivity tool that lets you instantly test your game by connecting your remote device to the Unity Editor via Wi-Fi.\n\n**IMPORTANT NOTICE**\nDO NOT remove this package by clicking the \"Remove\" button. Instead, follow these steps:\n  1) Close the editor.\n  2) Delete /Packages/com.modoium.service folder.\n  3) Restart the editor.\n",
+    "unity": "2020.3",
+    "author": {
+        "name": "Clicked, Inc.",
+        "email": "support@modoium.com",
+        "url": "https://modoium.com"
+    },
+    "keywords": [
+        "vr",
+        "xr",
+        "mr",
+        "reality",
+        "xreditorsubsystem"
+    ],
+    "dependencies": {
+        "com.unity.modules.audio": "1.0.0",
+        "com.unity.modules.uielements": "1.0.0",
+        "com.unity.nuget.newtonsoft-json": "3.2.1"
+    },
+    "documentationUrl": "https://modoium.com/docs/introduction/",
+    "changelogUrl": "file://./CHANGELOG.md",
+    "licensesUrl": "file://./LICENSE.md"
+}

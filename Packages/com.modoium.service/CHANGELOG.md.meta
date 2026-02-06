@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 4b351843726383944a0793d144c70fee
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/CHANGELOG.md
+  uploadId: 737216

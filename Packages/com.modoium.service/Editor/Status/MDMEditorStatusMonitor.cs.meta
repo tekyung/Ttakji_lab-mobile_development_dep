@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 328412f458d73504ebd585617926d46d
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/Editor/Status/MDMEditorStatusMonitor.cs
+  uploadId: 737216

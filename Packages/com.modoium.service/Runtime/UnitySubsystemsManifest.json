@@ -1,0 +1,12 @@
+{
+    "name": "Modoium",
+    "version": "1.0.4",
+    "libraryName": "modoium",
+    "displays": [{
+        "id": "Modoium Display",
+        "supportedMirrorBlitReservedModes": ["leftEye", "rightEye", "sideBySide", "none"]
+    }],
+    "inputs": [{
+        "id": "Modoium Input"
+    }]
+}
