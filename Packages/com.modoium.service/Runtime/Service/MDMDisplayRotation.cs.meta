@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 0e6440ff0049d6641b937056806cecdb
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/Runtime/Service/MDMDisplayRotation.cs
+  uploadId: 737216

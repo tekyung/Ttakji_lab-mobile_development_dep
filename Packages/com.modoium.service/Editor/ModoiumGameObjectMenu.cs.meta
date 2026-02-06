@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2bd40cb967e091c42bdad6e58c6ae874
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/Editor/ModoiumGameObjectMenu.cs
+  uploadId: 737216

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 0868830d9e7677a499091697b5d6ddc8
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 285371
+  packageName: Modoium Remote
+  packageVersion: 1.0.7
+  assetPath: Packages/com.modoium.service/Runtime/Modoium.Service.asmdef
+  uploadId: 737216
