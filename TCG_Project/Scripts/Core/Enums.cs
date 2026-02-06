@@ -18,4 +18,11 @@ namespace TCG_Project.Scripts.Core
         CardDye, // 카드 유언계
         CardDraw // 카드 드로우 시
     }
+
+    public enum CardType
+    {
+        None = 0,
+        Unit = 1,
+        Skill = 2
+    }
 }

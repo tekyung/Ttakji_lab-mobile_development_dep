@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Systems
@@ -10,126 +9,107 @@ namespace TCG_Project.Scripts.Systems
     {
         public static List<Target> Select(object targetParam, GameContext context)
         {
-            var results = new List<Target>();
+            List<Target> results = new List<Target>();
 
             // 1. 문자열 (단축형) 처리
             if (targetParam is string strParam)
             {
-                var players = TargetEvaluator.Evaluate(strParam, context);
-                foreach (var p in players) results.Add(new Target(p));
+                if (strParam == "ActivePlayer" || strParam == "Self") results.Add(new Target(context.ActivePlayer));
+                else if (strParam == "Opponent") results.Add(new Target(context.TargetPlayer));
                 return results;
             }
 
-            // 2. 객체 (상세 설정) 처리
-            if (targetParam is JObject obj)
+            // 2. 딕셔너리 (상세 설정) 처리 - [수정] JObject가 아니라 Dictionary로 받아야 함
+            if (targetParam is Dictionary<string, object> options)
             {
-                // A. 수집 (Collection)
-                var candidates = CollectCandidates(obj, context);
+                // A. 컨트롤러(주체) 확인
+                Player targetPlayer = context.ActivePlayer;
+                if (options.ContainsKey("controller") && options["controller"].ToString() == "Opponent")
+                    targetPlayer = context.TargetPlayer;
 
-                // B. 필터링 (Filter)
-                if (obj["filter"] != null)
+                // B. 존(Zone) 탐색 및 후보 수집
+                if (options.ContainsKey("zones"))
                 {
-                    string filter = obj["filter"].ToString();
-                    candidates = candidates.Where(t => ConditionEvaluator.EvaluateTarget(t, filter, context)).ToList();
+                    var zoneObj = options["zones"];
+                    string[] zones = zoneObj is string[] arr ? arr : ((IEnumerable<object>)zoneObj).Select(o => o.ToString()).ToArray();
+
+                    foreach (string zoneName in zones)
+                    {
+                        if (Enum.TryParse(zoneName, out ZoneType zone))
+                        {
+                            var cardsInZone = targetPlayer.GetZone(zone);
+                            foreach (var card in cardsInZone)
+                            {
+                                if (card == null) continue;
+
+                                // [핵심] 조건 필터링 (파이어볼: 공격력 300 이하 등)
+                                if (CheckCondition(card, options))
+                                {
+                                    results.Add(new Target(card));
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // 존 지정이 없으면 플레이어 자체가 타겟 (예: 마나 물약)
+                    results.Add(new Target(targetPlayer));
                 }
 
-                // C. 선택 (Selection) - 모드별 분기
-                int count = 1;
-                if (obj["count"] != null) count = FormulaEvaluator.Evaluate(obj["count"], context);
+                // C. 모드별 최종 선택 (Random, Manual, Top)
+                string mode = options.ContainsKey("mode") ? options["mode"].ToString() : "Random";
+                int count = options.ContainsKey("count") ? Convert.ToInt32(options["count"]) : 1;
 
-                string mode = obj["mode"]?.ToString() ?? "Random";
-
-                results = SelectFinalTargets(candidates, count, mode, context);
+                return SelectFinalTargets(results, count, mode, context);
             }
 
             return results;
         }
 
-        private static List<Target> CollectCandidates(JObject info, GameContext context)
+        // [신규] 조건 체크 로직 (파이어볼, 학습 등이 작동하려면 필수)
+        private static bool CheckCondition(Card card, Dictionary<string, object> options)
         {
-            var list = new List<Target>();
+            // 조건이 없으면 통과
+            if (!options.ContainsKey("condition")) return true;
 
-            string ctrlStr = info["controller"]?.ToString() ?? "Self";
-            var controllers = TargetEvaluator.Evaluate(ctrlStr, context);
+            string condType = options["condition"].ToString();
+            int condVal = options.ContainsKey("conditionValue") ? Convert.ToInt32(options["conditionValue"]) : 0;
 
-            var zones = info["zones"]?.ToObject<List<string>>() ?? new List<string>();
-
-            foreach (Player p in controllers)
+            switch (condType)
             {
-                if (zones.Contains("Player")) list.Add(new Target(p));
-                if (zones.Contains("Hand")) foreach (var c in p.Hand) list.Add(new Target(c));
-                if (zones.Contains("Field")) foreach (var c in p.Field) if (c != null) list.Add(new Target(c));
-                if (zones.Contains("Deck")) foreach (var c in p.Deck) list.Add(new Target(c));
+                case "PowerUnderOrEqual": // 파이어볼용
+                    return card.Power <= condVal;
+
+                case "DeckHighOrEqual": // 학습용 (덱 장수 체크)
+                    // 카드가 속한 덱의 장수를 체크
+                    return card.Controller.Deck.Count >= condVal;
+
+                default: return true;
             }
-            return list;
         }
 
         private static List<Target> SelectFinalTargets(List<Target> candidates, int count, string mode, GameContext context)
         {
             if (candidates.Count == 0) return new List<Target>();
 
-            switch (mode)
+            // 봇 시뮬레이션을 위해 Random 모드 우선 처리
+            if (mode == "Random")
             {
-                case "All":
-                    // 개수 제한 없이 전부 반환
-                    return candidates;
-
-                case "Random":
-                    // 셔플 후 N개
-                    var rnd = new Random();
-                    return candidates.OrderBy(x => rnd.Next()).Take(count).ToList();
-
-                case "Manual":
-                    // [직접 선택]
-                    // 봇인 경우(현재 로직상 구분 어려우면 임시로 Random 처리)
-                    // 여기서는 ActivePlayer가 대상 선택권을 가진다고 가정
-                    if (context.ActivePlayer.Name.Contains("Bot") || context.ActivePlayer.Name == "Player 2")
-                    {
-                        // AI는 그냥 랜덤/앞에서부터 선택 (AI 로직 추후 고도화 필요)
-                        return candidates.Take(count).ToList();
-                    }
-                    else
-                    {
-                        // 사람은 콘솔 입력으로 선택
-                        return ManualSelectConsole(candidates, count);
-                    }
-
-                default:
-                    return candidates.Take(count).ToList();
+                var rnd = new Random();
+                return candidates.OrderBy(x => rnd.Next()).Take(count).ToList();
             }
-        }
-
-        // 콘솔 UI: 유저가 번호를 입력해 선택
-        private static List<Target> ManualSelectConsole(List<Target> candidates, int count)
-        {
-            var selected = new List<Target>();
-            Console.WriteLine($"\n[Target Selection] 대상을 {count}개 선택하세요:");
-
-            while (selected.Count < count && candidates.Count > 0)
+            else if (mode == "Top")
             {
-                for (int i = 0; i < candidates.Count; i++)
-                {
-                    Console.WriteLine($"   {i + 1}. {candidates[i].Name} (Type: {candidates[i].Type})");
-                }
-
-                Console.Write($">> 선택 ({selected.Count + 1}/{count}): ");
-                string input = Console.ReadLine();
-
-                if (int.TryParse(input, out int index) && index >= 1 && index <= candidates.Count)
-                {
-                    var choice = candidates[index - 1];
-                    selected.Add(choice);
-                    Console.WriteLine($"   -> '{choice.Name}' 선택됨.");
-
-                    // 중복 선택 방지 (선택된 건 후보에서 제거)
-                    candidates.RemoveAt(index - 1);
-                }
-                else
-                {
-                    Console.WriteLine("   [!] 잘못된 입력입니다.");
-                }
+                return candidates.Take(count).ToList();
             }
-            return selected;
+            else // Manual
+            {
+                // 봇이거나 시뮬레이터 환경이면 Random처럼 동작하게 처리
+                // (실제 유니티 등 UI 환경에서는 여기서 입력 대기 로직 필요)
+                var rnd = new Random();
+                return candidates.OrderBy(x => rnd.Next()).Take(count).ToList();
+            }
         }
     }
 }
