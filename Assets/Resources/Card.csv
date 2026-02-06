@@ -1,6 +1,0 @@
-﻿,,"1.Unit - CardUnit 테이블
-2.Skill - CardSkill 테이블",,
-id,name,type,max_deck_count,skin_res
-int32,string(64),ECardType,byte,String(128)
-11001,슬라임,Unit,20,asset/m1_tmp/card_img/u_slime.png
-21001,파이어볼,Skill,2,asset/m1_tmp/card_img/s_fire_ball.png

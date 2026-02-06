@@ -188,7 +188,7 @@ public class DeckBuilderManager : MonoBehaviour
     // 전체 카드 리스트 생성 (처음에 한 번만 실행)
     void InitCollection()
     {
-        foreach (var kvp in CardDataManager.Instance.CardDict)
+        foreach (var kvp in CardDataManager.Instance.cardDic)
         {
             int id = kvp.Key;
             CardData data = kvp.Value;
@@ -198,7 +198,7 @@ public class DeckBuilderManager : MonoBehaviour
             CardUI ui = go.GetComponent<CardUI>();
 
             // 정보 입력 (처음엔 덱에 0장 있으므로 개수는 0)
-            ui.Setup(id, 0, data.maxDeckCount, this);
+            ui.Setup(id, 0, data.max_deck_count, this);
 
             // 리스트에 등록해둠 (나중에 개수 갱신할 때 쓰려고)
             collectionSlots.Add(ui);
@@ -222,7 +222,7 @@ public class DeckBuilderManager : MonoBehaviour
         int currentCount = myDeck.Count(x => x == id);
         CardData data = CardDataManager.Instance.GetCard(id);
 
-        if (currentCount < data.maxDeckCount)
+        if (currentCount < data.max_deck_count)
         {
             myDeck.Add(id);
             RefreshAllUI(); // 화면 갱신
@@ -281,7 +281,7 @@ public class DeckBuilderManager : MonoBehaviour
 
             int countInDeck = myDeck.Count(x => x == id);
 
-            ui.Setup(id, countInDeck, data.maxDeckCount, this);
+            ui.Setup(id, countInDeck, data.max_deck_count, this);
         }
     }
 
@@ -295,7 +295,7 @@ public class DeckBuilderManager : MonoBehaviour
             CardData data = CardDataManager.Instance.GetCard(slot.myCardID);
 
             // 숫자만 갱신 (깜빡임 없음)
-            slot.UpdateCount(count, data.maxDeckCount);
+            slot.UpdateCount(count, data.max_deck_count);
         }
     }
     // ---------------------------------------------------

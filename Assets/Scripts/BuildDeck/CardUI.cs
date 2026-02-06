@@ -31,7 +31,7 @@ public class CardUI : MonoBehaviour
         // if (descText) descText.text = data.description;
 
         // 이미지 로드 (Resources 폴더 기준)
-        LoadCardImage(data.skinPath);
+        LoadCardImage(data.skin_res);
 
         // 3. 개수 표시
         UpdateCount(currentCount, maxCount);
@@ -64,7 +64,7 @@ public class CardUI : MonoBehaviour
         string path = originalPath;
 
         // 1. 불필요한 앞부분 경로 삭제
-        path = path.Replace("asset/m1_tmp/", ""); // 가장 중요한 부분
+        path = path.Replace("Assets/m1_tmp/", ""); // 가장 중요한 부분
         //path = path.Replace("asset/", "");        // 혹시 몰라 추가
 
         // 2. 확장자 삭제
@@ -120,7 +120,7 @@ public class CardUI : MonoBehaviour
         //if (descText) descText.text = data.description; // 설명도 있다면 표시
 
         // 이미지 로드
-        string path = data.skinPath.Replace(".png", "").Replace("asset/m1_tmp/", "");
+        string path = data.skin_res.Replace(".png", "").Replace("asset/m1_tmp/", "");
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp && cardImage) cardImage.sprite = sp;
 
