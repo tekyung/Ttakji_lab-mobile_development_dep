@@ -8,6 +8,7 @@ public class CardData
     public string type;
     public int maxDeckCount;
     public string skinPath;
+    //public string description;
 
     public CardData(int _id, string _name, string _type, int _maxCount, string _skin)
     {
