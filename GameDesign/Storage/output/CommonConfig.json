@@ -33,11 +33,11 @@
   },
   {
     "Name": "room_session_time",
-    "Value": "60000"
+    "Value": "120000"
   },
   {
     "Name": "choose_wait_time",
-    "Value": "2000"
+    "Value": "20000"
   },
   {
     "Name": "gain_prize_by_direct",
