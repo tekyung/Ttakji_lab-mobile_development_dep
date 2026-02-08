@@ -30,7 +30,7 @@
     "effect_target_condition_value2": -1,
     "effect_function_type": "Power_Up",
     "effect_function_value1": 0,
-    "effect_function_value2": -1
+    "effect_function_value2": 200
   },
   {
     "id": 210014,
