@@ -17,8 +17,15 @@ public class CardUI : MonoBehaviour
     public int myCardID;
     private DeckBuilderManager deckManager; // 매니저 참조 변수
 
+    public Button removeAllButton;
+
+    public GameObject deckCount; // 카드 개수, 카드 우측 하단
+    public TextMeshProUGUI deckCountText;
+
+    private bool isDeckMode = false; //덱 리스트인지 아닌지
+
     // 매니저가 이 함수를 호출해서 카드를 설정해줍니다.
-    public void Setup(int id, int currentCount, int maxCount, DeckBuilderManager manager)
+    public void Setup(int id, int currentCount, int maxCount, DeckBuilderManager manager, bool isDeck)
     {
         myCardID = id;
         deckManager = manager;
@@ -32,6 +39,8 @@ public class CardUI : MonoBehaviour
 
         // 이미지 로드 (Resources 폴더 기준)
         LoadCardImage(data.skin_res);
+
+        isDeckMode = isDeck;
 
         // 3. 개수 표시
         UpdateCount(currentCount, maxCount);
@@ -54,6 +63,17 @@ public class CardUI : MonoBehaviour
                 deckManager.RemoveCard(myCardID);
             });
         }
+
+        if (removeAllButton != null)
+        {
+            // 기존 연결 제거 (중복 방지)
+            removeAllButton.onClick.RemoveAllListeners();
+
+            // 새 기능 연결: 매니저의 RemoveAllCards 호출
+            removeAllButton.onClick.AddListener(() => {
+                deckManager.RemoveAllCards(myCardID);
+            });
+        }
     }
 
     private void LoadCardImage(string originalPath)
@@ -64,7 +84,7 @@ public class CardUI : MonoBehaviour
         string path = originalPath;
 
         // 1. 불필요한 앞부분 경로 삭제
-        path = path.Replace("Assets/m1_tmp/", ""); // 가장 중요한 부분
+        path = path.Replace("Assets/Resources/", ""); // 가장 중요한 부분
         //path = path.Replace("asset/", "");        // 혹시 몰라 추가
 
         // 2. 확장자 삭제
@@ -88,10 +108,35 @@ public class CardUI : MonoBehaviour
     // 개수만 따로 갱신하는 함수 (깜빡임 방지)
     public void UpdateCount(int current, int max)
     {
-        if (countText)
+        if (isDeckMode)
         {
-            if (current > 0) countText.text = $"{current}/{max}";
-            else countText.text = ""; // 0장이면 숫자 숨김
+            if (countText) countText.gameObject.SetActive(false);
+
+            if (deckCount) deckCount.SetActive(true);
+
+            if (deckCountText) deckCountText.text = current.ToString();
+        }
+        else
+        {
+            if (deckCount) deckCount.SetActive(false);
+
+            if (countText)
+            {
+                if (current > 0) countText.text = $"{current}/{max}";
+                else countText.text = ""; // 0장이면 숫자 숨김
+            }
+
+            //if (removeAllButton != null)
+            //{
+            //    if (current > 0)
+            //    {
+            //        removeAllButton.gameObject.SetActive(true);
+            //    }
+            //    else
+            //    {
+            //        removeAllButton.gameObject.SetActive(false);
+            //    }
+            //}
         }
     }
 
@@ -120,7 +165,8 @@ public class CardUI : MonoBehaviour
         //if (descText) descText.text = data.description; // 설명도 있다면 표시
 
         // 이미지 로드
-        string path = data.skin_res.Replace(".png", "").Replace("asset/m1_tmp/", "");
+        string path = data.skin_res.Replace(".png", "").Replace("Assets/Resources/", "");
+        path = path.Replace(".png", "").Replace(".jpg", "");
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp && cardImage) cardImage.sprite = sp;
 
