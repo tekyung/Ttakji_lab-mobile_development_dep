@@ -28,6 +28,8 @@ public class DeckBuilderManager : MonoBehaviour
     public GameObject deleteConfirmPopup; // 삭제 확인 팝업
     public TextMeshProUGUI deleteConfirmText; // 삭제 덱 이름
 
+    public GameObject newDeckPopup; // 새 덱 만들기 팝업
+
     private string deckToDelete = "";
 
     [Header("카드 확대 팝업")]
@@ -186,7 +188,7 @@ public class DeckBuilderManager : MonoBehaviour
     // 전체 카드 리스트 생성 (처음에 한 번만 실행)
     void InitCollection()
     {
-        foreach (var kvp in CardDataManager.Instance.CardDict)
+        foreach (var kvp in CardDataManager.Instance.cardDic)
         {
             int id = kvp.Key;
             CardData data = kvp.Value;
@@ -196,7 +198,7 @@ public class DeckBuilderManager : MonoBehaviour
             CardUI ui = go.GetComponent<CardUI>();
 
             // 정보 입력 (처음엔 덱에 0장 있으므로 개수는 0)
-            ui.Setup(id, 0, data.maxDeckCount, this);
+            ui.Setup(id, 0, data.max_deck_count, this);
 
             // 리스트에 등록해둠 (나중에 개수 갱신할 때 쓰려고)
             collectionSlots.Add(ui);
@@ -220,7 +222,7 @@ public class DeckBuilderManager : MonoBehaviour
         int currentCount = myDeck.Count(x => x == id);
         CardData data = CardDataManager.Instance.GetCard(id);
 
-        if (currentCount < data.maxDeckCount)
+        if (currentCount < data.max_deck_count)
         {
             myDeck.Add(id);
             RefreshAllUI(); // 화면 갱신
@@ -279,7 +281,7 @@ public class DeckBuilderManager : MonoBehaviour
 
             int countInDeck = myDeck.Count(x => x == id);
 
-            ui.Setup(id, countInDeck, data.maxDeckCount, this);
+            ui.Setup(id, countInDeck, data.max_deck_count, this);
         }
     }
 
@@ -293,7 +295,7 @@ public class DeckBuilderManager : MonoBehaviour
             CardData data = CardDataManager.Instance.GetCard(slot.myCardID);
 
             // 숫자만 갱신 (깜빡임 없음)
-            slot.UpdateCount(count, data.maxDeckCount);
+            slot.UpdateCount(count, data.max_deck_count);
         }
     }
     // ---------------------------------------------------
@@ -439,6 +441,30 @@ public class DeckBuilderManager : MonoBehaviour
         RefreshDeckList(null);
     }
 
+    // 새로운 덱 만들기
+    public void OnClickNewDeckButton()
+    {
+        if (newDeckPopup != null)
+        {
+            newDeckPopup.SetActive(true);
+        }
+    }
+
+    public void OnConfirmNewDeck()
+    {
+        // 1. 덱 초기화 로직 (아까 만들었던 코드)
+        myDeck.Clear();
+        if (deckNameInput != null) deckNameInput.text = "새 덱";
+        RefreshAllUI();
+
+        // 2. 열려있는 확인 팝업 닫기
+        ClosePopup();
+
+        // 3. 성공 메시지 띄우기
+        ShowMessagePopup("새 덱을 생성하였습니다.");
+
+        Debug.Log("새 덱 생성 완료");
+    }
     // ---------------------------------------------------
     // 팝업 관련
     // ---------------------------------------------------
@@ -461,6 +487,8 @@ public class DeckBuilderManager : MonoBehaviour
         if (deleteConfirmPopup !=null) deleteConfirmPopup.SetActive(false);
 
         if (cardZoomPopup != null) cardZoomPopup.SetActive(false);
+
+        if (newDeckPopup != null) newDeckPopup.SetActive(false);
     }
 
 

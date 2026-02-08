@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 060a7605d6f8cd64190fc55e8967dcd6
+guid: c43480f481e67174b9b7ca96ca6620bd
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 905723166969014979
-    second: Learning_0
+      213: 5810246794766127355
+    second: Small_Worm_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -126,7 +126,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Learning_0
+      name: Small_Worm_0
       rect:
         serializedVersion: 2
         x: 0
@@ -141,8 +141,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3caa700fb66c19c00800000000000000
-      internalID: 905723166969014979
+      spriteID: bf013630da422a050800000000000000
+      internalID: 5810246794766127355
       vertices: []
       indices: 
       edges: []
@@ -161,7 +161,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Learning_0: 905723166969014979
+      Small_Worm_0: 5810246794766127355
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

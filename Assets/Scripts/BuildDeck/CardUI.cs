@@ -31,9 +31,7 @@ public class CardUI : MonoBehaviour
         // if (descText) descText.text = data.description;
 
         // 이미지 로드 (Resources 폴더 기준)
-        string path = data.skinPath.Replace(".png", "").Replace("asset/m1_tmp/", "");
-        Sprite sp = Resources.Load<Sprite>(path);
-        if (sp && cardImage) cardImage.sprite = sp;
+        LoadCardImage(data.skin_res);
 
         // 3. 개수 표시
         UpdateCount(currentCount, maxCount);
@@ -55,6 +53,35 @@ public class CardUI : MonoBehaviour
                 Debug.Log($"[클릭] - 버튼 눌림: {data.name} ({myCardID})");
                 deckManager.RemoveCard(myCardID);
             });
+        }
+    }
+
+    private void LoadCardImage(string originalPath)
+    {
+        // CSV 경로: "asset/m1_tmp/card_img/u_slime.png"
+        // 목표 경로: "card_img/u_slime" (Resources 폴더 기준)
+
+        string path = originalPath;
+
+        // 1. 불필요한 앞부분 경로 삭제
+        path = path.Replace("Assets/m1_tmp/", ""); // 가장 중요한 부분
+        //path = path.Replace("asset/", "");        // 혹시 몰라 추가
+
+        // 2. 확장자 삭제
+        path = path.Replace(".png", "").Replace(".jpg", "");
+
+        // 3. 로드
+        Sprite sp = Resources.Load<Sprite>(path);
+
+        // 4. 적용
+        if (sp != null && cardImage != null)
+        {
+            cardImage.sprite = sp;
+        }
+        else
+        {
+            // 디버깅용: 이미지가 하얗게 나오면 콘솔창을 확인하세요!
+             Debug.LogWarning($"이미지 로드 실패! 최종 경로: {path} / 원본: {originalPath}");
         }
     }
 
@@ -93,7 +120,7 @@ public class CardUI : MonoBehaviour
         //if (descText) descText.text = data.description; // 설명도 있다면 표시
 
         // 이미지 로드
-        string path = data.skinPath.Replace(".png", "").Replace("asset/m1_tmp/", "");
+        string path = data.skin_res.Replace(".png", "").Replace("asset/m1_tmp/", "");
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp && cardImage) cardImage.sprite = sp;
 
@@ -106,5 +133,4 @@ public class CardUI : MonoBehaviour
         if (plusButton) plusButton.gameObject.SetActive(false);
         if (minusButton) minusButton.gameObject.SetActive(false);
     }
-
 }

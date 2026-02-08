@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 060a7605d6f8cd64190fc55e8967dcd6
+guid: 6657addc2ab132f4dac6cb9070122b6c
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 905723166969014979
-    second: Learning_0
+      213: -3896932687596940581
+    second: Strengthen_Potion_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -126,7 +126,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Learning_0
+      name: Strengthen_Potion_0
       rect:
         serializedVersion: 2
         x: 0
@@ -141,8 +141,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3caa700fb66c19c00800000000000000
-      internalID: 905723166969014979
+      spriteID: bd21d221e505be9c0800000000000000
+      internalID: -3896932687596940581
       vertices: []
       indices: 
       edges: []
@@ -161,7 +161,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Learning_0: 905723166969014979
+      Strengthen_Potion_0: -3896932687596940581
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
