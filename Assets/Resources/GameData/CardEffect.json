@@ -75,5 +75,16 @@
     "effect_function_type": "KillUnit",
     "effect_function_value1": 0,
     "effect_function_value2": -1
+  },
+  {
+    "id": 210018,
+    "effect_target_type": "OwnMana",
+    "effect_target_value": -1,
+    "effect_target_condition": "None",
+    "effect_target_condition_value1": -1,
+    "effect_target_condition_value2": -1,
+    "effect_function_type": "Gain_Mana",
+    "effect_function_value1": 0,
+    "effect_function_value2": 1
   }
 ]

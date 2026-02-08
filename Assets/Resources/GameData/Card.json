@@ -42,6 +42,13 @@
     "skin_res": "Assets/m1_tmp/card_img/Bomb_Bee.png"
   },
   {
+    "id": 11007,
+    "name": "골드 슬라임",
+    "type": "Unit",
+    "max_deck_count": 2,
+    "skin_res": "Assets/m1_tmp/card_img/u_Gold_Slime.png"
+  },
+  {
     "id": 21001,
     "name": "파이어볼",
     "type": "Skill",
