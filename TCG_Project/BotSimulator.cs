@@ -48,8 +48,10 @@ namespace TCG_Project
             }
 
             // 1. 카드 데이터 로드
-            string cardsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "Cards.json");
+            string cardsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "SpellCards.json");
             List<Card> cardDatabase = CardFactory.LoadCardsFromFile(cardsPath);
+            
+            //List<Card> cardDatabase = CardFactoryver2.LoadAllData(cardsPath);
 
             if (cardDatabase.Count == 0)
             {
@@ -107,19 +109,19 @@ namespace TCG_Project
 
             while (true)
             {
-                Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {GameRules.StartingMana} ==========");
-
+                //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, globalContext);
                 // --- Player 1 턴 ---
                 if (!ProcessTurn(p1, p2, GameRules.StartingMana)) break;
-
+                //ProcessPendingEffects(GamePhase.TurnEnd, activePlayer, globalContext);
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
 
-                Console.WriteLine("--------------------------------------");
+                Console.WriteLine("--------------------------------------------------\n");
 
+                //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, globalContext);
                 // --- Player 2 턴 ---
                 if (!ProcessTurn(p2, p1, GameRules.StartingMana)) break;
-
+                //ProcessPendingEffects(GamePhase.TurnEnd, activePlayer, globalContext);
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
 
@@ -132,7 +134,7 @@ namespace TCG_Project
                     if (currentMaxMana > GameRules.MaxMana) currentMaxMana = GameRules.MaxMana;
                 }
 
-                turnCount++;
+                // turnCount++;
 
                 // 엔터키로 진행
                 Console.ReadLine();
@@ -173,6 +175,8 @@ namespace TCG_Project
         // 한 플레이어의 턴을 진행하는 로직
         public static bool ProcessTurn(Player activePlayer, Player opponent, int currentTurnMaxMana)
         {
+            Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {GameRules.StartingMana} ==========");
+
             // 1. 마나 충전 (현재 턴의 최대 마나로 리필)
             // 보통 TCG는 턴 시작 시 마나가 '회복'되므로 할당(=)이 일반적입니다.
             if (turnCount != 1) activePlayer.Mana = GameRules.StartingMana;
@@ -220,10 +224,9 @@ namespace TCG_Project
             // 3. 메인 페이즈
 
             int playCount = 0;
-            const int MAX_PLAYS_PER_TURN = 3; // 최대 행동 횟수 제한
 
             // [조건 변경] 마나가 있고 && 낼 카드가 있고 && 3번 미만으로 행동했으면 반복
-            while (activePlayer.Mana > 0 && playCount < MAX_PLAYS_PER_TURN)
+            while (activePlayer.Mana > 0 && playCount < GameRules.MaxPlaysPerTurn)
             {
                 // 1. 낼 수 있는 카드 목록 갱신
                 activePlayer.UpdatePlayableCards(checkContext);
@@ -246,9 +249,29 @@ namespace TCG_Project
                 System.Threading.Thread.Sleep(500);
             }
 
-            Console.WriteLine($"\n--- {activePlayer.Name} 턴 종료 (사용 카드: {playCount}장 / LP: {activePlayer.Health}장 / 패: {activePlayer.Hand.Count} / 덱: {activePlayer.Deck.Count}장 / 묘지: {activePlayer.Graveyard.Count}장) ---");
+            Console.WriteLine($"\n--- {activePlayer.Name} 턴 종료 (사용 카드: {playCount}장 / LP: {activePlayer.Health} / 패: {activePlayer.Hand.Count} / 덱: {activePlayer.Deck.Count}장 / 묘지: {activePlayer.Graveyard.Count}장) ---");
+            turnCount++;
 
             return true;
+        }
+
+        // 카드 트리거 효과 체크
+        public static void ProcessPendingEffects(GamePhase phase, Player currentTurnPlayer, GameContext context)
+        {
+            // 리스트를 순회하며 조건에 맞는 효과 실행
+            // (실행 중 리스트가 변경될 수 있으므로 역순이나 복사본 사용 권장)
+            var effectsToRun = context.PendingEffects
+                .Where(e => e.TriggerPhase == phase && (e.OwnerPlayer == null || e.OwnerPlayer == currentTurnPlayer))
+                .ToList();
+
+            foreach (var pe in effectsToRun)
+            {
+                Console.WriteLine($"⏰ [만료] 예약된 효과가 발동합니다.");
+                pe.Effect.Execute(pe.Context); // 저장해둔 컨텍스트로 실행
+
+                // 실행 후 제거 (일회성)
+                context.PendingEffects.Remove(pe);
+            }
         }
 
         public static bool CheckGameOver(Player p1, Player p2)

@@ -2,9 +2,5 @@
 2.Skill - CardSkill 테이블",,
 id,name,type,max_deck_count,skin_res
 int32,string(64),ECardType,byte,String(128)
-11001,슬라임,Unit,2,asset/m1_tmp/card_img/u_slime.png
+11001,슬라임,Unit,20,asset/m1_tmp/card_img/u_slime.png
 21001,파이어볼,Skill,2,asset/m1_tmp/card_img/s_fire_ball.png
-31001,이거,Unit,2,asset/m1_tmp/card_img/s_fire_ball2.png
-41001,이거2,Unit,2,asset/m1_tmp/card_img/s_fire_ball3.png
-51001,이거3,Unit,2,asset/m1_tmp/card_img/s_fire_ball4.png
-61001,이거4,Unit,2,asset/m1_tmp/card_img/s_fire_ball5.png

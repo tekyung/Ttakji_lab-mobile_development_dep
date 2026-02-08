@@ -15,6 +15,7 @@ namespace TCG_Project.Scripts.Systems
         public int DrawPerTurn { get; set; }
         public int MaxHandSize { get; set; }
         public int MaxSameCardInDeck { get; set; }
+        public int MaxPlaysPerTurn { get; set; }
     }
 
     public static class GameRules
@@ -44,5 +45,6 @@ namespace TCG_Project.Scripts.Systems
         public static int MaxHandSize => currentRules.MaxHandSize;
         public static int StatingHand => currentRules.StartingHand;
         public static int MaxSameCardInDeck => currentRules.MaxSameCardInDeck;
+        public static int MaxPlaysPerTurn => currentRules.MaxPlaysPerTurn;
     }
 }
