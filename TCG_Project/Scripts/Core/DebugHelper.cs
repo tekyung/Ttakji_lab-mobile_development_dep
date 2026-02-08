@@ -4,6 +4,7 @@ namespace TCG_Project.Scripts.Core
 {
     public static class DebugHelper
     {
+        
         public static void LogSpell(string message)
         {
             Console.ForegroundColor = ConsoleColor.Cyan; // 스펠은 하늘색
@@ -24,5 +25,6 @@ namespace TCG_Project.Scripts.Core
             Console.WriteLine($"      ⚠️ [Warning] {message}");
             Console.ResetColor();
         }
+        
     }
 }

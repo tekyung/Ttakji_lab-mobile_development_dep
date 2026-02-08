@@ -24,11 +24,6 @@ namespace TCG_Project.Scripts.Core
         // 필드 존 (예: 5칸 고정). null이면 빈 공간.
         public Card[] Field { get; private set; } = new Card[5];
 
-        // [유틸] 존 타입에 따라 해당 컨테이너(List)를 반환하거나 처리하는 헬퍼가 필요함
-        // 하지만 Field가 배열이라 타입이 다르므로, MoveCardEffect 내부에서 처리하거나
-        // 별도의 인터페이스(ICardContainer)를 만드는 방법이 있습니다.
-        // 이번 단계에서는 Effect 내부에서 분기 처리하는 방식을 사용하겠습니다.
-
         // 필드의 빈 자리 찾기 (-1이면 꽉 참)
         public int GetEmptyFieldSlot()
         {
@@ -113,7 +108,7 @@ namespace TCG_Project.Scripts.Core
 
             if (card.Type == CardType.Unit)
             {
-                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost}) / 남은 마나: {Mana}");
+                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
             }
             else
             {
@@ -125,7 +120,7 @@ namespace TCG_Project.Scripts.Core
             PlayingCard = card;
 
             // 3. 효과 발동
-            card.Play(context);
+            if (card.Type == CardType.Skill) { card.Play(context); }
 
             // 4. [종료 처리] PlayingCard -> Graveyard (원래 주인 묘지로!) / 소환 시 유닛 효과
             PlayingCard = null;
@@ -139,6 +134,7 @@ namespace TCG_Project.Scripts.Core
                     // 소환 후유증 (바로 공격 불가) 미적용
                     card.IsExhausted = false;
                     Console.WriteLine($"   ⚔️ [소환] {card.Name} (ATK:{card.Power}/HP:{card.Health})가 필드에 배치되었습니다.");
+                    card.Play(context);
                 }
                 else
                 {
@@ -300,7 +296,7 @@ namespace TCG_Project.Scripts.Core
                 {
                     // 1. 행동력 회복 (공격 기회 리필)
                     card.RefreshUnitState();
-
+                    
                     // 2. [신규] 체력 완전 회복 (줄어든 HP 초기화)
                     if (card.Health < card.MaxHealth)
                     {

@@ -44,6 +44,7 @@ namespace TCG_Project.Scripts.Effects
             foreach (Target t in targets)
             {
                 int actualChange = 0;
+                int resultValue = 0;
 
                 // CASE A: 플레이어 스탯 변경
                 if (t.Type == TargetType.Player)
@@ -55,28 +56,58 @@ namespace TCG_Project.Scripts.Effects
                         p.Health += amount;
                         // (Clamp 로직 필요 시 추가)
                         actualChange = p.Health - prev;
+                        resultValue = p.Health;
                     }
                     else if (statName == "Mana")
                     {
                         int prev = p.Mana;
                         p.Mana += amount;
                         actualChange = p.Mana - prev;
+                        resultValue = p.Mana;
                     }
-                    System.Console.WriteLine($"✨ [스탯 변경] {p.Name}의 {statName} {amount} 변동 -> {(statName == "Health" ? p.Health : p.Mana)}");
+                    System.Console.WriteLine($"✨ [스탯 변경] {p.Name}의 {statName} {amount} 변동 -> {resultValue}");
                 }
                 // CASE B: 카드 스탯 변경
                 else if (t.Type == TargetType.Card)
                 {
                     Card c = t.CardVal;
-                    // [수정] Power 케이스 추가
+                    // 공격력 처리
                     if (statName == "Power")
                     {
                         int prev = c.Power;
                         c.Power += amount;
-                        if (c.Power < 0) c.Power = 0; // 음수 방지 (선택 사항)
+                        if (c.Power < 0) c.Power = 0;
                         actualChange = c.Power - prev;
+                        resultValue = c.Power;
+                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Power {amount} 변동 -> {resultValue}");
+                        
+                        // ★ 파워는 일단 체력과 동일시, 0 이하가 되면 파괴
+                        if (c.Health <= 0)
+                        {
+                            // BattleSystem의 사망 처리를 호출하거나, 여기서 직접 묘지로 보냄
+                            // (BattleSystem 인스턴스가 없으므로 직접 처리 예시)
+                            ProcessDeath(c, context);
+                        }
+                    }
+                    // [추가] 체력 처리 (파이어볼/픽시드래곤 용)
+                    else if (statName == "Health")
+                    {
+                        int prev = c.Health;
+                        c.Health += amount;
+                        // (최대 체력 초과 방지 로직 필요시 추가)
+                        if (c.Health > c.MaxHealth) c.Health = c.MaxHealth;
 
-                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Power {amount} 변동 -> {c.Power}");
+                        actualChange = c.Health - prev;
+                        resultValue = c.Health;
+                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Health {amount} 변동 -> {resultValue}");
+
+                        // ★ 중요: 체력이 0 이하가 되면 파괴 처리!
+                        if (c.Health <= 0)
+                        {
+                            // BattleSystem의 사망 처리를 호출하거나, 여기서 직접 묘지로 보냄
+                            // (BattleSystem 인스턴스가 없으므로 직접 처리 예시)
+                            ProcessDeath(c, context);
+                        }
                     }
                     // [수정] 중복 호출 제거하고 여기서 한 번만 처리
                     else if (statName == "Cost")
@@ -85,10 +116,10 @@ namespace TCG_Project.Scripts.Effects
                         c.Cost += amount;
                         if (c.Cost < 0) c.Cost = 0;
                         actualChange = c.Cost - prev;
-
-                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Cost {amount} 변동 -> {c.Cost}");
+                        resultValue= c.Cost;
+                        System.Console.WriteLine($"✨ [스탯 변경] 카드 '{c.Name}'의 Cost {amount} 변동 -> {resultValue}");
                     }
-                    else if (statName == "ignorePlayCondition")
+                    else if (statName == "ignorePlayCondition") // 아직 미구현
                     {
                         // 조건 해제 로직 등
                         c.PlayCondition = null;
@@ -97,7 +128,7 @@ namespace TCG_Project.Scripts.Effects
                     }
 
                     // [디버깅] 최종 결과 출력
-                    DebugHelper.LogEffect("Stat Change", $"{c.Name}의 {statName} {amount} 변동 (현재: {(statName == "Cost" ? c.Cost : 0)})");
+                    DebugHelper.LogEffect("Stat Change", $"{c.Name}의 {statName} {amount} 변동 (현재: {resultValue})");
                     // [중요] 변경된 카드를 명단에 추가 (되돌리기 예약용)
                     affectedCards.Add(c);
                 }
@@ -130,6 +161,19 @@ namespace TCG_Project.Scripts.Effects
                 });
 
                 System.Console.WriteLine($"⏰ [예약] {phase}에 {affectedCards.Count}장의 카드 복구 예약됨.");
+            }
+        }
+
+        private void ProcessDeath(Card unit, GameContext context) // HP 0시 파괴 처리
+        {
+            System.Console.WriteLine($"      💀 {unit.Name} 파괴됨! (효과)");
+            Player controller = unit.Controller;
+            if (controller.ExtractCard(ZoneType.Field, unit))
+            {
+                unit.ResetState();
+                Player owner = unit.OriginalOwner ?? controller;
+                owner.Graveyard.Add(unit);
+                System.Console.WriteLine($"{unit.Name}이(가) {owner.Name}의 묘지로 이동합니다. 현재 묘지 {owner.Graveyard.Count}장");
             }
         }
 

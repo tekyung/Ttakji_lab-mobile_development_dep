@@ -9,6 +9,7 @@ namespace TCG_Project.Scripts.Core
     {   // 스펠 카드 종류
         // 게임 중 변할 수 있는 고유 ID (인스턴스 식별용)
         public string InstanceId { get; set; }
+
         // 원본 데이터 ID (어떤 종류의 카드인가?)
         public string DataId { get; set; }
         public string Name { get; set; }
@@ -43,6 +44,8 @@ namespace TCG_Project.Scripts.Core
 
         // 불변 스탯(초기화용 원본 데이터)
         public int OriginalCost { get; set; } // 원래 코스트 기억
+
+        public int OriginalPower { get; set; } // 원래 유닛 파워
         
         // 원래 주인 (게임 시작 시 덱의 주인, 불변)
         public Player OriginalOwner { get; set; }
@@ -74,7 +77,7 @@ namespace TCG_Project.Scripts.Core
             Controller = owner;
         }
 
-        // [핵심] 상태 초기화 (묘지행, 바운스 등)
+        // 상태 초기화 (묘지행, 바운스 등)
         public void ResetState()
         {
             // 1. 코스트 복구
@@ -84,9 +87,8 @@ namespace TCG_Project.Scripts.Core
             this.Controller = this.OriginalOwner;
 
             // 추후 공격력/체력/상태이상 초기화 로직이 여기에 추가됨
-            // 예: this.Attack = this.OriginalAttack;
+            this.Power = this.OriginalPower;
 
-            // 주의: Effects 리스트는 건드리지 않음 (카드 고유 능력이므로)
         }
 
         public void AddEffect(ICardEffect effect)
@@ -97,20 +99,27 @@ namespace TCG_Project.Scripts.Core
         // 카드를 사용할 때 호출
         public void Play(GameContext context)
         {
-            // [중요] 새 카드를 발동할 때 컨텍스트 변수 초기화
+            // 새 카드를 발동할 때 컨텍스트 변수 초기화
             context.ClearVariables();
 
             // [디버깅] 스펠 사용 시작 로그
             if (this.Type == CardType.Skill)
             {
-                DebugHelper.LogSpell($"'{Name}' 발동 시작! (보유 효과: {Effects.Count}개)");
+                DebugHelper.LogSpell($"'{Name}' 발동 (보유 효과: {Effects.Count}개)");
+                Console.WriteLine($"--- {Name} / {Cost} / {Description} ---\n");
+                foreach (var effect in Effects)
+                { effect.Execute(context); }
             }
-
-            Console.WriteLine($"--- {Name} / {Cost} / {Description} ---\n");
-            foreach (var effect in Effects)
+            else // 유닛일 경우: 기동 효과 사용
             {
-                effect.Execute(context);
+                Console.WriteLine($"--- {Name} / {Power} / 효과 {Effects.Count}개 ---\n");
+                foreach (var effect in Effects)
+                {
+                    Console.WriteLine($"    {Name}의 소환 시 효과 발동");
+                    effect.Execute(context);
+                }
             }
+            
             Console.WriteLine("---------------------------------------------\n");
         }
 
@@ -153,6 +162,7 @@ namespace TCG_Project.Scripts.Core
                 DataId = this.DataId, // 원본 카드의 종류 유지
                 Name = this.Name,
                 Cost = this.Cost,
+                Power = this.Power,
                 PlayCondition = this.PlayCondition,
                 Description = this.Description
             };

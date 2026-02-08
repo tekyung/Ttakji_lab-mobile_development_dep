@@ -15,7 +15,7 @@ namespace TCG_Project.Scripts.Systems
             attacker.Controller.Mana -= attacker.AttackCost;
             attacker.IsExhausted = true; // 행동력 소진
 
-            Console.WriteLine($"\n⚔️ [공격] {attacker.Name}(이)가 대상을 공격합니다! (소모 마나: {attacker.AttackCost})");
+            Console.WriteLine($"\n⚔️ [공격] {attacker.Name}(이)가 공격합니다! (소모 마나: {attacker.AttackCost})");
 
             // 3. 데미지 처리
             if (target is Player targetPlayer)
@@ -65,7 +65,7 @@ namespace TCG_Project.Scripts.Systems
             // 공격 비용 체크
             if (attacker.Controller.Mana < attacker.AttackCost)
             {
-                Console.WriteLine($"   🚫 공격 불가: 마나가 부족합니다. (필요: {attacker.AttackCost})");
+                Console.WriteLine($"   🚫 공격 불가: 마나가 부족합니다. (필요 마나: {attacker.AttackCost})");
                 return false;
             }
 
@@ -88,7 +88,7 @@ namespace TCG_Project.Scripts.Systems
         // 유닛 사망 처리
         private void ProcessDeath(Card unit)
         {
-            Console.WriteLine($"      💀 {unit.Name} 파괴됨!");
+            Console.WriteLine($"      💀 {unit.Name} 파괴됨!(전투)");
 
             Player controller = unit.Controller;
 
@@ -100,7 +100,7 @@ namespace TCG_Project.Scripts.Systems
                 // 원래 주인의 묘지로
                 Player owner = unit.OriginalOwner ?? controller;
                 owner.Graveyard.Add(unit); 
-                Console.WriteLine($"{unit.Name}이 의 묘지로 이동합니다.(현재 묘지 {owner.Graveyard.Count}장)");
+                Console.WriteLine($"{unit.Name}이 {owner.Name}의 묘지로 이동합니다.(현재 묘지 {owner.Graveyard.Count}장)");
             }
            
             // TODO: 여기서 '처치 보상(Prize)' 로직 추가 가능
