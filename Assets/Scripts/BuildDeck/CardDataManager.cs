@@ -18,11 +18,11 @@ public class CardDataManager : MonoBehaviour
     void LoadCardData()
     {
         // 1. Resources 폴더에서 JSON 파일 읽어오기 (확장자 .json 제외)
-        TextAsset jsonFile = Resources.Load<TextAsset>("Card");
+        TextAsset jsonFile = Resources.Load<TextAsset>("GameData/Card");
 
         if (jsonFile == null)
         {
-            Debug.LogError("JSON 파일을 찾을 수 없습니다! Assets/Resources/card_data.json 확인 필요");
+            Debug.LogError("JSON 파일을 찾을 수 없습니다! Assets/Resources/GameData/card_data.json 확인 필요");
             return;
         }
 

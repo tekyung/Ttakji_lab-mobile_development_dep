@@ -9,7 +9,7 @@ public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHa
 
     private bool isPressed = false;
     private float pressTimer = 0f;
-    private float holdDuration = 1.5f; // 1.5초 동안 눌러야 함
+    private float holdDuration = 1f; // 1.5초 동안 눌러야 함
     private bool isZoomOpened = false; // 이미 열렸는지 체크
 
     void Update()
@@ -25,7 +25,7 @@ public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHa
                 isZoomOpened = true; // 중복 실행 방지
 
                 // 매니저를 찾아서 팝업 열기 실행!
-                DeckBuilderManager manager = FindObjectOfType<DeckBuilderManager>();
+                DeckBuilderManager manager = FindAnyObjectByType<DeckBuilderManager>();
                 if (manager != null)
                 {
                     manager.OpenCardZoom(cardId);
@@ -49,12 +49,10 @@ public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHa
         pressTimer = 0f;
     }
 
-    // (선택사항) 마우스가 카드 밖으로 나가면 취소하고 싶을 때
-    // IPointerExitHandler를 추가하고 아래 함수를 쓰면 됩니다.
-    /*
+    // 누르다가 카드 밖으로 손 나가면 취소
     public void OnPointerExit(PointerEventData eventData)
     {
         isPressed = false;
+        pressTimer = 0f;
     }
-    */
 }
