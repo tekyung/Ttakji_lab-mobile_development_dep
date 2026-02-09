@@ -19,6 +19,8 @@ public class DeckBuilderManager : MonoBehaviour
     public TextMeshProUGUI deckCountText; // 20/20 텍스트 (없으면 연결 안 해도 됨)
 
     [Header("팝업 연결")]
+    public GameObject PopupPanel;
+
     public GameObject warningPopup; // 20장 안될 때 팝업
     public GameObject okPopup; //덱 저장 완료시 팝업
 
@@ -94,7 +96,7 @@ public class DeckBuilderManager : MonoBehaviour
         deckListDropdown.ClearOptions();
 
         // 2. 해당 폴더의 모든 .json 파일 경로를 가져옴
-        string folderPath = Application.dataPath;
+        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
         string[] filePaths = Directory.GetFiles(folderPath, "*.json");
 
         Debug.Log("검색 중인 폴더 위치: " + folderPath);
@@ -198,10 +200,16 @@ public class DeckBuilderManager : MonoBehaviour
             CardUI ui = go.GetComponent<CardUI>();
 
             // 정보 입력 (처음엔 덱에 0장 있으므로 개수는 0)
-            ui.Setup(id, 0, data.max_deck_count, this);
+            ui.Setup(id, 0, data.max_deck_count, this, false);
 
             // 리스트에 등록해둠 (나중에 개수 갱신할 때 쓰려고)
             collectionSlots.Add(ui);
+
+            LongPressTrigger trigger = go.GetComponent<LongPressTrigger>();
+            if (trigger != null)
+            {
+                trigger.cardId = id; // "너는 11001번이야!" 명찰 달기
+            }
         }
     }
 
@@ -281,7 +289,18 @@ public class DeckBuilderManager : MonoBehaviour
 
             int countInDeck = myDeck.Count(x => x == id);
 
-            ui.Setup(id, countInDeck, data.max_deck_count, this);
+            ui.Setup(id, countInDeck, data.max_deck_count, this, true);
+
+            if (ui.removeAllButton != null)
+            {
+                ui.removeAllButton.gameObject.SetActive(true);
+            }
+
+            LongPressTrigger trigger = go.GetComponent<LongPressTrigger>();
+            if (trigger != null)
+            {
+                trigger.cardId = id; // "너는 11001번이야!" 명찰 달기
+            }
         }
     }
 
@@ -314,6 +333,7 @@ public class DeckBuilderManager : MonoBehaviour
         if (myDeck.Count != MAX_DECK_COUNT)
         {
             // 20장이 아니면 경고 팝업 띄우기
+            if (PopupPanel != null) PopupPanel.SetActive(true);
             if (warningPopup != null) warningPopup.SetActive(true);
 
             Debug.Log("저장 실패: 덱이 완성되지 않았습니다.");
@@ -338,28 +358,74 @@ public class DeckBuilderManager : MonoBehaviour
         data.cardIdList = new List<int>(myDeck); // 현재 덱 복사
 
         // JSON 문자열로 변환
-        string json = JsonUtility.ToJson(data);
+        string json = JsonUtility.ToJson(data, true);
 
         // 저장할 경로, 이름 설정 (PC, 모바일 모두 작동하는 경로)
-        string saveName = deckNameInput.text;
-        string fileName = deckNameInput.text + ".json";
-        string path = Path.Combine(Application.dataPath, fileName);
+        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
+
+        string originalName = deckNameInput.text;
+        string finalName = originalName;
+        string fileName = finalName + ".json";
+        string path = Path.Combine(folderPath, fileName);
+
+if (File.Exists(path))
+        {
+            string baseName = originalName;
+            int nextNumber = 1;
+
+            // 3-1. 이름 뒤에 이미 "_숫자"가 붙어있는지 분석 (예: "Deck_1")
+            int lastUnderscore = originalName.LastIndexOf('_');
+            
+            // '_'가 있고, 그 뒤에 숫자가 있다면?
+            if (lastUnderscore > 0 && lastUnderscore < originalName.Length - 1)
+            {
+                string numberPart = originalName.Substring(lastUnderscore + 1);
+                
+                // 진짜 숫자가 맞는지 확인 (TryParse)
+                if (int.TryParse(numberPart, out int currentNumber))
+                {
+                    // "Deck_1" 이라면 -> baseName은 "Deck", 다음 번호는 2부터 시작
+                    baseName = originalName.Substring(0, lastUnderscore);
+                    nextNumber = currentNumber + 1;
+                }
+            }
+
+            // 3-2. 빈 자리가 나올 때까지 숫자 증가 (while문)
+            while (true)
+            {
+                finalName = $"{baseName}_{nextNumber}"; // 예: Deck_2
+                path = Path.Combine(folderPath, finalName + ".json");
+
+                if (!File.Exists(path))
+                {
+                    // 없는 파일을 찾았다! 여기서 멈춤.
+                    break;
+                }
+                nextNumber++; // Deck_2도 있으면 Deck_3으로...
+            }
+        }
 
         // 파일 쓰기
         File.WriteAllText(path, json);
 
         Debug.Log("저장 완료! 이름: " + fileName);
 
+        if (deckNameInput != null)
+        {
+            deckNameInput.text = finalName;
+        }
+
+        if (PopupPanel != null) PopupPanel.SetActive(true);
         if (okPopup != null) okPopup.SetActive(true);
 
-        RefreshDeckList(saveName);
+        RefreshDeckList(finalName);
     }
 
     //JSON 파일 이름 받기
     bool LoadDeckFromJson(string fileName)
     {
         // 1. 경로 설정 (Assets 폴더 기준)
-        string path = Path.Combine(Application.dataPath, fileName);
+        string path = Path.Combine(Application.dataPath, "MyDeck", fileName);
 
         Debug.Log("파일 찾는 중: " + path);
 
@@ -415,6 +481,7 @@ public class DeckBuilderManager : MonoBehaviour
             deleteConfirmText.text = $"{selectedName}을(를) 삭제하시겠습니까?";
         }
 
+        if (PopupPanel != null) PopupPanel.SetActive(true);
         if (deleteConfirmPopup != null) deleteConfirmPopup.SetActive(true);
     }
 
@@ -441,11 +508,23 @@ public class DeckBuilderManager : MonoBehaviour
         RefreshDeckList(null);
     }
 
+    // 내 덱에서 해당 카드 전부 제거
+    public void RemoveAllCards(int id)
+    {
+        myDeck.RemoveAll(x => x == id);
+
+        // 2. 화면 갱신
+        RefreshAllUI();
+
+        Debug.Log($"카드 ID {id}번을 덱에서 모두 제거했습니다.");
+    }
+
     // 새로운 덱 만들기
     public void OnClickNewDeckButton()
     {
         if (newDeckPopup != null)
         {
+            if (PopupPanel != null) PopupPanel.SetActive(true);
             newDeckPopup.SetActive(true);
         }
     }
@@ -472,6 +551,7 @@ public class DeckBuilderManager : MonoBehaviour
     void ShowMessagePopup(string msg)
     {
         if (saveText != null) saveText.text = msg;
+        if (PopupPanel != null) PopupPanel.SetActive(true);
         if (savePopup != null) savePopup.SetActive(true);
     }
 
@@ -489,12 +569,15 @@ public class DeckBuilderManager : MonoBehaviour
         if (cardZoomPopup != null) cardZoomPopup.SetActive(false);
 
         if (newDeckPopup != null) newDeckPopup.SetActive(false);
+
+        if (PopupPanel != null) PopupPanel.SetActive(false);
     }
 
 
     public void OpenCardZoom(int cardId)
     {
         // 1. 팝업 켜기
+        if (PopupPanel != null) PopupPanel.SetActive(true);
         cardZoomPopup.SetActive(true);
 
         // 2. 확대용 함수 호출 (ID만 넘겨주면 알아서 그림)
