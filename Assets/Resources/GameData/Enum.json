@@ -81,7 +81,7 @@
   },
   {
     "enum_category": "ECardEffectTargetCondition",
-    "enum_value": "DeckHighOrEqual",
+    "enum_value": "DeckMoreOrEqual",
     "enum_index": 2
   },
   {
@@ -96,7 +96,7 @@
   },
   {
     "enum_category": "ECardEffectFunctionType",
-    "enum_value": "DamegeToUnit",
+    "enum_value": "DamageToUnit",
     "enum_index": 2
   },
   {
