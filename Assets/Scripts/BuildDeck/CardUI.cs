@@ -122,21 +122,22 @@ public class CardUI : MonoBehaviour
 
             if (countText)
             {
+                countText.gameObject.SetActive(true);
                 if (current > 0) countText.text = $"{current}/{max}";
                 else countText.text = ""; // 0ÀåÀÌ¸é ¼ýÀÚ ¼û±è
             }
+        }
 
-            //if (removeAllButton != null)
-            //{
-            //    if (current > 0)
-            //    {
-            //        removeAllButton.gameObject.SetActive(true);
-            //    }
-            //    else
-            //    {
-            //        removeAllButton.gameObject.SetActive(false);
-            //    }
-            //}
+        if (removeAllButton != null)
+        {
+            if (current > 0)
+            {
+                removeAllButton.gameObject.SetActive(true);
+            }
+            else
+            {
+                removeAllButton.gameObject.SetActive(false);
+            }
         }
     }
 

@@ -19,7 +19,7 @@ MonoBehaviour:
     width: 1920
     height: 989
   m_ShowMode: 4
-  m_Title: Scene
+  m_Title: Project
   m_RootView: {fileID: 7}
   m_MinSize: {x: 875, y: 300}
   m_MaxSize: {x: 10000, y: 10000}
@@ -1220,9 +1220,9 @@ MonoBehaviour:
   m_AudioPlay: 0
   m_DebugDrawModesUseInteractiveLightBakingData: 0
   m_Position:
-    m_Target: {x: 540, y: 960, z: 0}
+    m_Target: {x: 48.669834, y: 968.61005, z: 1.6326011}
     speed: 2
-    m_Value: {x: 540, y: 960, z: 0}
+    m_Value: {x: 48.669834, y: 968.61005, z: 1.6326011}
   m_RenderMode: 0
   m_CameraMode:
     drawMode: 0
@@ -1272,9 +1272,9 @@ MonoBehaviour:
     speed: 2
     m_Value: {x: 0, y: 0, z: 0, w: 1}
   m_Size:
-    m_Target: 1101.4536
+    m_Target: 938.194
     speed: 2
-    m_Value: 1101.4536
+    m_Value: 938.194
   m_Ortho:
     m_Target: 1
     speed: 2
@@ -1353,33 +1353,22 @@ MonoBehaviour:
       m_LastClickedID:
         m_Data: 0
       m_ExpandedIDs:
-      - m_Data: -104332
-      - m_Data: -104220
-      - m_Data: -101330
-      - m_Data: -88192
-      - m_Data: -87958
-      - m_Data: -73238
-      - m_Data: -72998
-      - m_Data: -72688
-      - m_Data: -72462
-      - m_Data: -62808
-      - m_Data: -38746
-      - m_Data: -34164
-      - m_Data: -1438
-      - m_Data: 48992
-      - m_Data: 49018
-      - m_Data: 49196
-      - m_Data: 49406
-      - m_Data: 49466
-      - m_Data: 49532
-      - m_Data: 64294
-      - m_Data: 64334
-      - m_Data: 64784
-      - m_Data: 69050
-      - m_Data: 69294
-      - m_Data: 69310
-      - m_Data: 69378
-      - m_Data: 69518
+      - m_Data: -46530
+      - m_Data: -46308
+      - m_Data: -26680
+      - m_Data: -26580
+      - m_Data: -22502
+      - m_Data: -22402
+      - m_Data: -13728
+      - m_Data: -13628
+      - m_Data: -9646
+      - m_Data: -6502
+      - m_Data: -1318
+      - m_Data: 48896
+      - m_Data: 49140
+      - m_Data: 49156
+      - m_Data: 49224
+      - m_Data: 49364
       m_RenameOverlay:
         m_UserAcceptedRename: 0
         m_Name: 
@@ -1454,7 +1443,7 @@ MonoBehaviour:
     m_SkipHidden: 0
     m_SearchArea: 1
     m_Folders:
-    - Assets/Resources/Build
+    - Assets/Scenes
     m_Globs: []
     m_ProductIds: 
     m_AnyWithAssetOrigin: 0
@@ -1464,7 +1453,7 @@ MonoBehaviour:
   m_ViewMode: 1
   m_StartGridSize: 64
   m_LastFolders:
-  - Assets/Resources/Build
+  - Assets/Scenes
   m_LastFoldersGridSize: -1
   m_LastProjectPath: D:\unity project\Ttakji
   m_LockTracker:
@@ -1473,9 +1462,9 @@ MonoBehaviour:
   m_FolderTreeState:
     scrollPos: {x: 0, y: 127}
     m_SelectedIDs:
-    - m_Data: 50128
+    - m_Data: 50172
     m_LastClickedID:
-      m_Data: 50128
+      m_Data: 50172
     m_ExpandedIDs:
     - m_Data: 0
     - m_Data: 50070
@@ -1538,8 +1527,9 @@ MonoBehaviour:
       m_Icon: {fileID: 0}
       m_ResourceFile: 
   m_ListAreaState:
-    m_SelectedInstanceIDs: []
-    m_LastClickedInstanceID: 0
+    m_SelectedInstanceIDs:
+    - m_Data: 58060
+    m_LastClickedInstanceID: 58060
     m_HadKeyboardFocusLastEvent: 1
     m_ExpandedInstanceIDs:
     - m_Data: 49126

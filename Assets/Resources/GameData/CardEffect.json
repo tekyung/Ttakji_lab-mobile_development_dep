@@ -1,90 +1,92 @@
-[
-  {
-    "id": 210011,
-    "effect_target_type": "OppentUnit",
-    "effect_target_value": 1,
-    "effect_target_condition": "PowerUnderOrEqual",
-    "effect_target_condition_value1": 300,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "KillUnit",
-    "effect_function_value1": 0,
-    "effect_function_value2": -1
-  },
-  {
-    "id": 210012,
-    "effect_target_type": "OwnDeck",
-    "effect_target_value": -1,
-    "effect_target_condition": "DeckHighOrEqual",
-    "effect_target_condition_value1": 1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "Draw",
-    "effect_function_value1": 1,
-    "effect_function_value2": -1
-  },
-  {
-    "id": 210013,
-    "effect_target_type": "OwnUnit",
-    "effect_target_value": 1,
-    "effect_target_condition": "None",
-    "effect_target_condition_value1": -1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "Power_Up",
-    "effect_function_value1": 0,
-    "effect_function_value2": 200
-  },
-  {
-    "id": 210014,
-    "effect_target_type": "OwnMana",
-    "effect_target_value": -1,
-    "effect_target_condition": "None",
-    "effect_target_condition_value1": -1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "Gain_Mana",
-    "effect_function_value1": 0,
-    "effect_function_value2": 2
-  },
-  {
-    "id": 210015,
-    "effect_target_type": "OwnDeck",
-    "effect_target_value": -1,
-    "effect_target_condition": "DeckHighOrEqual",
-    "effect_target_condition_value1": 1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "Draw",
-    "effect_function_value1": 1,
-    "effect_function_value2": -1
-  },
-  {
-    "id": 210016,
-    "effect_target_type": "OppentUnit",
-    "effect_target_value": 1,
-    "effect_target_condition": "None",
-    "effect_target_condition_value1": -1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "DamegeToUnit",
-    "effect_function_value1": 0,
-    "effect_function_value2": 200
-  },
-  {
-    "id": 210017,
-    "effect_target_type": "OppentUnit",
-    "effect_target_value": 1,
-    "effect_target_condition": "None",
-    "effect_target_condition_value1": -1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "KillUnit",
-    "effect_function_value1": 0,
-    "effect_function_value2": -1
-  },
-  {
-    "id": 210018,
-    "effect_target_type": "OwnMana",
-    "effect_target_value": -1,
-    "effect_target_condition": "None",
-    "effect_target_condition_value1": -1,
-    "effect_target_condition_value2": -1,
-    "effect_function_type": "Gain_Mana",
-    "effect_function_value1": 0,
-    "effect_function_value2": 1
-  }
-]
+{
+  "cardEffect": [
+    {
+      "id": 210011,
+      "effect_target_type": "OppentUnit",
+      "effect_target_value": 1,
+      "effect_target_condition": "PowerUnderOrEqual",
+      "effect_target_condition_value1": 300,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "KillUnit",
+      "effect_function_value1": 0,
+      "effect_function_value2": -1
+    },
+    {
+      "id": 210012,
+      "effect_target_type": "OwnDeck",
+      "effect_target_value": -1,
+      "effect_target_condition": "DeckHighOrEqual",
+      "effect_target_condition_value1": 1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "Draw",
+      "effect_function_value1": 1,
+      "effect_function_value2": -1
+    },
+    {
+      "id": 210013,
+      "effect_target_type": "OwnUnit",
+      "effect_target_value": 1,
+      "effect_target_condition": "None",
+      "effect_target_condition_value1": -1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "Power_Up",
+      "effect_function_value1": 0,
+      "effect_function_value2": 200
+    },
+    {
+      "id": 210014,
+      "effect_target_type": "OwnMana",
+      "effect_target_value": -1,
+      "effect_target_condition": "None",
+      "effect_target_condition_value1": -1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "Gain_Mana",
+      "effect_function_value1": 0,
+      "effect_function_value2": 2
+    },
+    {
+      "id": 210015,
+      "effect_target_type": "OwnDeck",
+      "effect_target_value": -1,
+      "effect_target_condition": "DeckHighOrEqual",
+      "effect_target_condition_value1": 1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "Draw",
+      "effect_function_value1": 1,
+      "effect_function_value2": -1
+    },
+    {
+      "id": 210016,
+      "effect_target_type": "OppentUnit",
+      "effect_target_value": 1,
+      "effect_target_condition": "None",
+      "effect_target_condition_value1": -1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "DamegeToUnit",
+      "effect_function_value1": 0,
+      "effect_function_value2": 200
+    },
+    {
+      "id": 210017,
+      "effect_target_type": "OppentUnit",
+      "effect_target_value": 1,
+      "effect_target_condition": "None",
+      "effect_target_condition_value1": -1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "KillUnit",
+      "effect_function_value1": 0,
+      "effect_function_value2": -1
+    },
+    {
+      "id": 210018,
+      "effect_target_type": "OwnMana",
+      "effect_target_value": -1,
+      "effect_target_condition": "None",
+      "effect_target_condition_value1": -1,
+      "effect_target_condition_value2": -1,
+      "effect_function_type": "Gain_Mana",
+      "effect_function_value1": 0,
+      "effect_function_value2": 1
+    }
+  ]
+}
