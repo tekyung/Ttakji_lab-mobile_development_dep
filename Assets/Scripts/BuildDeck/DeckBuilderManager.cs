@@ -362,6 +362,7 @@ public class DeckBuilderManager : MonoBehaviour
 
         // 저장할 경로, 이름 설정 (PC, 모바일 모두 작동하는 경로)
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
+        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath); // 폴더 없으면 생성
 
         string originalName = deckNameInput.text;
         string finalName = originalName;
@@ -371,8 +372,6 @@ public class DeckBuilderManager : MonoBehaviour
 if (File.Exists(path))
         {
             string baseName = originalName;
-            int nextNumber = 1;
-
             // 3-1. 이름 뒤에 이미 "_숫자"가 붙어있는지 분석 (예: "Deck_1")
             int lastUnderscore = originalName.LastIndexOf('_');
             
@@ -386,23 +385,36 @@ if (File.Exists(path))
                 {
                     // "Deck_1" 이라면 -> baseName은 "Deck", 다음 번호는 2부터 시작
                     baseName = originalName.Substring(0, lastUnderscore);
-                    nextNumber = currentNumber + 1;
                 }
             }
 
-            // 3-2. 빈 자리가 나올 때까지 숫자 증가 (while문)
-            while (true)
+            int maxNumber = 0;
+
+            string[] files = Directory.GetFiles(folderPath, baseName + "*.json");
+
+            foreach (string filePath in files)
             {
-                finalName = $"{baseName}_{nextNumber}"; // 예: Deck_2
-                path = Path.Combine(folderPath, finalName + ".json");
+                string fName = Path.GetFileNameWithoutExtension(filePath); // 파일명만 가져옴
 
-                if (!File.Exists(path))
+                // 정확히 포맷이 맞는지 확인 ("Slime_숫자")
+                string prefix = baseName + "_";
+                if (fName.StartsWith(prefix))
                 {
-                    // 없는 파일을 찾았다! 여기서 멈춤.
-                    break;
+                    string numStr = fName.Substring(prefix.Length);
+                    if (int.TryParse(numStr, out int num))
+                    {
+                        if (num > maxNumber)
+                        {
+                            maxNumber = num; // 더 큰 숫자를 발견하면 갱신
+                        }
+                    }
                 }
-                nextNumber++; // Deck_2도 있으면 Deck_3으로...
             }
+
+            int nextNumber = maxNumber + 1;
+
+            finalName = $"{baseName}_{nextNumber}";
+            path = Path.Combine(folderPath, finalName + ".json");
         }
 
         // 파일 쓰기
@@ -489,8 +501,9 @@ if (File.Exists(path))
     public void OnConfirmDelete()
     {
         // 아까 기억해둔 이름으로 파일 경로 찾기
+        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
         string fileName = deckToDelete + ".json";
-        string path = Path.Combine(Application.dataPath, fileName);
+        string path = Path.Combine(folderPath, fileName);
 
         // 파일 삭제
         if (File.Exists(path))
@@ -533,7 +546,46 @@ if (File.Exists(path))
     {
         // 1. 덱 초기화 로직 (아까 만들었던 코드)
         myDeck.Clear();
-        if (deckNameInput != null) deckNameInput.text = "새 덱";
+
+        //if (deckNameInput != null) deckNameInput.text = "새 덱";  // 기존꺼
+
+        // 2. [핵심] "새 덱" 이름 중복 검사 및 자동 번호 매기기
+        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
+        string baseName = "새 덱";
+        string finalName = baseName;
+
+        // 폴더가 있고, "새 덱.json" 파일이 이미 존재한다면?
+        if (Directory.Exists(folderPath) && File.Exists(Path.Combine(folderPath, baseName + ".json")))
+        {
+            int maxNumber = 0;
+
+            // "새 덱"으로 시작하는 모든 파일을 찾음
+            string[] files = Directory.GetFiles(folderPath, baseName + "*.json");
+
+            foreach (string filePath in files)
+            {
+                string fName = Path.GetFileNameWithoutExtension(filePath);
+
+                // "새 덱_숫자" 형식인지 확인
+                string prefix = baseName + "_";
+                if (fName.StartsWith(prefix))
+                {
+                    string numPart = fName.Substring(prefix.Length);
+                    if (int.TryParse(numPart, out int num))
+                    {
+                        if (num > maxNumber) maxNumber = num;
+                    }
+                }
+            }
+
+            // 가장 큰 숫자 다음 번호로 설정
+            // 예: "새 덱", "새 덱_1"이 있으면 max는 1 -> 결과는 "새 덱_2"
+            finalName = $"{baseName}_{maxNumber + 1}";
+        }
+
+        // 3. 결정된 이름을 입력칸에 넣기
+        if (deckNameInput != null) deckNameInput.text = finalName;
+
         RefreshAllUI();
 
         // 2. 열려있는 확인 팝업 닫기
