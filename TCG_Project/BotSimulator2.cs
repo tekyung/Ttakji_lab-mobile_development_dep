@@ -60,12 +60,19 @@ public class BotSimulator2
 
     private static bool RunBotTurn(Player me, Player enemy, int globalTurn, GameContext context)
     {
-        int maxMana = (globalTurn <= 2) ? 1 : 3;
-        me.Mana = maxMana;
+        // 1턴(선공): 0, 2턴(후공): 1, 3턴 이후: 3
+        int setMana = 3;
+        if (globalTurn == 1) setMana = 0;
+        else if (globalTurn == 2) setMana = 1;
+
+        // "현재 코스트가 3보다 높으면 낮추진 않음" (기존 보유 마나가 더 많을 경우 유지)
+        if (me.Mana > 3) setMana = me.Mana;
+
+        me.Mana = setMana;
         me.OnTurnStart();
         DrawCards(me, 1);
 
-        Console.WriteLine($"--- HP: {me.Health} | Prize: {me.PrizePoints} | Mana: {me.Mana}/{maxMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} | Graveyard: {me.Graveyard.Count(c => c != null)} ---");
+        Console.WriteLine($"--- HP: {me.Health} | Prize: {me.PrizePoints} | Mana: {me.Mana}/{setMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} | Graveyard: {me.Graveyard.Count(c => c != null)} ---");
 
         Console.WriteLine($"{me.Name} 의 패: {string.Join(", ", me.Hand.Select(c => c.Name))}");
         
@@ -122,14 +129,14 @@ public class BotSimulator2
             }
         }
 
-        if (me.Field.Count(c => c != null) > 0)
+        if (me.Field.Count(c => c != null) > 0 && me.Mana >=1)
         {
             // [Phase 2] 배틀 페이즈
             ExecuteBattlePhase(me, enemy, context);
         }
         else
         {
-            Console.WriteLine($"{me.Name} : 컨트롤하는 유닛이 없어 배틀을 스킵합니다.");
+            Console.WriteLine($"{me.Name} : 컨트롤하는 유닛이 없거나 배틀할 마나가 없습니다.");
         }
 
         return GameSet(me, enemy);
@@ -160,7 +167,7 @@ public class BotSimulator2
                 // 마나 체크 (중요: 마나 없으면 아예 스킵)
                 if (me.Mana < attacker.AttackCost)
                 {
-                    Console.WriteLine($"      (Skip) {attacker.Name} 마나 부족");
+                    // Console.WriteLine($"      (Skip) {attacker.Name} 마나 부족");
                     continue;
                 }
 
