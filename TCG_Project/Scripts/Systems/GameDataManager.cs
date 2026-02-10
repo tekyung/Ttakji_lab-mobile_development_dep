@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json; // 혹은 유니티 JsonUtility 사용
+using Newtonsoft.Json;
 using System.IO;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;
@@ -10,38 +10,64 @@ namespace TCG_Project.Scripts.Systems
 {
     public class GameDataManager
     {
-        // 팀원의 Raw Data 구조체 (내부용)
+        // 1. Raw Data 클래스 (내부 데이터용)
         private class RawCard { public int id; public string name; public string type; public string skin_res; }
-        private class RawUnit { public int id; public int prize; public int arts_cost; public int power; public int on_play_effect_id; }
-        private class RawSkill { public int id; public int skill_cost; public int after_use_effect_id; }
+
+        private class RawUnit
+        {
+            public int id; public int prize; public int arts_cost; public int power;
+            public int on_play_effect_id;
+            public string desc;
+            public string on_play_condition_type;
+            public int on_play_condition_value1;
+        }
+
+        private class RawSkill
+        {
+            public int id; public int skill_cost;
+            public int after_use_effect_id;
+            public string desc;
+            public string use_condition_type;
+            public int use_condition_value1;
+        }
+
         private class RawEffect
         {
             public int id;
-            public string effect_function_type; // "Draw", "Gain_Mana", "KillUnit"
-            public string effect_target_type;   // "OppentUnit", "OwnDeck"
-            public string effect_target_condition; // [조건 필드]
-            public int effect_target_condition_value1; // [조건 값]
+            public string effect_function_type;
+            public string effect_target_type;
+            public string effect_target_condition;
+            public int effect_target_condition_value1;
             public int effect_function_value1;
             public int effect_function_value2;
         }
 
-        // 전체 카드 도감
+        // [신규] JSON 구조에 맞춘 래퍼 클래스 (상자 역할)
+        private class CardDataWrapper { public List<RawCard> Card; }
+        private class UnitDataWrapper { public List<RawUnit> CardUnit; }
+        private class SkillDataWrapper { public List<RawSkill> CardSkill; }
+        private class EffectDataWrapper { public List<RawEffect> CardEffect; }
+
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
 
         public void LoadAllData(string basePath)
         {
-            // 1. JSON 파일 읽기 (경로는 환경에 맞춰 수정)
-            var cardsData = ReadJson<List<RawCard>>(basePath + "/Card.json");
-            var unitsData = ReadJson<List<RawUnit>>(basePath + "/CardUnit.json");
-            var skillsData = ReadJson<List<RawSkill>>(basePath + "/CardSkill.json");
-            var effectsData = ReadJson<List<RawEffect>>(basePath + "/CardEffect.json");
+            // 1. 래퍼 클래스로 먼저 읽어들이기 (Object -> Wrapper)
+            var cardsWrapper = ReadJson<CardDataWrapper>(basePath + "/Card.json");
+            var unitsWrapper = ReadJson<UnitDataWrapper>(basePath + "/CardUnit.json");
+            var skillsWrapper = ReadJson<SkillDataWrapper>(basePath + "/CardSkill.json");
+            var effectsWrapper = ReadJson<EffectDataWrapper>(basePath + "/CardEffect.json");
 
-            // 효과 조회용 딕셔너리
+            // 2. 래퍼 안에서 실제 리스트 꺼내기 (null 체크 포함)
+            var cardsData = cardsWrapper?.Card ?? new List<RawCard>();
+            var unitsData = unitsWrapper?.CardUnit ?? new List<RawUnit>();
+            var skillsData = skillsWrapper?.CardSkill ?? new List<RawSkill>();
+            var effectsData = effectsWrapper?.CardEffect ?? new List<RawEffect>();
+
             var effectLookup = effectsData.ToDictionary(e => e.id);
             var unitLookup = unitsData.ToDictionary(u => u.id);
             var skillLookup = skillsData.ToDictionary(s => s.id);
 
-            // 2. 통합 및 변환 (Flattening)
             foreach (var raw in cardsData)
             {
                 Card newCard = new Card
@@ -51,163 +77,138 @@ namespace TCG_Project.Scripts.Systems
                     SkinResource = raw.skin_res
                 };
 
-                // 타입별 파싱
+                // 유닛 처리
                 if (raw.type == "Unit" && unitLookup.ContainsKey(raw.id))
                 {
                     var u = unitLookup[raw.id];
                     newCard.Type = CardType.Unit;
                     newCard.Power = u.power;
-                    newCard.MaxHealth = u.power; // 일단 Power를 체력으로 사용
-                    newCard.Health = u.power; // Power가 공격력이자 체력
+                    newCard.MaxHealth = u.power;
+                    newCard.Health = u.power;
                     newCard.Prize = u.prize;
                     newCard.AttackCost = u.arts_cost;
-                    newCard.Cost = 0; // 유닛 소환 코스트가 JSON에 없음 (0으로 가정)
+                    newCard.Cost = 0;
+                    newCard.Description = u.desc;
 
-                    // 출격 효과(OnPlay) 연결
+                    // 유닛 효과 & 조건 연결
                     if (u.on_play_effect_id != -1 && effectLookup.ContainsKey(u.on_play_effect_id))
                     {
-                        var effectObj = ConvertEffect(effectLookup[u.on_play_effect_id]);
+                        var extraParams = new Dictionary<string, object>();
+                        if (!string.IsNullOrEmpty(u.on_play_condition_type) && u.on_play_condition_type != "None")
+                        {
+                            extraParams["triggerCondition"] = GetConditionFormula(u.on_play_condition_type, u.on_play_condition_value1);
+                        }
+
+                        var effectObj = ConvertEffect(effectLookup[u.on_play_effect_id], extraParams);
                         if (effectObj != null) newCard.Effects.Add(effectObj);
                     }
                 }
+                // 스킬 처리
                 else if (raw.type == "Skill" && skillLookup.ContainsKey(raw.id))
                 {
                     var s = skillLookup[raw.id];
                     newCard.Type = CardType.Skill;
                     newCard.Cost = s.skill_cost;
+                    newCard.Description = s.desc;
 
-                    // 스킬 사용 효과 연결
+                    // 스킬 발동 조건 변환
+                    if (!string.IsNullOrEmpty(s.use_condition_type) && s.use_condition_type != "None")
+                    {
+                        newCard.PlayCondition = GetConditionFormula(s.use_condition_type, s.use_condition_value1);
+                    }
+
                     if (s.after_use_effect_id != -1 && effectLookup.ContainsKey(s.after_use_effect_id))
                     {
                         var effectObj = ConvertEffect(effectLookup[s.after_use_effect_id]);
                         if (effectObj != null) newCard.Effects.Add(effectObj);
                     }
                 }
-
                 AllCards[newCard.Id] = newCard;
             }
-
             System.Console.WriteLine($"[System] 카드 데이터 {AllCards.Count}장 로드 완료.");
         }
 
-        // 3. 효과 변환기 (Translator)
-        // 팀원의 Effect Enum을 우리 엔진의 Effect Class로 변환
-        private ICardEffect ConvertEffect(RawEffect raw)
+        private string GetConditionFormula(string type, int val1)
         {
-            // [핵심] 타겟 정보 생성 시 '조건(condition)'도 함께 넘김
+            switch (type)
+            {
+                case "Draw":
+                    return "activePlayer.Deck.Count > 0";
+
+                // 1. 애벌레용 (덱에 카드가 있는가?)
+                case "DeckNotEmpty":
+                    return "DeckNotEmpty"; // ConditionEvaluator에서 처리할 키워드 반환
+
+                // 2. 픽시드래곤/폭탄벌용 (적 유닛이 있는가?)
+                case "EnemyUnitExist":
+                    return "EnemyUnitExist";
+
+                default:
+                    return null;
+            }
+        }
+
+        private ICardEffect ConvertEffect(RawEffect raw, Dictionary<string, object> extraParams = null)
+        {
             var targetInfo = ConvertTarget(raw);
+            var finalParams = new Dictionary<string, object>();
+            if (extraParams != null) foreach (var kvp in extraParams) finalParams[kvp.Key] = kvp.Value;
+            finalParams["target"] = targetInfo;
 
             switch (raw.effect_function_type)
             {
                 case "Draw":
                     var drawEffect = new MoveCardEffect();
-                    drawEffect.Initialize(new Dictionary<string, object> {
-                        { "src", "Deck" }, { "dest", "Hand" },
-                        { "count", raw.effect_function_value1 },
-                        { "target", targetInfo }
-                    });
+                    finalParams["src"] = "Deck";
+                    finalParams["dest"] = "Hand";
+                    finalParams["count"] = raw.effect_function_value1;
+                    drawEffect.Initialize(finalParams);
                     return drawEffect;
 
                 case "Gain_Mana":
                     var manaEffect = new ManaGainEffect();
-                    int amount = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    manaEffect.Initialize(new Dictionary<string, object> {
-                        { "amount", amount },
-                        { "target", "ActivePlayer" }
-                    });
+                    int manaAmt = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
+                    finalParams["amount"] = manaAmt;
+                    finalParams["target"] = "ActivePlayer";
+                    manaEffect.Initialize(finalParams);
                     return manaEffect;
 
                 case "KillUnit":
                     var killEffect = new MoveCardEffect();
-                    killEffect.Initialize(new Dictionary<string, object> {
-                        { "src", "Field" }, { "dest", "Graveyard" },
-                        { "target", targetInfo }
-                    });
+                    finalParams["src"] = "Field";
+                    finalParams["dest"] = "Graveyard";
+                    if (raw.effect_function_value1 != 0) finalParams["prizeOnKill"] = raw.effect_function_value1;
+                    killEffect.Initialize(finalParams);
                     return killEffect;
 
                 case "Power_Up":
                     var buffEffect = new ModifyStatEffect();
-                    int buffAmt = raw.effect_function_value1 > 0 ? raw.effect_function_value1 : 100;
-                    buffEffect.Initialize(new Dictionary<string, object> {
-                        { "stat", "Power" },
-                        { "amount", buffAmt },
-                        { "target", targetInfo }
-                    });
+                    int buffAmt = raw.effect_function_value1 > 0 ? raw.effect_function_value1 : raw.effect_function_value2;
+                    if (buffAmt == 0) buffAmt = 100;
+
+                    finalParams["stat"] = "Power";
+                    finalParams["amount"] = buffAmt;
+                    buffEffect.Initialize(finalParams);
                     return buffEffect;
 
                 case "DamegeToUnit":
+                case "DamageToUnit":
                     var dmgEffect = new ModifyStatEffect();
                     int dmg = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    dmgEffect.Initialize(new Dictionary<string, object> {
-                        { "stat", "Health" },
-                        { "amount", -dmg },
-                        { "target", targetInfo }
-                    });
+                    finalParams["stat"] = "Power";
+                    finalParams["amount"] = -dmg;
+                    if (raw.effect_function_value1 != 0) finalParams["prizeOnKill"] = raw.effect_function_value1;
+                    dmgEffect.Initialize(finalParams);
                     return dmgEffect;
 
                 default: return null;
             }
-            /*
-            switch (raw.effect_function_type)
-            {
-                case "Draw":
-                    var drawEffect = new MoveCardEffect();
-                    drawEffect.Initialize(new Dictionary<string, object> {
-                        { "src", "Deck" }, { "dest", "Hand" },
-                        { "count", raw.effect_function_value1 },
-                        { "target", ConvertTarget(raw.effect_target_type) }
-                    });
-                    return drawEffect;
-
-                case "Gain_Mana":
-                    var manaEffect = new ManaGainEffect();
-                    // value2가 양수인 경우가 많은 듯 함 (JSON 참고)
-                    int amount = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    manaEffect.Initialize(new Dictionary<string, object> {
-                        { "amount", amount },
-                        { "target", ConvertTarget(raw.effect_target_type) }
-                    });
-                    return manaEffect;
-
-                case "KillUnit":
-                    var killEffect = new MoveCardEffect();
-                    killEffect.Initialize(new Dictionary<string, object> {
-                        { "src", "Field" }, { "dest", "Graveyard" },
-                        { "target", ConvertTarget(raw.effect_target_type) }
-                    });
-                    return killEffect;
-
-                case "Power_Up":
-                    var buffEffect = new ModifyStatEffect();
-                    buffEffect.Initialize(new Dictionary<string, object> {
-                        { "stat", "Power" }, // 혹은 "Health"
-                        { "amount", raw.effect_function_value1 },
-                        { "target", ConvertTarget(raw.effect_target_type) }
-                    });
-                    return buffEffect;
-
-                case "DamegeToUnit": // 오타(Damege) 그대로 대응
-                    // DamageEffect가 없다면 ModifyStat(Health)으로 대체
-                    var dmgEffect = new ModifyStatEffect();
-                    int dmg = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    dmgEffect.Initialize(new Dictionary<string, object> {
-                        { "stat", "Health" },
-                        { "amount", -dmg }, // 데미지니까 음수
-                        { "target", ConvertTarget(raw.effect_target_type) }
-                    });
-                    return dmgEffect;
-
-                default:
-                    return null;
-            }*/
         }
 
-        // [수정] RawEffect 전체를 받아서 조건까지 처리
         private object ConvertTarget(RawEffect raw)
         {
             var dict = new Dictionary<string, object>();
 
-            // 1. 기본 타겟 설정
             switch (raw.effect_target_type)
             {
                 case "OppentUnit":
@@ -224,60 +225,20 @@ namespace TCG_Project.Scripts.Systems
                 default: return "Self";
             }
 
-            // 2. 봇을 위해 랜덤 모드 적용
-            dict["mode"] = "Random";
+            dict["mode"] = "HighestPower";
             dict["count"] = 1;
 
-            // 3. [신규] 조건(Condition) 매핑
             if (!string.IsNullOrEmpty(raw.effect_target_condition) && raw.effect_target_condition != "None")
             {
-                dict["condition"] = raw.effect_target_condition;
+                string cond = raw.effect_target_condition;
+                //if (cond == "DeckMoreOrEqual") cond = "DeckHighOrEqual";
+
+                dict["condition"] = cond;
                 dict["conditionValue"] = raw.effect_target_condition_value1;
             }
 
             return dict;
         }
-        /* [핵심 수정] 봇을 위해 "Manual" 대신 "Random" 사용
-        private object ConvertTarget(string enumType)
-        {
-            switch (enumType)
-            {
-                case "OppentUnit":
-                    return new Dictionary<string, object> {
-                        {"controller", "Opponent"}, {"zones", new[]{ "Field" }}, {"mode", "Random"}, {"count", 1}
-                    };
-                case "OwnUnit":
-                    return new Dictionary<string, object> {
-                        {"controller", "Self"}, {"zones", new[]{ "Field" }}, {"mode", "Random"}, {"count", 1}
-                    };
-                case "OwnDeck": return "ActivePlayer";
-                case "OppentDeck": return "Opponent";
-                case "OwnMana": return "ActivePlayer";
-                default: return "Self";
-            }
-        }
-
-        /* 타겟 변환기 원본
-        private object ConvertTarget(string enumType)
-        {
-            // 우리 엔진의 타겟팅 쿼리(JSON style object)로 변환
-            switch (enumType)
-            {
-                case "OppentUnit":
-                    return new Dictionary<string, object> {
-                        {"controller", "Opponent"}, {"zones", new[]{ "Field" }}, {"mode", "Manual"}, {"count", 1}
-                    };
-                case "OwnUnit":
-                    return new Dictionary<string, object> {
-                        {"controller", "Self"}, {"zones", new[]{ "Field" }}, {"mode", "Manual"}, {"count", 1}
-                    };
-                case "OwnDeck": return "ActivePlayer"; // 단순화
-                case "OppentDeck": return "Opponent";
-                case "OwnMana": return "ActivePlayer";
-                default: return "Self";
-            }
-        }
-        */
 
         private T ReadJson<T>(string path)
         {

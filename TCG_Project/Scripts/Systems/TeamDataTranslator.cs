@@ -50,6 +50,7 @@ namespace TCG_Project.Scripts.Systems
             switch (funcType)
             {
                 case "DamegeToUnit": // 오타(Damege) 대응
+                case "DamageToUnit":
                     var dmgParams = new Dictionary<string, object>
                     {
                         { "amount", val2 }, // Damage는 value2에 있다고 가정 (JSON 예시 기반)
@@ -129,7 +130,7 @@ namespace TCG_Project.Scripts.Systems
             {
                 case "PowerUnderOrEqual":
                     return $"target.CurrentPower <= {value}"; // UnitCard 프로퍼티명 매칭
-                case "DeckHighOrEqual":
+                case "DeckMoreOrEqual":
                     // 타겟 필터라기보단 발동 조건에 가까울 수 있음. 
                     // 하지만 TargetSelector filter로 쓴다면 "target.Deck.Count >= value" 가 됨.
                     // 만약 이게 'Global Condition'이라면 별도 처리가 필요하지만 일단 필터로 처리

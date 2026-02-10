@@ -116,6 +116,7 @@ namespace TCG_Project.Scripts.Core
                 foreach (var effect in Effects)
                 {
                     Console.WriteLine($"    {Name}의 소환 시 효과 발동");
+                    Console.WriteLine($"    {Name} : {Description}");
                     effect.Execute(context);
                 }
             }
@@ -164,7 +165,16 @@ namespace TCG_Project.Scripts.Core
                 Cost = this.Cost,
                 Power = this.Power,
                 PlayCondition = this.PlayCondition,
-                Description = this.Description
+                Description = this.Description,
+                Id = this.Id, // Id도 복사 필요
+                OriginalCost = this.OriginalCost, // OriginalCost도 복사
+                
+                Type = this.Type,          // 이게 없으면 유닛으로 인식을 못함
+                MaxHealth = this.MaxHealth,
+                Health = this.Health,
+                AttackCost = this.AttackCost,
+                Prize = this.Prize,
+                SkinResource = this.SkinResource
             };
 
             // 효과 리스트도 새로 만들어서 독립성 보장

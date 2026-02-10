@@ -12,6 +12,8 @@ namespace TCG_Project.Scripts.Effects
         private object amountParam;
         private string outVarParam;
         private string durationParam;
+        private string triggerCondition; // [신규] 발동 조건
+        private int prizeOnKill;         // [신규] 처치 시 승점
 
         public void Initialize(Dictionary<string, object> parameters)
         {
@@ -24,10 +26,28 @@ namespace TCG_Project.Scripts.Effects
 
             if (parameters.ContainsKey("duration"))
                 durationParam = parameters["duration"].ToString();
+
+            // [신규] 파라미터 로드
+            if (parameters.ContainsKey("triggerCondition"))
+                triggerCondition = parameters["triggerCondition"].ToString();
+
+            if (parameters.ContainsKey("prizeOnKill"))
+                prizeOnKill = int.Parse(parameters["prizeOnKill"].ToString());
         }
 
         public void Execute(GameContext context)
         {
+            // 1. [과제 1] 발동 조건(triggerCondition) 재확인
+            if (!string.IsNullOrEmpty(triggerCondition))
+            {
+                // ConditionEvaluator를 사용하여 조건 체크 (예: EnemyUnitExist)
+                if (!ConditionEvaluator.Evaluate(triggerCondition, context))
+                {
+                    System.Console.WriteLine($"🚫 조건 불만족({triggerCondition})으로 효과가 취소되었습니다.");
+                    return;
+                }
+            }
+            // 2. 스탯 변경 처리
             int amount = FormulaEvaluator.Evaluate(amountParam, context);
             List<Target> targets = TargetSelector.Select(targetParam, context);
 
@@ -95,7 +115,7 @@ namespace TCG_Project.Scripts.Effects
                         int prev = c.Health;
                         c.Health += amount;
                         // (최대 체력 초과 방지 로직 필요시 추가)
-                        if (c.Health > c.MaxHealth) c.Health = c.MaxHealth;
+                        // if (c.Health > c.MaxHealth) c.Health = c.MaxHealth;
 
                         actualChange = c.Health - prev;
                         resultValue = c.Health;
@@ -109,7 +129,6 @@ namespace TCG_Project.Scripts.Effects
                             ProcessDeath(c, context);
                         }
                     }
-                    // [수정] 중복 호출 제거하고 여기서 한 번만 처리
                     else if (statName == "Cost")
                     {
                         int prev = c.Cost;
@@ -164,7 +183,7 @@ namespace TCG_Project.Scripts.Effects
             }
         }
 
-        private void ProcessDeath(Card unit, GameContext context) // HP 0시 파괴 처리
+        private void ProcessDeath(Card unit, GameContext context) // HP, Power 0시 파괴 처리
         {
             System.Console.WriteLine($"      💀 {unit.Name} 파괴됨! (효과)");
             Player controller = unit.Controller;
@@ -174,6 +193,14 @@ namespace TCG_Project.Scripts.Effects
                 Player owner = unit.OriginalOwner ?? controller;
                 owner.Graveyard.Add(unit);
                 System.Console.WriteLine($"{unit.Name}이(가) {owner.Name}의 묘지로 이동합니다. 현재 묘지 {owner.Graveyard.Count}장");
+                
+                // 효과 파괴 승점 처리
+                if (prizeOnKill > 0)
+                {
+                    // 효과를 발동한 플레이어(ActivePlayer)가 점수를 얻음
+                    context.ActivePlayer.PrizePoints += prizeOnKill;
+                    System.Console.WriteLine($"      🏆 [효과 승점] {context.ActivePlayer.Name}가 {prizeOnKill}점을 얻었습니다! (Total: {context.ActivePlayer.PrizePoints})");
+                }
             }
         }
 

@@ -10,6 +10,7 @@ namespace TCG_Project.Scripts.Core
         public string Name { get; set; }
         public int Health { get; set; }
         public int Mana { get; set; }
+        public int PrizePoints { get; set; } = 0; // 승점
 
         public List<Card> Deck { get; private set; } = new List<Card>();
         public List<Card> Hand { get; private set; } = new List<Card>();
@@ -68,7 +69,7 @@ namespace TCG_Project.Scripts.Core
             }
 
             // 디버깅용 로그 (너무 시끄러우면 주석 처리)
-            Console.WriteLine($"   (플레이 가능한 카드: {EnableCardList.Count}장)");
+            Console.WriteLine($"(플레이 가능한 카드: {EnableCardList.Count}장)");
         }
 
         // 덱 셔플
@@ -133,7 +134,7 @@ namespace TCG_Project.Scripts.Core
                 {
                     // 소환 후유증 (바로 공격 불가) 미적용
                     card.IsExhausted = false;
-                    Console.WriteLine($"   ⚔️ [소환] {card.Name} (ATK:{card.Power}/HP:{card.Health})가 필드에 배치되었습니다.");
+                    Console.WriteLine($"   ⚔️ [소환] {card.Name} (Power:{card.Power})가 필드에 배치되었습니다.");
                     card.Play(context);
                 }
                 else
@@ -302,7 +303,7 @@ namespace TCG_Project.Scripts.Core
                     {
                         int healAmount = card.MaxHealth - card.Health;
                         card.Health = card.MaxHealth;
-                        System.Console.WriteLine($"   ✨ [회복] {card.Name}의 체력이 초기화되었습니다. (+{healAmount})");
+                        Console.WriteLine($"   ✨ [회복] {card.Name}의 체력이 초기화되었습니다. (+{healAmount})");
                     }
                 }
             }

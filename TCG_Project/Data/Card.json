@@ -1,72 +1,81 @@
-[
-  {
-    "id": 11001,
-    "name": "슬라임",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/u_slime.png"
-  },
-  {
-    "id": 11002,
-    "name": "레드슬라임",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Red_Slime.png"
-  },
-  {
-    "id": 11003,
-    "name": "킹슬라임",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/King_Slime.png"
-  },
-  {
-    "id": 11004,
-    "name": "애벌레",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Small_Worm.png"
-  },
-  {
-    "id": 11005,
-    "name": "픽시드래곤",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Pixie_Dragon.png"
-  },
-  {
-    "id": 11006,
-    "name": "폭탄벌",
-    "type": "Unit",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Bomb_Bee.png"
-  },
-  {
-    "id": 21001,
-    "name": "파이어볼",
-    "type": "Skill",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/s_fire_ball.png"
-  },
-  {
-    "id": 21002,
-    "name": "학습",
-    "type": "Skill",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Learning.png"
-  },
-  {
-    "id": 21003,
-    "name": "강화물약",
-    "type": "Skill",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Strengthen_Potion.png"
-  },
-  {
-    "id": 21004,
-    "name": "마나물약",
-    "type": "Skill",
-    "max_deck_count": 2,
-    "skin_res": "Assets/m1_tmp/card_img/Mana_Potion.png"
-  }
-]
+{
+  "Card": [
+    {
+      "id": 11001,
+      "name": "슬라임",
+      "type": "Unit",
+      "max_deck_count": 20,
+      "skin_res": "Assets/Resources/card_img/u_slime.png"
+    },
+    {
+      "id": 11002,
+      "name": "레드슬라임",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Red_Slime.png"
+    },
+    {
+      "id": 11003,
+      "name": "킹슬라임",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/King_Slime.png"
+    },
+    {
+      "id": 11004,
+      "name": "애벌레",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Small_Worm.png"
+    },
+    {
+      "id": 11005,
+      "name": "픽시드래곤",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Pixie_Dragon.png"
+    },
+    {
+      "id": 11006,
+      "name": "폭탄벌",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Bomb_Bee.png"
+    },
+    {
+      "id": 11007,
+      "name": "골드 슬라임",
+      "type": "Unit",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/u_Gold_Slime.png"
+    },
+    {
+      "id": 21001,
+      "name": "파이어볼",
+      "type": "Skill",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/s_fire_ball.png"
+    },
+    {
+      "id": 21002,
+      "name": "학습",
+      "type": "Skill",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Learning.png"
+    },
+    {
+      "id": 21003,
+      "name": "강화물약",
+      "type": "Skill",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Strengthen_Potion.png"
+    },
+    {
+      "id": 21004,
+      "name": "마나물약",
+      "type": "Skill",
+      "max_deck_count": 2,
+      "skin_res": "Assets/Resources/card_img/Mana_Potion.png"
+    }
+  ]
+}

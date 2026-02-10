@@ -20,6 +20,9 @@ namespace TCG_Project.Scripts.Effects
         private string operationParam;
         private object destCountParam; // [신규] 상대방(목적지)에서 가져올 수량 (수식 가능)
 
+        private string triggerCondition; // [신규] 발동 조건
+        private int prizeOnKill;         // [신규] 처치 시 승점
+
         public void Initialize(Dictionary<string, object> parameters)
         {
             srcZone = parameters.ContainsKey("src") ? Enum.Parse<ZoneType>(parameters["src"].ToString()) : ZoneType.Deck;
@@ -41,10 +44,28 @@ namespace TCG_Project.Scripts.Effects
             if (parameters.ContainsKey("destCount")) destCountParam = parameters["destCount"];
             else if (parameters.ContainsKey("destAmount")) destCountParam = parameters["destAmount"];
             else destCountParam = countParam;
+
+            // 효과 발동 조건, 승점 파라미터 로드
+            if (parameters.ContainsKey("triggerCondition"))
+                triggerCondition = parameters["triggerCondition"].ToString();
+
+            if (parameters.ContainsKey("prizeOnKill"))
+                prizeOnKill = int.Parse(parameters["prizeOnKill"].ToString());
         }
 
         public void Execute(GameContext context)
         {
+            // 발동 조건(triggerCondition) 재확인
+            if (!string.IsNullOrEmpty(triggerCondition))
+            {
+                // ConditionEvaluator를 사용하여 조건 체크 (예: EnemyUnitExist)
+                if (!ConditionEvaluator.Evaluate(triggerCondition, context))
+                {
+                    System.Console.WriteLine($"🚫 조건 불만족({triggerCondition})으로 효과가 취소되었습니다.");
+                    return;
+                }
+            }
+
             int totalRecordedValue = 0;
             int count = FormulaEvaluator.Evaluate(countParam, context);
 
@@ -64,7 +85,7 @@ namespace TCG_Project.Scripts.Effects
 
             if (!string.IsNullOrEmpty(outVarParam))
             {
-                // 되돌리기 효과: "원래 주인에게 이동"
+                // 되돌리기 효과: "원래 주인에게 이동" -> 아직 구현 중
                 var revertEffect = new MoveCardEffect();
 
                 // 여기서 중요한 건 "방금 옮긴 그 카드"를 정확히 찍어야 합니다.
@@ -125,9 +146,6 @@ namespace TCG_Project.Scripts.Effects
                             // 3. [기록] 카드를 다시 읽지 말고, 아까 캡처해둔 값을 더함!
                             if (isMoved)
                             {
-                                // [수정 전] RecordStat(cardToMove, ref totalRecordedValue); // <-- 이게 문제였음 (초기화된 값을 읽음)
-
-                                // [수정 후]
                                 totalRecordedValue += capturedValue;
                             }
                         }
@@ -174,7 +192,7 @@ namespace TCG_Project.Scripts.Effects
             return 0;
         }
 
-        // [수정] 성공 여부(bool) 반환
+        // 카드 이동 단계, 성공 여부(bool) 반환
         private bool ProcessMove(Player srcPlayer, Player destPlayer, Card card)
         {
             // 1. 룰 보정 (묘지행일 경우 원래 주인 묘지로)

@@ -16,20 +16,11 @@ namespace TCG_Project
         public static int turnCount = 1;
 
         static void Main(string[] args)
-        {
-            // TestLoader.RunTest(); // 테스트
-            // 테스트가 끝나면 콘솔이 바로 꺼지지 않게 입력 대기
-            // Console.WriteLine("\n엔터 키를 누르면 종료합니다...");
-            
+        {   
             // 콘솔에서 UTF-8 인코딩 사용 설정
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
-
-            BotSimulator2.Run();
-            Console.ReadLine();
-
-            Console.WriteLine("=== TCG 콘솔 시뮬레이터 시작 ===\n");
-
+            Console.WriteLine("\n엔터 키를 누르면 종료합니다2");
             // 0. 룰 데이터 로드 (가장 먼저 실행)
             try
             {
@@ -41,6 +32,23 @@ namespace TCG_Project
                 Console.WriteLine($"[Error] 룰 파일을 불러오는데 실패했습니다: {e.Message}");
                 return;
             }
+
+            BotSimulator2.Run();
+            Console.ReadLine();
+
+            RunBot1();
+        }
+
+        public static void RunBot1()
+        {
+            
+            TestLoader.RunTest(); // 테스트
+            // 테스트가 끝나면 콘솔이 바로 꺼지지 않게 입력 대기
+            Console.WriteLine("\n엔터 키를 누르면 종료합니다...");
+
+            Console.WriteLine("=== TCG 콘솔 시뮬레이터 시작 ===\n");
+
+            
 
             // 0.5 효과 데이터 로드 (신규 추가)
             try
@@ -161,15 +169,13 @@ namespace TCG_Project
             Console.ReadKey(true);
         }
 
-        
-
         // 한 플레이어의 턴을 진행하는 로직
         public static bool ProcessTurn(Player activePlayer, Player opponent, int currentTurnMaxMana, GameContext context)
         {
             Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {GameRules.StartingMana} ==========");
 
             // 0. [턴 시작] 예약된 효과 처리 (예: "다음 턴 시작 시까지" 였던 효과들 만료)
-            ProcessPendingEffects(GamePhase.TurnStart, activePlayer, context);
+            //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, context);
 
             // 1. 마나 충전 (현재 턴의 최대 마나로 리필)
             // 보통 TCG는 턴 시작 시 마나가 '회복'되므로 할당(=)이 일반적입니다.

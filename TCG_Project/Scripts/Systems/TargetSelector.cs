@@ -81,9 +81,26 @@ namespace TCG_Project.Scripts.Systems
         private static List<Target> SelectFinalTargets(List<Target> candidates, int count, string mode, GameContext context)
         {
             if (candidates.Count == 0) return new List<Target>();
-            // 봇/시뮬레이터는 무조건 Random 처리 (Manual 불가)
-            var rnd = new Random();
-            return candidates.OrderBy(x => rnd.Next()).Take(count).ToList();
+
+            // [신규] Power가 높은 순서대로 선택
+            if (mode == "HighestPower")
+            {
+                return candidates
+                    .OrderByDescending(t => t.Type == TargetType.Card ? t.CardVal.Power : 0)
+                    .Take(count)
+                    .ToList();
+            }
+            // 기존 Random 모드
+            else if (mode == "Random")
+            {
+                var rnd = new Random();
+                return candidates.OrderBy(x => rnd.Next()).Take(count).ToList();
+            }
+            // Top 모드
+            else
+            {
+                return candidates.Take(count).ToList();
+            }
         }
     }
 }

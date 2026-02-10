@@ -4,6 +4,7 @@ using System.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Systems;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Effects; // namespace 확인 필요
 
 public class BotSimulator2
 {
@@ -12,11 +13,18 @@ public class BotSimulator2
 
     public static void Run()
     {
-        Console.WriteLine("=== 🤖 봇 대전 시뮬레이터 (Advanced AI) ===");
-        InitializeSystem();
+        Console.WriteLine("=== 🤖 봇 대전 시뮬레이터 (Fixed Logic) ===");
+        InitializeSystem(); // 시스템 초기화 필수
 
-        Player p1 = CreateBotPlayer("Bot_Red", 11001, 11002, 11004, 21001, 21003);
-        Player p2 = CreateBotPlayer("Bot_Blue", 11003, 11005, 11006, 21002, 21004);
+        // 데이터 로드 확인
+        if (_dataManager.AllCards.Count == 0)
+        {
+            Console.WriteLine("[Error] 카드 데이터가 로드되지 않았습니다!");
+            return;
+        }
+
+        Player p1 = CreateBotPlayer("Bot_Red", 11001, 11002, 11003, 11007, 21001, 21002, 21003, 21004);
+        Player p2 = CreateBotPlayer("Bot_Blue", 11004, 11005, 11006, 21001, 21002, 21003, 21004);
 
         GameContext context = new GameContext();
         context.Players.Add(p1);
@@ -40,7 +48,7 @@ public class BotSimulator2
 
             if (!RunBotTurn(activePlayer, targetPlayer, globalTurn, context))
             {
-                isGameRunning = false;
+                isGameRunning = GameSet(p1, p2);
                 break;
             }
             globalTurn++;
@@ -52,50 +60,61 @@ public class BotSimulator2
 
     private static bool RunBotTurn(Player me, Player enemy, int globalTurn, GameContext context)
     {
-        if (me.Health <= 0 || enemy.Health <= 0) return false;
-
         int maxMana = (globalTurn <= 2) ? 1 : 3;
         me.Mana = maxMana;
         me.OnTurnStart();
         DrawCards(me, 1);
 
-        Console.WriteLine($"--- HP: {me.Health} | Mana: {me.Mana}/{maxMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} ---");
+        Console.WriteLine($"--- HP: {me.Health} | Prize: {me.PrizePoints} | Mana: {me.Mana}/{maxMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} | Graveyard: {me.Graveyard.Count(c => c != null)} ---");
 
-        // [Phase 1] 메인 페이즈 (소환 및 스펠)
+        Console.WriteLine($"{me.Name} 의 패: {string.Join(", ", me.Hand.Select(c => c.Name))}");
+        
+        // [Phase 1] 메인 페이즈
         bool actionTaken = true;
-        while (actionTaken)
+        int safetyCount = 0; // 무한 루프 방지용
+
+        while (actionTaken && safetyCount < 20)
         {
-            // [요청 1] 마나 보존 정책 (마나가 적으면 배틀로 직행)
+            //me.UpdatePlayableCards(context);
+            safetyCount++;
+            actionTaken = false;
+            var handClone = new List<Card>(me.Hand);
+
+            // 1. 유닛 소환 (Power 높은 순)
+            var unitToPlay = handClone
+                .Where(c => c.Type == CardType.Unit && c.IsPlayable(context))
+                .OrderByDescending(c => c.Power)
+                .FirstOrDefault();
+
+            if (unitToPlay != null)
+            {
+                // Console.WriteLine($"   [Action] {unitToPlay.Name} 소환 시도");
+                me.PlayCard(unitToPlay, context);
+                actionTaken = true;
+                continue; // 유닛 냈으면 다시 처음부터
+            }
+            else
+            {
+                Console.WriteLine($"{me.Name} : 소환할 유닛이 없습니다.");
+            }
+
+            // 2. 마나 보존 정책
             int unitCount = me.Field.Count(c => c != null);
             int manaThreshold = (unitCount <= 1) ? 1 : 2;
 
             if (me.Mana <= manaThreshold)
             {
-                // 단, 소환 가능한 유닛이 있다면 마나를 다 써서라도 필드를 채우는 게 유리할 수 있으므로
-                // "스킬"만 제한하거나, 아예 행동을 멈출지 결정해야 합니다.
-                // 요청하신 대로 "스펠 사용 중단"의 의미로 해석하여 루프를 탈출합니다.
-                // (만약 유닛 소환도 멈추길 원하시면 이대로 두시면 됩니다.)
-                break;
+                // Console.WriteLine("   [Skip] 마나 보존을 위해 스펠 사용 중단");
+                break; // 배틀로 이동
             }
 
-            actionTaken = false;
-            var handClone = new List<Card>(me.Hand);
-
-            // 1. 유닛 소환 (최우선 - 마나 제한 무시 or 별도 체크 가능)
-            var unitToPlay = handClone.FirstOrDefault(c => c.Type == CardType.Unit && c.IsPlayable(context));
-            if (unitToPlay != null)
-            {
-                me.PlayCard(unitToPlay, context);
-                actionTaken = true;
-                continue;
-            }
-
-            // 2. 스킬 사용 (AI 판단)
+            // 3. 스펠 사용
             var skills = handClone.Where(c => c.Type == CardType.Skill && c.IsPlayable(context)).ToList();
             foreach (var skill in skills)
             {
                 if (IsSkillUseful(skill, me, enemy))
                 {
+                    // Console.WriteLine($"   [Action] {skill.Name} 사용 시도");
                     me.PlayCard(skill, context);
                     actionTaken = true;
                     break;
@@ -103,108 +122,142 @@ public class BotSimulator2
             }
         }
 
-        // [Phase 2] 배틀 페이즈 (개선됨)
-        ExecuteBattlePhase(me, enemy, context);
+        if (me.Field.Count(c => c != null) > 0)
+        {
+            // [Phase 2] 배틀 페이즈
+            ExecuteBattlePhase(me, enemy, context);
+        }
+        else
+        {
+            Console.WriteLine($"{me.Name} : 컨트롤하는 유닛이 없어 배틀을 스킵합니다.");
+        }
 
-        return enemy.Health > 0 && me.Health > 0;
+        return GameSet(me, enemy);
     }
 
     private static void ExecuteBattlePhase(Player me, Player enemy, GameContext context)
     {
-        // [요청 3] 재탐색을 위한 루프
-        // 한 번이라도 공격이 발생하면(전황이 바뀌면) 처음부터 다시 최적의 공격을 찾습니다.
-        while (true)
+        Console.WriteLine("   ⚔️ [배틀 페이즈 시작]");
+        int loopSafety = 0;
+
+        while (loopSafety < 10) // 최대 10번까지만 재탐색 (무한 루프 방지)
         {
+            loopSafety++;
             bool attackOccurred = false;
 
-            // [요청 2] Power가 높은 유닛부터 탐색
+            // 공격 가능한 내 유닛 찾기 (Power 높은 순)
             var attackers = me.Field
-                .Where(c => c != null && !c.IsExhausted) // 행동 안 한 유닛만
-                .OrderByDescending(c => c.Power)       // 센 놈 먼저!
+                .Where(c => c != null && !c.IsExhausted)
+                .OrderByDescending(c => c.Power)
                 .ToList();
 
-            if (attackers.Count == 0) break; // 공격할 유닛 없으면 종료
+            if (attackers.Count == 0) break; // 공격할 유닛 없음
 
             var enemyUnits = enemy.Field.Where(c => c != null).ToList();
 
             foreach (var attacker in attackers)
             {
-                if (me.Mana < attacker.AttackCost) continue;
+                // 마나 체크 (중요: 마나 없으면 아예 스킵)
+                if (me.Mana < attacker.AttackCost)
+                {
+                    Console.WriteLine($"      (Skip) {attacker.Name} 마나 부족");
+                    continue;
+                }
 
                 object finalTarget = null;
 
                 if (enemyUnits.Count > 0)
                 {
-                    // 도발 룰: 유닛이 있으면 유닛 먼저
-                    // 내 공격력 이하인 적 중 가장 센 놈(위협적인 놈)을 잡는다? (혹은 약한 놈?)
-                    // 여기선 기존 로직(약한 순) 유지하되, 필요하면 OrderByDescending으로 변경 가능
+                    // 이길 수 있는 적 중 가장 센 놈
                     var validTargets = enemyUnits
                         .Where(e => e.Power <= attacker.Power)
-                        .OrderBy(e => e.Power)
+                        .OrderByDescending(e => e.Power)
                         .ToList();
 
                     if (validTargets.Count > 0)
                     {
                         finalTarget = validTargets[0];
                     }
-                    else
-                    {
-                        // 공격 포기 (대기)
-                        // 주의: 여기서 로그를 계속 찍으면 루프 돌 때마다 도배될 수 있음
-                    }
                 }
                 else
                 {
-                    // 적 유닛 없음 -> 명치
-                    finalTarget = enemy;
+                    finalTarget = enemy; // 명치
                 }
 
                 if (finalTarget != null)
                 {
                     _battleSystem.Attack(attacker, finalTarget, context);
-
-                    // 공격 성공! 루프 재시작 (요청 3)
-                    // 전황이 바뀌었으므로(적 사망 등), 남은 유닛들의 최적 타겟이 바뀔 수 있음
                     attackOccurred = true;
-                    break;
+                    if (GameSet(me, enemy)) break; // 공격 발생! 다시 처음부터 탐색 (재귀 효과)
                 }
             }
 
-            // 모든 유닛을 다 훑었는데 아무도 공격을 안/못 했다면 배틀 종료
+            // 한 바퀴 다 돌았는데 아무도 공격을 안/못 했다면 종료
             if (!attackOccurred) break;
+        }
+
+        Console.WriteLine("   ⚔️ [배틀 페이즈 종료]");
+    }
+
+    // --- Helpers ---
+    private static void InitializeSystem()
+    {
+        _dataManager = new GameDataManager();
+        _dataManager.LoadAllData("./Data"); // 경로 주의!
+        _battleSystem = new BattleSystem();
+    }
+
+    private static Player CreateBotPlayer(string name, params int[] ids)
+    {
+        Player p = new Player { Name = name, Health = 7, Mana = 0 };
+        List<Card> deck = new List<Card>();
+        foreach (int id in ids)
+        {
+            if (_dataManager.AllCards.TryGetValue(id.ToString(), out Card c))
+                for (int i = 0; i < 2; i++) deck.Add(c.Clone());
+        }
+        p.SetDeck(deck);
+        return p;
+    }
+
+    private static void DrawCards(Player p, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            var c = p.ExtractCard(ZoneType.Deck, "Top");
+            if (c != null) p.InsertCard(ZoneType.Hand, c);
         }
     }
 
-    // --- (이하 Helper 메서드들은 기존과 동일) ---
-    private static void InitializeSystem() { _dataManager = new GameDataManager(); _dataManager.LoadAllData("./Data"); _battleSystem = new BattleSystem(); }
-    private static Player CreateBotPlayer(string name, params int[] ids)
+    public static bool GameSet(Player me, Player emermy)
     {
-        /* 기존과 동일 */
-        Player p = new Player { Name = name, Health = 20, Mana = 0 };
-        List<Card> deck = new List<Card>();
-        foreach (int id in ids) { if (_dataManager.AllCards.TryGetValue(id.ToString(), out Card c)) for (int i = 0; i < 3; i++) deck.Add(c.Clone()); }
-        p.SetDeck(deck); return p;
+        if (me.PrizePoints >= 7 || emermy.PrizePoints >= 7)
+        { return false; }
+        else
+        { return true; }
     }
-    private static void DrawCards(Player p, int count) { for (int i = 0; i < count; i++) { var c = p.ExtractCard(ZoneType.Deck, "Top"); if (c != null) p.InsertCard(ZoneType.Hand, c); } }
+
     private static void PrintGameResult(Player p1, Player p2)
     {
         Console.WriteLine("\n========== [ Result ] ==========");
-        Console.WriteLine($"{p1.Name}: {p1.Health} HP");
-        Console.WriteLine($"{p2.Name}: {p2.Health} HP");
-        if (p1.Health <= 0 && p2.Health <= 0) Console.WriteLine("🤝 무승부!");
-        else if (p1.Health <= 0) Console.WriteLine($"🏆 승리: {p2.Name}");
-        else if (p2.Health <= 0) Console.WriteLine($"🏆 승리: {p1.Name}");
+        Console.WriteLine($"{p1.Name}: {p1.PrizePoints} Prize");
+        Console.WriteLine($"{p2.Name}: {p2.PrizePoints} Prize");
+        if (p1.PrizePoints >= 7 && p2.PrizePoints >= 7) Console.WriteLine("🤝 무승부!");
+        else if (p1.PrizePoints >= 7) Console.WriteLine($"🏆 승리: {p2.Name}");
+        else if (p2.PrizePoints >= 7) Console.WriteLine($"🏆 승리: {p1.Name}");
         else Console.WriteLine("🤝 무승부 (턴 오버)");
     }
+
     private static bool IsSkillUseful(Card skill, Player me, Player enemy)
     {
-        // ... (기존 로직 유지) ...
-        if (skill.Id == "21001" || skill.Effects.Any(e => e is ModifyStatEffect))
+        // 간단 체크 로직
+        if (skill.Id == "21001" || skill.Effects.Any(e => e.GetType().Name.Contains("ModifyStat")))
         {
             if (enemy.Field.All(c => c == null)) return false;
         }
         if (skill.Id == "21003") { if (me.Field.All(c => c == null)) return false; }
         if (skill.Id == "21002") { if (me.Deck.Count == 0) return false; }
+        if (skill.Id == "21004") { if (me.Hand.Count <= 1) return false; }
         return true;
     }
 }
