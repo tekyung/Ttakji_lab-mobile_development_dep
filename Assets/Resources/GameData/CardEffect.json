@@ -1,5 +1,5 @@
 {
-  "Card": [
+  "CardEffect": [
     {
       "id": 210011,
       "effect_target_type": "OppentUnit",

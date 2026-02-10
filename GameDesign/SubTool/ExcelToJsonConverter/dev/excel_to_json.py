@@ -240,8 +240,6 @@ class ExcelToJsonConverter:
         """엑셀 파일을 JSON으로 변환 (테이블 기반)"""
         created_files = []
         file_name = os.path.basename(excel_path)
-        # 엑셀 파일명(확장자 제거)을 테이블명으로 사용
-        table_key = os.path.splitext(file_name)[0]
         
         self.log(f"\n{file_name} 처리 중...")
         
@@ -253,6 +251,9 @@ class ExcelToJsonConverter:
         
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
+            
+            # 시트명을 테이블명으로 사용
+            table_key = sheet_name
             
             # 시트 내 테이블 확인
             # read_only 모드에서는 tables 속성 접근 불가, 일반 모드로 다시 열기
@@ -275,7 +276,7 @@ class ExcelToJsonConverter:
                         json_filename = f"{table_name}.json"
                         json_path = os.path.join(output_dir, json_filename)
                         
-                        # 엑셀 파일명을 키로 하는 객체 형식으로 저장
+                        # 시트명을 키로 하는 객체 형식으로 저장
                         with open(json_path, 'w', encoding='utf-8') as f:
                             json.dump({table_key: records}, f, ensure_ascii=False, indent=2)
                         
