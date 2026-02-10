@@ -1,42 +1,44 @@
-[
-  {
-    "id": 21001,
-    "desc": "pow300이하 적 유닛 1장 파괴(승점X)",
-    "skill_cost": 1,
-    "use_condition_type": "None",
-    "use_condition_value1": -1,
-    "use_condition_value2": -1,
-    "before_use_effect_id": -1,
-    "after_use_effect_id": 210011
-  },
-  {
-    "id": 21002,
-    "desc": "자신의 덱에서 드로우 1장",
-    "skill_cost": 1,
-    "use_condition_type": "Draw",
-    "use_condition_value1": -1,
-    "use_condition_value2": -1,
-    "before_use_effect_id": -1,
-    "after_use_effect_id": 210012
-  },
-  {
-    "id": 21003,
-    "desc": "필드의 자신의 유닛 1체 pow+200",
-    "skill_cost": 1,
-    "use_condition_type": "Power_Up",
-    "use_condition_value1": -1,
-    "use_condition_value2": -1,
-    "before_use_effect_id": -1,
-    "after_use_effect_id": 210013
-  },
-  {
-    "id": 21004,
-    "desc": "자신의 마나 2 증가(이번턴)",
-    "skill_cost": 1,
-    "use_condition_type": "Gain_Mana",
-    "use_condition_value1": -1,
-    "use_condition_value2": -1,
-    "before_use_effect_id": -1,
-    "after_use_effect_id": 210014
-  }
-]
+{
+  "Card": [
+    {
+      "id": 21001,
+      "desc": "pow300이하 적 유닛 1장 파괴(승점X)",
+      "skill_cost": 1,
+      "use_condition_type": "None",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210011
+    },
+    {
+      "id": 21002,
+      "desc": "자신의 덱에서 드로우 1장",
+      "skill_cost": 1,
+      "use_condition_type": "Draw",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210012
+    },
+    {
+      "id": 21003,
+      "desc": "필드의 자신의 유닛 1체 pow+200",
+      "skill_cost": 1,
+      "use_condition_type": "Power_Up",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210013
+    },
+    {
+      "id": 21004,
+      "desc": "자신의 마나 2 증가(이번턴)",
+      "skill_cost": 1,
+      "use_condition_type": "Gain_Mana",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210014
+    }
+  ]
+}

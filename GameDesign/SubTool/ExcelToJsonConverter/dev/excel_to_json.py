@@ -240,6 +240,8 @@ class ExcelToJsonConverter:
         """엑셀 파일을 JSON으로 변환 (테이블 기반)"""
         created_files = []
         file_name = os.path.basename(excel_path)
+        # 엑셀 파일명(확장자 제거)을 테이블명으로 사용
+        table_key = os.path.splitext(file_name)[0]
         
         self.log(f"\n{file_name} 처리 중...")
         
@@ -273,8 +275,9 @@ class ExcelToJsonConverter:
                         json_filename = f"{table_name}.json"
                         json_path = os.path.join(output_dir, json_filename)
                         
+                        # 엑셀 파일명을 키로 하는 객체 형식으로 저장
                         with open(json_path, 'w', encoding='utf-8') as f:
-                            json.dump(records, f, ensure_ascii=False, indent=2)
+                            json.dump({table_key: records}, f, ensure_ascii=False, indent=2)
                         
                         created_files.append(json_filename)
                         self.log(f"    - {json_filename} 생성 ({len(records)}건)")
