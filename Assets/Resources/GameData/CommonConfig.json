@@ -1,5 +1,5 @@
 {
-  "commonConfig": [
+  "CommonConfig": [
     {
       "Name": "first_player_first_turn_having_energy",
       "Value": "0"

@@ -14,6 +14,6 @@ public class CardData
     [System.Serializable]
     public class CardDataWrapper
     {
-        public List<CardData> cards;
+        public List<CardData> Card;
     }
 }
