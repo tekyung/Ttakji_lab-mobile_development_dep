@@ -31,9 +31,9 @@ public class CardDataManager : MonoBehaviour
         CardDataWrapper wrapper = JsonUtility.FromJson<CardDataWrapper>(jsonFile.text);
 
         // 3. 딕셔너리와 리스트에 정리해 넣기
-        if (wrapper != null && wrapper.cards != null)
+        if (wrapper != null && wrapper.Card != null)
         {
-            allCardList = wrapper.cards;
+            allCardList = wrapper.Card;
 
             foreach (CardData card in allCardList)
             {
