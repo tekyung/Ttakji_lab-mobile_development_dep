@@ -252,6 +252,9 @@ class ExcelToJsonConverter:
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             
+            # 시트명을 테이블명으로 사용
+            table_key = sheet_name
+            
             # 시트 내 테이블 확인
             # read_only 모드에서는 tables 속성 접근 불가, 일반 모드로 다시 열기
             try:
@@ -273,8 +276,9 @@ class ExcelToJsonConverter:
                         json_filename = f"{table_name}.json"
                         json_path = os.path.join(output_dir, json_filename)
                         
+                        # 시트명을 키로 하는 객체 형식으로 저장
                         with open(json_path, 'w', encoding='utf-8') as f:
-                            json.dump(records, f, ensure_ascii=False, indent=2)
+                            json.dump({table_key: records}, f, ensure_ascii=False, indent=2)
                         
                         created_files.append(json_filename)
                         self.log(f"    - {json_filename} 생성 ({len(records)}건)")

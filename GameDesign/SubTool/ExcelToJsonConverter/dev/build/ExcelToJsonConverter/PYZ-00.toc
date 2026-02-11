@@ -1,4 +1,4 @@
-('C:\\Git\\Ttakji_lab-mobile_development_dep\\GameDesign\\SubTool\\build\\ExcelToJsonConverter\\PYZ-00.pyz',
+('C:\\Git\\Ttakji_lab-mobile_development_dep\\GameDesign\\SubTool\\ExcelToJsonConverter\\dev\\build\\ExcelToJsonConverter\\PYZ-00.pyz',
  [('PIL',
    'C:\\Users\\habin2243\\AppData\\Roaming\\Python\\Python313\\site-packages\\PIL\\__init__.py',
    'PYMODULE'),
