@@ -10,6 +10,7 @@ namespace TCG_Project.Scripts.Core
         public string Name { get; set; }
         public int Health { get; set; }
         public int Mana { get; set; }
+        public int PrizePoints { get; set; } = 0; // 승점
 
         public List<Card> Deck { get; private set; } = new List<Card>();
         public List<Card> Hand { get; private set; } = new List<Card>();
@@ -24,11 +25,6 @@ namespace TCG_Project.Scripts.Core
         // 필드 존 (예: 5칸 고정). null이면 빈 공간.
         public Card[] Field { get; private set; } = new Card[5];
 
-        // [유틸] 존 타입에 따라 해당 컨테이너(List)를 반환하거나 처리하는 헬퍼가 필요함
-        // 하지만 Field가 배열이라 타입이 다르므로, MoveCardEffect 내부에서 처리하거나
-        // 별도의 인터페이스(ICardContainer)를 만드는 방법이 있습니다.
-        // 이번 단계에서는 Effect 내부에서 분기 처리하는 방식을 사용하겠습니다.
-
         // 필드의 빈 자리 찾기 (-1이면 꽉 참)
         public int GetEmptyFieldSlot()
         {
@@ -38,6 +34,16 @@ namespace TCG_Project.Scripts.Core
             }
             return -1;
         }
+
+        /* 턴 시작 시 호출할 메서드 (GameLoop에서 호출 필요)
+        public void OnTurnStart()
+        {
+            // 마나 회복 등은 GameLoop에서 하더라도, 유닛 상태 초기화는 여기서
+            foreach (var card in Field)
+            {
+                if (card != null) card.RefreshUnitState();
+            }
+        }*/
 
         public void SetDeck(List<Card> newDeck)
         {
@@ -63,7 +69,7 @@ namespace TCG_Project.Scripts.Core
             }
 
             // 디버깅용 로그 (너무 시끄러우면 주석 처리)
-            // Console.WriteLine($"   (플레이 가능한 카드: {EnableCardList.Count}장)");
+            Console.WriteLine($"(플레이 가능한 카드: {EnableCardList.Count}장)");
         }
 
         // 덱 셔플
@@ -100,26 +106,54 @@ namespace TCG_Project.Scripts.Core
 
             // 1. 자원 소모
             Mana -= card.Cost;
-            Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 발동 (Cost: {card.Cost}) / 남은 마나: {Mana}");
+
+            if (card.Type == CardType.Unit)
+            {
+                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
+            }
+            else
+            {
+                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 사용 (Cost: {card.Cost}) / 남은 마나: {Mana}");
+            }
 
             // 2. 패에서 PlayingCard 존으로 이동
             Hand.Remove(card);
             PlayingCard = card;
 
             // 3. 효과 발동
-            card.Play(context);
+            if (card.Type == CardType.Skill) { card.Play(context); }
 
-            // 4. [종료 처리] PlayingCard -> Graveyard (원래 주인 묘지로!)
+            // 4. [종료 처리] PlayingCard -> Graveyard (원래 주인 묘지로!) / 소환 시 유닛 효과
             PlayingCard = null;
 
-            // [수정된 부분] 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
-            Player owner = card.OriginalOwner ?? this; // 안전장치
-            owner.Graveyard.Add(card);
-
-            // 상태 초기화 (묘지로 가니까)
-            card.ResetState();
-
-            Console.WriteLine($" ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
+            // 유닛 소환시 효과 분기
+            if (card.Type == CardType.Unit)
+            {
+                // [유닛] 필드로 이동
+                if (InsertCard(ZoneType.Field, card))
+                {
+                    // 소환 후유증 (바로 공격 불가) 미적용
+                    card.IsExhausted = false;
+                    Console.WriteLine($"   ⚔️ [소환] {card.Name} (Power:{card.Power})가 필드에 배치되었습니다.");
+                    card.Play(context);
+                }
+                else
+                {
+                    // 필드가 꽉 차서 소환 실패 시 -> 묘지로 가거나 핸드로 복귀 (룰에 따라 다름)
+                    // 여기서는 묘지로 보내고 경고
+                    Console.WriteLine($"   🚫 [소환 실패] 필드가 꽉 찼습니다! {card.Name} 돌아감.");
+                    Hand.Add(card);
+                }
+            }
+            else
+            {
+                // [수정된 부분] 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
+                Player owner = card.OriginalOwner ?? this; // 안전장치
+                owner.Graveyard.Add(card);
+                // 상태 초기화 (묘지로 가니까)
+                card.ResetState();
+                Console.WriteLine($" ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
+            }
         }
 
         // DamageEffect에서 호출할 메서드
@@ -253,6 +287,51 @@ namespace TCG_Project.Scripts.Core
 
             return target;
         }
-        
+
+        public void OnTurnStart()
+        {
+            // 필드에 있는 내 유닛들 상태 초기화
+            foreach (var card in Field)
+            {
+                if (card != null)
+                {
+                    // 1. 행동력 회복 (공격 기회 리필)
+                    card.RefreshUnitState();
+                    
+                    // 2. [신규] 체력 완전 회복 (줄어든 HP 초기화)
+                    if (card.Health < card.MaxHealth)
+                    {
+                        int healAmount = card.MaxHealth - card.Health;
+                        card.Health = card.MaxHealth;
+                        Console.WriteLine($"   ✨ [회복] {card.Name}의 체력이 초기화되었습니다. (+{healAmount})");
+                    }
+                }
+            }
+        }
+
+        // [신규] ZoneType에 따라 해당 영역의 카드 리스트를 반환하는 메서드
+        public List<Card> GetZone(ZoneType zone)
+        {
+            switch (zone)
+            {
+                case ZoneType.Hand:
+                    return Hand;
+
+                case ZoneType.Deck:
+                    return Deck;
+
+                case ZoneType.Graveyard:
+                    return Graveyard;
+
+                case ZoneType.Field:
+                    // Field는 배열(Card[])이므로, 비어있지 않은(null이 아닌) 유닛만 리스트로 변환하여 반환
+                    // (TargetSelector가 null 체크를 하긴 하지만, 여기서 걸러주는 게 안전함)
+                    return Field.Where(c => c != null).ToList();
+
+                default:
+                    return new List<Card>(); // 빈 리스트 반환
+            }
+        }
+
     }
 }

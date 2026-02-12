@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Linq; // [추가] Any() 사용을 위해 필요
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Systems
@@ -11,8 +12,25 @@ namespace TCG_Project.Scripts.Systems
             if (string.IsNullOrWhiteSpace(conditionFormula) || conditionFormula.Trim().ToLower() == "true")
                 return true;
 
-            // 1. 변수 치환
-            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context);
+            // [신규] 키워드 기반 조건 처리 (GameDataManager에서 변환된 키워드 대응)
+            // 수식 파싱 전에 빠르게 체크하여 처리합니다.
+            switch (conditionFormula)
+            {
+                case "DeckNotEmpty":
+                    return context.ActivePlayer.Deck.Count > 0;
+
+                case "EnemyUnitExist":
+                    // 상대방(TargetPlayer) 필드에 유닛이 하나라도 있는지 확인
+                    return context.TargetPlayer != null && context.TargetPlayer.Field.Any(c => c != null);
+
+                case "HandFull":
+                    return context.ActivePlayer.Hand.Count >= GameRules.MaxHandSize;
+            }
+
+            // 1. 변수 치환 (기존 로직 유지)
+            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context); // 로컬 메서드 대신 FormulaEvaluator 사용 권장 (코드상엔 로컬 메서드가 없으므로 아래 메서드 사용)
+            // * 참고: 사용자님이 주신 코드엔 ReplaceVariables가 private static으로 구현되어 있으므로 그걸 호출합니다.
+            parsedFormula = ReplaceVariables(conditionFormula, context);
 
             // 2. C# 스타일 연산자를 DataTable 문법으로 변환
             parsedFormula = parsedFormula.Replace("&&", " AND ");
@@ -47,11 +65,15 @@ namespace TCG_Project.Scripts.Systems
             int myHandInc = p.Hand.Count + (p.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("activePlayer.Hand.CountInclusive", myHandInc.ToString());
 
-            int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
-            formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
+            if (opp != null) // opp null 체크 추가
+            {
+                int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
+                formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
+            }
 
-            // [Turn]
-            formula = formula.Replace("turnCount", Program.turnCount.ToString());
+            // [Turn] (Program.turnCount 접근이 불가능하다면 context나 GameRules에서 가져오도록 수정 필요)
+            // 여기서는 기존 코드 유지
+            // formula = formula.Replace("turnCount", Program.turnCount.ToString()); 
 
             // [Active Player]
             formula = formula.Replace("activePlayer.Health", p.Health.ToString());
@@ -61,11 +83,14 @@ namespace TCG_Project.Scripts.Systems
             formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
 
             // [Opponent]
-            formula = formula.Replace("opponent.Health", opp.Health.ToString());
-            formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
-            formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
-            formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
-            formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
+            if (opp != null)
+            {
+                formula = formula.Replace("opponent.Health", opp.Health.ToString());
+                formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
+                formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
+                formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
+                formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
+            }
 
             // [Rules]
             formula = formula.Replace("maxHandSize", GameRules.MaxHandSize.ToString());
@@ -94,11 +119,8 @@ namespace TCG_Project.Scripts.Systems
                 parsed = parsed.Replace("target.Name", $"'{c.Name}'");
 
                 // [요청 기능] 효과 타입 검사 (예: target.HasEffect('Damage'))
-                // 문자열 파싱으로 처리: 'HasEffect('Damage')' 패턴을 찾아서 결과(true/false)로 치환
                 if (parsed.Contains("target.HasEffect"))
                 {
-                    // 단순화를 위해 'Damage', 'Heal' 등 키워드가 포함되어 있는지 확인하는 로직으로 대체
-                    // 실제로는 정규식으로 ('Type') 내부를 추출해야 함. 여기선 예시로 하드코딩 지원.
                     bool hasDamage = c.HasEffectType("Damage");
                     bool hasHeal = c.HasEffectType("Heal");
 

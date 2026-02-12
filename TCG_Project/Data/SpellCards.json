@@ -392,7 +392,7 @@
         "name": "마나 재활용",
         "cost": 1,
         "description": "패를 1장 버리고, 그 카드의 코스트만큼 마나를 회복합니다.",
-        "playingCondition": "activePlayer.Hand.Count >= 2",
+        "playingCondition": "activePlayer.Hand.Count > 2",
         "effects": [
             {
                 "type": "MoveCard",
@@ -412,7 +412,7 @@
             {
                 "id": "managain",
                 "args": {
-                    "target": "ActivePlayer",
+                    "target": "activePlayer",
                     "amount": "var.recycle_amount" // <--- 저장된 값만큼 회복
                 }
             }
@@ -435,6 +435,70 @@
                     "destTarget": "Opponent" // 상대
                 }
             }
+        ]
+    },
+    {
+        "id": "c_unfair_exchange",
+        "name": "불공정 거래",
+        "cost": 3,
+        "description": "상대 패 2장과 자신의 패 1장을 교환합니다.",
+        "playCondition": "activePlayer.Hand.Count > 1 && opponent.Hand.Count >= 2",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "operation": "Swap",
+                    "src": "Hand",
+                    "dest": "Hand",
+                    "srcTarget": "Self",
+                    "destTarget": "Opponent",
+                    "count": 1, // 나는 1장
+                    "destCount": 2 // 너는 2장 (2배)
+                    // "destCount": "count * 2" 처럼 수식도 가능
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_pendingCard",
+        "name": "잠시만 빌릴게",
+        "cost": 2,
+        "description": "상대 덱 맨 위의 카드를 1장 뽑아 자신의 패에 넣습니다. 턴이 종료될 때 돌려줍니다.",
+        "playCondition": "opponent.Deck.Count > 0",
+        "effects": [
+            {
+                "type": "MoveCard",
+                "params": {
+                    "src": "Deck",
+                    "dest": "Hand",
+                    "srcTarget": "Opponent",
+                    "destTarget": "Self",
+                    "count": 1,
+                    "duration": "TurnEnd" // <--- 턴 종료 시 원래 주인에게 반환
+                }
+            }
+        ]
+    },
+    {
+        "id": "c_rapid_grow",
+        "name": "급성장",
+        "cost": 4,
+        "description": "턴 종료시까지 내 패의 카드 코스트를 2 낮춥니다.",
+        "playCondition": "activePlayer.Hand.Count >= 2",
+        "effects": [
+            {
+                "type": "ModifyStat",
+                "params": {
+                    "stat": "Cost",
+                    "amount": -2,
+                    "duration": "TurnEnd", // <--- 턴 종료 시 코스트 +2 (복구)
+                    "target": {
+                        "controller": "Self",
+                        "zones": [ "Hand" ],
+                        "mode": "All"
+                    }
+                }
+            } 
         ]
     }
 ]

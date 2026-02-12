@@ -23,6 +23,19 @@
 	<None Update="Data\Effects.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</None>
+
+	<None Update="Data\Card.json">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
+	<None Update="Data\CardEffect.json">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
+	<None Update="Data\CardSkill.json">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
+	<None Update="Data\CardUnit.json">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
   </ItemGroup>
 
 </Project>

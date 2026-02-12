@@ -20,6 +20,9 @@ namespace TCG_Project.Scripts.Effects
         private string operationParam;
         private object destCountParam; // [신규] 상대방(목적지)에서 가져올 수량 (수식 가능)
 
+        private string triggerCondition; // [신규] 발동 조건
+        private int prizeOnKill;         // [신규] 처치 시 승점
+
         public void Initialize(Dictionary<string, object> parameters)
         {
             srcZone = parameters.ContainsKey("src") ? Enum.Parse<ZoneType>(parameters["src"].ToString()) : ZoneType.Deck;
@@ -41,10 +44,28 @@ namespace TCG_Project.Scripts.Effects
             if (parameters.ContainsKey("destCount")) destCountParam = parameters["destCount"];
             else if (parameters.ContainsKey("destAmount")) destCountParam = parameters["destAmount"];
             else destCountParam = countParam;
+
+            // 효과 발동 조건, 승점 파라미터 로드
+            if (parameters.ContainsKey("triggerCondition"))
+                triggerCondition = parameters["triggerCondition"].ToString();
+
+            if (parameters.ContainsKey("prizeOnKill"))
+                prizeOnKill = int.Parse(parameters["prizeOnKill"].ToString());
         }
 
         public void Execute(GameContext context)
         {
+            // 발동 조건(triggerCondition) 재확인
+            if (!string.IsNullOrEmpty(triggerCondition))
+            {
+                // ConditionEvaluator를 사용하여 조건 체크 (예: EnemyUnitExist)
+                if (!ConditionEvaluator.Evaluate(triggerCondition, context))
+                {
+                    System.Console.WriteLine($"🚫 조건 불만족({triggerCondition})으로 효과가 취소되었습니다.");
+                    return;
+                }
+            }
+
             int totalRecordedValue = 0;
             int count = FormulaEvaluator.Evaluate(countParam, context);
 
@@ -64,6 +85,34 @@ namespace TCG_Project.Scripts.Effects
 
             if (!string.IsNullOrEmpty(outVarParam))
             {
+                // 되돌리기 효과: "원래 주인에게 이동" -> 아직 구현 중
+                var revertEffect = new MoveCardEffect();
+
+                // 여기서 중요한 건 "방금 옮긴 그 카드"를 정확히 찍어야 합니다.
+                // 따라서 TargetSelector가 "SpecificCards"를 지원하거나, 
+                // 임시로 해당 카드들의 ID를 이용한 필터링 쿼리를 만들어야 합니다.
+
+                // [심화 구현] 실제로는 카드의 Instance ID(GUID)를 쓰는 게 제일 정확합니다.
+                // 여기서는 개념적으로 "방금 이동한 카드들"을 되돌린다고 가정합니다.
+
+                // 되돌릴 타겟 리스트 생성 (JSON 아님, 직접 주입 방식이 필요)
+                // 이 부분은 ICardEffect 인터페이스의 한계로 인해, 
+                // "특정 카드를 타겟으로 하는 MoveCardEffect"를 동적으로 생성하는 팩토리 메서드가 필요합니다.
+
+                // (약식 구현: 소유권 복구 로직 활용)
+                // 묘지로 보내거나 덱으로 보내는 게 아니라 "원래 주인 손패"로 보낸다면:
+                var revertParams = new Dictionary<string, object>
+                {
+                    { "src", destZone },        // 현재 위치 (내 필드/패)
+                    { "dest", srcZone },        // 원래 위치 (상대 필드/패)
+                    { "srcTarget", "Self" },    // 지금 나한테 있으니까
+                    { "destTarget", "Opponent" }, // 돌려줄 놈
+                    { "count", 1 },
+                    // ★ 중요: 아무거나 돌려주면 안 되고 "뺏어온 그 놈"이어야 함.
+                    // 이를 위해선 'movedCards' 리스트를 별도로 관리하거나
+                    // PendingEffect가 'List<Card>'를 직접 들고 있어야 함.
+                };
+
                 context.SetVariable(outVarParam, totalRecordedValue);
             }
         }
@@ -89,8 +138,16 @@ namespace TCG_Project.Scripts.Effects
 
                         if (currentHolder != null)
                         {
+                            // [수정 핵심] 이동하기 전에 값을 먼저 캡처합니다!
+                            // 묘지로 가면 Reset되어서 코스트 정보를 잃어버리기 때문입니다.
+                            int capturedValue = GetStatValue(cardToMove);
+
                             bool isMoved = ProcessMove(currentHolder, destPlayer, cardToMove);
-                            if (isMoved) RecordStat(cardToMove, ref totalRecordedValue);
+                            // 3. [기록] 카드를 다시 읽지 말고, 아까 캡처해둔 값을 더함!
+                            if (isMoved)
+                            {
+                                totalRecordedValue += capturedValue;
+                            }
                         }
                     }
                 }
@@ -126,7 +183,16 @@ namespace TCG_Project.Scripts.Effects
             }
         }
 
-        // [수정] 성공 여부(bool) 반환
+        // [신규 헬퍼] 기록할 값을 추출하는 메서드
+        private int GetStatValue(Card card)
+        {
+            if (string.IsNullOrEmpty(recordStatParam)) return 1; // 기본: 개수(1)
+            else if (recordStatParam == "Cost") return card.Cost; // 코스트
+            // 추후 Power, HP 등 추가 가능
+            return 0;
+        }
+
+        // 카드 이동 단계, 성공 여부(bool) 반환
         private bool ProcessMove(Player srcPlayer, Player destPlayer, Card card)
         {
             // 1. 룰 보정 (묘지행일 경우 원래 주인 묘지로)
@@ -152,7 +218,9 @@ namespace TCG_Project.Scripts.Effects
                 else card.Controller = finalDestPlayer; // 컨트롤러 갱신
 
                 InsertCardToDest(finalDestPlayer, card, isSilent: true);
-
+                // [디버깅] 이동 로그
+                DebugHelper.LogEffect("Move Card", $"{card.Name}: {srcZone} -> {destZone} ({destPlayer.Name})");
+                
                 Console.WriteLine($"🚚 [지정 이동] {card.Name}: {srcPlayer.Name}({srcZone}) -> {finalDestPlayer.Name}({destZone}) {(needReset ? "[Reset]" : "")}");
                 return true;
             }
@@ -223,6 +291,39 @@ namespace TCG_Project.Scripts.Effects
                 else break;
             }
             return extracted;
+        }
+
+        // 내부 시스템용 효과 (JSON으로 안 만듦)
+        public class RevertControlEffect : ICardEffect
+        {
+            private List<Card> cardsToRevert;
+            private Player originalOwner;
+            private ZoneType returnZone;
+
+            public RevertControlEffect(List<Card> cards, Player owner, ZoneType zone)
+            {
+                cardsToRevert = cards;
+                originalOwner = owner;
+                returnZone = zone;
+            }
+
+            public void Initialize(Dictionary<string, object> parameters) { } // 미사용
+
+            public void Execute(GameContext context)
+            {
+                foreach (var card in cardsToRevert)
+                {
+                    // 현재 컨트롤러(나)에게서 -> 원래 주인(owner)에게로
+                    Player currentController = card.Controller;
+
+                    if (currentController != null && currentController.ExtractCard(ZoneType.Field, card)) // 필드라고 가정
+                    {
+                        card.ResetState(); // 상태 초기화 (주인 복귀)
+                        originalOwner.InsertCard(returnZone, card);
+                        Console.WriteLine($"↩️ [만료] {card.Name}의 컨트롤이 {originalOwner.Name}에게 돌아갑니다.");
+                    }
+                }
+            }
         }
 
         private List<Card> GetCardsInZone(Player p, ZoneType zone)

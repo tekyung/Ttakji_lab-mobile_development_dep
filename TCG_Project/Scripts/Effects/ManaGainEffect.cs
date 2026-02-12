@@ -18,12 +18,23 @@ namespace TCG_Project.Scripts.Effects
 
         public void Execute(GameContext context)
         {
+            // 1. 수식 계산 (var.recycle_amount 같은 변수도 여기서 처리됨)
+            
+
+            // 2. 타겟 선정
+            
             int finalAmount = FormulaEvaluator.Evaluate(amountParam, context);
             List<Player> targets = TargetEvaluator.Evaluate(targetParam, context);
 
+            // [디버깅]
+            DebugHelper.LogEffect("Mana Gain", $"마나 {finalAmount} 회복 시도");
+
             foreach (Player target in targets)
             {
+                int oldMana = target.Mana;
                 target.ManaGain(finalAmount);
+                // [디버깅] 실제 변화 확인
+                DebugHelper.LogEffect("Result", $"{target.Name} Mana: {oldMana} -> {target.Mana}");
             }
         }
     }

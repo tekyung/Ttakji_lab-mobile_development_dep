@@ -29,7 +29,7 @@ namespace TCG_Project.Scripts.Systems
             { "Heal", typeof(HealEffect) },
             { "ManaGain", typeof(ManaGainEffect) },
             { "MoveCard", typeof(MoveCardEffect) },
-            {  "ModifyStat", typeof(ModifyStatEffect) },
+            { "ModifyStat", typeof(ModifyStatEffect) },
             { "Conditional", typeof(ConditionalEffect) }
         };
 

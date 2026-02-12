@@ -12,18 +12,15 @@ namespace TCG_Project
 {
     class Program
     {
-
         // 전역 변수 : 룰에 관련된 상수는 GameRules로 이동됨
         public static int turnCount = 1;
 
         static void Main(string[] args)
-        {
+        {   
             // 콘솔에서 UTF-8 인코딩 사용 설정
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
-
-            Console.WriteLine("=== TCG 콘솔 시뮬레이터 시작 ===\n");
-
+            Console.WriteLine("\n엔터 키를 누르면 종료합니다2");
             // 0. 룰 데이터 로드 (가장 먼저 실행)
             try
             {
@@ -35,6 +32,23 @@ namespace TCG_Project
                 Console.WriteLine($"[Error] 룰 파일을 불러오는데 실패했습니다: {e.Message}");
                 return;
             }
+
+            BotSimulator2.Run();
+            Console.ReadLine();
+
+            RunBot1();
+        }
+
+        public static void RunBot1()
+        {
+            
+            TestLoader.RunTest(); // 테스트
+            // 테스트가 끝나면 콘솔이 바로 꺼지지 않게 입력 대기
+            Console.WriteLine("\n엔터 키를 누르면 종료합니다...");
+
+            Console.WriteLine("=== TCG 콘솔 시뮬레이터 시작 ===\n");
+
+            
 
             // 0.5 효과 데이터 로드 (신규 추가)
             try
@@ -75,6 +89,11 @@ namespace TCG_Project
                 Mana = GameRules.StartingMana
             };
 
+            // 2. [핵심] 게임 전체를 관통하는 Context 생성!
+            GameContext globalContext = new GameContext();
+            globalContext.Players.Add(p1);
+            globalContext.Players.Add(p2);
+
             // 3. 덱 생성 (Deep Copy 적용)
             // 주의: P1과 P2는 서로 다른 덱 인스턴스를 가져야 하므로 BuildDeck을 각각 호출
             p1.SetDeck(BuildDeck(cardDatabase, 20, GameRules.MaxSameCardInDeck));
@@ -84,6 +103,9 @@ namespace TCG_Project
             int startDraw = GameRules.StartingDrawCount;
             Console.WriteLine($"--- 게임 준비: 초기 핸드 {startDraw}장 드로우 ---");
 
+            SetDebugHand(p1, "급성장", "화염구", "기적의 드로우");
+            SetDebugHand(p2, "잠시만 빌릴게", "축제", "마나 재활용");
+            
             // 첫 패 드로우 (MoveCardEffect 사용)
             // 턴 진행 중이 아니므로, 각 플레이어별로 Context를 임시로 만들어 실행합니다.
             var startingDraw = new MoveCardEffect();
@@ -91,7 +113,7 @@ namespace TCG_Project
             {
                 { "src", "Deck" },
                 { "dest", "Hand" },
-                { "count", startDraw }, // 초기 핸드 2장 (룰에 따라 변경 가능)
+                { "count", startDraw - 1 }, // 초기 핸드 2장 (룰에 따라 변경 가능)
                 { "srcTarget", "ActivePlayer" }, // Context에서 주입된 플레이어를 대상으로 함
                 { "destTarget", "ActivePlayer" }
             });
@@ -101,6 +123,7 @@ namespace TCG_Project
 
             // Player 2 드로우
             startingDraw.Execute(new GameContext { ActivePlayer = p2, TargetPlayer = p1 });
+            
 
             Console.WriteLine("--------------------------------------\n");
 
@@ -109,19 +132,21 @@ namespace TCG_Project
 
             while (true)
             {
-                //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, globalContext);
                 // --- Player 1 턴 ---
-                if (!ProcessTurn(p1, p2, GameRules.StartingMana)) break;
-                //ProcessPendingEffects(GamePhase.TurnEnd, activePlayer, globalContext);
+                globalContext.ActivePlayer = p1;
+                globalContext.TargetPlayer = p2;
+                if (!ProcessTurn(p1, p2, GameRules.StartingMana, globalContext)) break;
+                
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
 
-                Console.WriteLine("--------------------------------------------------\n");
+                Console.WriteLine("-----------------------------------------------------\n");
 
-                //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, globalContext);
                 // --- Player 2 턴 ---
-                if (!ProcessTurn(p2, p1, GameRules.StartingMana)) break;
-                //ProcessPendingEffects(GamePhase.TurnEnd, activePlayer, globalContext);
+                globalContext.ActivePlayer = p2;
+                globalContext.TargetPlayer = p1;
+                if (!ProcessTurn(p2, p1, GameRules.StartingMana, globalContext)) break;
+                
                 // 승패 체크
                 if (CheckGameOver(p1, p2)) break;
 
@@ -144,38 +169,13 @@ namespace TCG_Project
             Console.ReadKey(true);
         }
 
-        // 덱 생성 헬퍼 함수
-        public static List<Card> BuildDeck(List<Card> database, int deckSize, int MaxSameCards)
-        {
-            List<Card> newDeck = new List<Card>();
-            List<string> cardCountTracker = new List<string>();
-            Random rng = new Random();
-
-            for (int i = 0; i < deckSize; i++)
-            {
-                // DB에서 랜덤 카드 선택
-                Card randomCard = database[rng.Next(database.Count)];
-
-                // 중복 체크
-                int sameCardCount = cardCountTracker.Count(c => c == randomCard.Name);
-                if (sameCardCount >= MaxSameCards) // 등호 조건 수정 (>=)
-                {
-                    i--;
-                    continue;
-                }
-
-                cardCountTracker.Add(randomCard.Name);
-
-                // [핵심 변경] 원본 참조가 아닌, 복제본(Clone)을 덱에 추가
-                newDeck.Add(randomCard.Clone());
-            }
-            return newDeck;
-        }
-
         // 한 플레이어의 턴을 진행하는 로직
-        public static bool ProcessTurn(Player activePlayer, Player opponent, int currentTurnMaxMana)
+        public static bool ProcessTurn(Player activePlayer, Player opponent, int currentTurnMaxMana, GameContext context)
         {
             Console.WriteLine($"\n========== [ TURN {turnCount} ] 최대 마나: {GameRules.StartingMana} ==========");
+
+            // 0. [턴 시작] 예약된 효과 처리 (예: "다음 턴 시작 시까지" 였던 효과들 만료)
+            //ProcessPendingEffects(GamePhase.TurnStart, activePlayer, context);
 
             // 1. 마나 충전 (현재 턴의 최대 마나로 리필)
             // 보통 TCG는 턴 시작 시 마나가 '회복'되므로 할당(=)이 일반적입니다.
@@ -250,11 +250,35 @@ namespace TCG_Project
             }
 
             Console.WriteLine($"\n--- {activePlayer.Name} 턴 종료 (사용 카드: {playCount}장 / LP: {activePlayer.Health} / 패: {activePlayer.Hand.Count} / 덱: {activePlayer.Deck.Count}장 / 묘지: {activePlayer.Graveyard.Count}장) ---");
+            ProcessPendingEffects(GamePhase.TurnEnd, activePlayer, context);
             turnCount++;
 
             return true;
         }
 
+        public static void ProcessPendingEffects(GamePhase phase, Player currentTurnPlayer, GameContext context)
+        {
+            // [수정] 필터링 로직 단순화 및 디버깅
+            // OwnerPlayer가 null이면 공용 효과로 취급, 아니면 현재 턴 플레이어와 일치해야 함
+            var effectsToRun = context.PendingEffects
+                .Where(e => e.TriggerPhase == phase)
+                .Where(e => e.OwnerPlayer == null || e.OwnerPlayer == currentTurnPlayer)
+                .ToList();
+
+            // (디버깅용: 만약 예약된 건 있는데 실행이 안 되는지 확인)
+            if (context.PendingEffects.Count > 0 && effectsToRun.Count == 0)
+                 Console.WriteLine($"   (Debug: 대기 중인 효과 {context.PendingEffects.Count}개 중 조건 만족 0개)");
+
+            foreach (var pe in effectsToRun)
+            {
+                // 효과 실행
+                pe.Effect.Execute(context);
+
+                // 리스트에서 제거
+                context.PendingEffects.Remove(pe);
+            }
+        }
+        /*
         // 카드 트리거 효과 체크
         public static void ProcessPendingEffects(GamePhase phase, Player currentTurnPlayer, GameContext context)
         {
@@ -264,6 +288,11 @@ namespace TCG_Project
                 .Where(e => e.TriggerPhase == phase && (e.OwnerPlayer == null || e.OwnerPlayer == currentTurnPlayer))
                 .ToList();
 
+            if (effectsToRun.Count > 0)
+            {
+                Console.WriteLine($"\n⏰ [효과 만료] {phase} 단계의 임시 효과들이 해제됩니다.");
+            }
+
             foreach (var pe in effectsToRun)
             {
                 Console.WriteLine($"⏰ [만료] 예약된 효과가 발동합니다.");
@@ -272,6 +301,62 @@ namespace TCG_Project
                 // 실행 후 제거 (일회성)
                 context.PendingEffects.Remove(pe);
             }
+        }
+        */
+        // 덱 생성 헬퍼 함수
+        public static List<Card> BuildDeck(List<Card> database, int deckSize, int MaxSameCards)
+        {
+            List<Card> newDeck = new List<Card>();
+            List<string> cardCountTracker = new List<string>();
+            Random rng = new Random();
+
+            for (int i = 0; i < deckSize; i++)
+            {
+                // DB에서 랜덤 카드 선택
+                Card randomCard = database[rng.Next(database.Count)];
+
+                // 중복 체크
+                int sameCardCount = cardCountTracker.Count(c => c == randomCard.Name);
+                if (sameCardCount >= MaxSameCards) // 등호 조건 수정 (>=)
+                {
+                    i--;
+                    continue;
+                }
+
+                cardCountTracker.Add(randomCard.Name);
+
+                // [핵심 변경] 원본 참조가 아닌, 복제본(Clone)을 덱에 추가
+                newDeck.Add(randomCard.Clone());
+            }
+            return newDeck;
+        }
+
+        // [디버그용] 특정 플레이어의 패를 원하는 카드로 세팅하는 함수
+        public static void SetDebugHand(Player player, params string[] cardNames)
+        {
+            Console.WriteLine($"\n🕵️‍♂️ [Debug] {player.Name}의 패를 조작합니다...");
+
+            // 기존에 혹시 들어간 카드가 있다면 덱으로 돌려보내거나 초기화 (선택 사항)
+            // player.Hand.Clear(); // 필요하면 주석 해제
+
+            foreach (string name in cardNames)
+            {
+                // 1. 덱에서 해당 이름의 카드를 찾음 (첫 번째 발견된 것)
+                Card targetCard = player.Deck.FirstOrDefault(c => c.Name == name);
+
+                if (targetCard != null)
+                {
+                    // 2. 덱에서 빼고 패로 이동
+                    player.Deck.Remove(targetCard);
+                    player.Hand.Add(targetCard);
+                    Console.WriteLine($"   -> '{name}' 추가됨.");
+                }
+                else
+                {
+                    Console.WriteLine($"   [Warning] 덱에 '{name}' 카드가 없습니다! (철자 확인 필요)");
+                }
+            }
+            Console.WriteLine($"   (현재 패: {player.Hand.Count}장)");
         }
 
         public static bool CheckGameOver(Player p1, Player p2)
