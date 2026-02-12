@@ -1,0 +1,40 @@
+{
+  "CardSkill": [
+    {
+      "id": 21001,
+      "skill_cost": 1,
+      "use_condition_type": "None",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210011
+    },
+    {
+      "id": 21002,
+      "skill_cost": 1,
+      "use_condition_type": "Draw",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210012
+    },
+    {
+      "id": 21003,
+      "skill_cost": 1,
+      "use_condition_type": "Power_Up",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210013
+    },
+    {
+      "id": 21004,
+      "skill_cost": 1,
+      "use_condition_type": "Gain_Mana",
+      "use_condition_value1": -1,
+      "use_condition_value2": -1,
+      "before_use_effect_id": -1,
+      "after_use_effect_id": 210014
+    }
+  ]
+}
