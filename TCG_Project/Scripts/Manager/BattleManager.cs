@@ -1,10 +1,11 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO; // 파일 경로 처리를 위해 필요
+using System.IO;
 using System.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using UnityEngine;
 using static System.Net.Mime.MediaTypeNames;
@@ -42,6 +43,7 @@ public class BattleManager : MonoBehaviour
     private void Start()
     {
         Debug.Log("=== 🤖 봇 대전 시뮬레이터 (Unity Ver) ===");
+        EventManager.GameStart?.Invoke(p1, p2);
         StartCoroutine(GameLoop());
     }
 
@@ -116,8 +118,10 @@ public class BattleManager : MonoBehaviour
 
         if (me.Mana > 3) setMana = me.Mana;
         me.Mana = setMana;
+        EventManager.OnManaChange?.Invoke(me, currentTurn);
 
         me.OnTurnStart();
+        EventManager.OnTurnStart?.Invoke(currentTurn, me.Name);
         DrawCards(me, 1);
 
         Debug.Log($"--- HP: {me.Health} | Prize: {me.PrizePoints} | Mana: {me.Mana}/{setMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} ---");
@@ -126,6 +130,7 @@ public class BattleManager : MonoBehaviour
         yield return new WaitForSeconds(ActionDelay); // 드로우 후 대기
 
         // [Phase 1] 메인 페이즈
+        EventManager.OnMainPhase?.Invoke(me.Name, currentTurn);
         bool actionTaken = true;
         int safetyCount = 0;
 
@@ -185,11 +190,14 @@ public class BattleManager : MonoBehaviour
         {
             Debug.Log($"{me.Name} : 컨트롤하는 유닛이 없거나 배틀할 마나가 없습니다.");
         }
+        // 배틀이나 메인(배틀 건너뛸경우) 끝나면 턴 종료
+        EventManager.OnTurnEnd?.Invoke(me.Name);
     }
 
     private IEnumerator ExecuteBattlePhaseRoutine(Player me, Player enemy)
     {
         Debug.Log("   ⚔️ [배틀 페이즈 시작]");
+        EventManager.OnBattlePhase?.Invoke(me.Name, globalTurn);
         int loopSafety = 0;
 
         while (loopSafety < 10)
@@ -251,7 +259,7 @@ public class BattleManager : MonoBehaviour
 
     private void InitializeSystem()
     {
-        // [중요] 유니티 에디터 경로 설정
+        // 유니티 에디터 경로 설정
         // Assets/Resources/GameData 경로를 가리킵니다.
         string resourcePath = Path.Combine(Application.dataPath, "Resources", "GameData");
 
@@ -310,6 +318,7 @@ public class BattleManager : MonoBehaviour
         else if (p1.PrizePoints >= 7) Debug.Log($"🏆 승리: {p1.Name}");
         else if (p2.PrizePoints >= 7) Debug.Log($"🏆 승리: {p2.Name}");
         else Debug.Log("🤝 무승부 (턴 오버)");
+        EventManager.GameEnd?.Invoke(p1, p2, globalTurn);
     }
 
     private bool IsSkillUseful(Card skill, Player me, Player enemy)

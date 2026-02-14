@@ -2,6 +2,8 @@
 using System.Diagnostics;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
+using TCG_Project.Scripts.Effects;
+using TCG_Project.Scripts.Interfaces;
 using UnityEngine;
 
 namespace TCG_Project.Scripts.Systems
@@ -16,7 +18,7 @@ namespace TCG_Project.Scripts.Systems
 
             // 2. 공격 비용(Arts Cost) 지불
             attacker.Controller.Mana -= attacker.AttackCost;
-            attacker.IsExhausted = true; // 행동력 소진
+            EventManager.OnManaChange?.Invoke(attacker.Controller, attacker.AttackCost);
 
             Console.WriteLine($"\n⚔️ [공격] {attacker.Name}(이)가 공격합니다! (소모 마나: {attacker.AttackCost})");
 
@@ -44,7 +46,6 @@ namespace TCG_Project.Scripts.Systems
                 // 공격 대상만 데미지를 입게 변경
                 int attackerDmg = attacker.Power;
                 // int defenderDmg = targetUnit.Power;
-                EventManager.OnUnitTakeDamage?.Invoke(targetUnit, attackerDmg);
 
                 ApplyDamage(targetUnit, attackerDmg);
                 // ApplyDamage(attacker, defenderDmg);
@@ -63,6 +64,8 @@ namespace TCG_Project.Scripts.Systems
                     }
                 }
             }
+            attacker.IsExhausted = true; // 행동력 소진
+            EventManager.UnitStatusChange?.Invoke(attacker, "Exhausted"); // 지침 상태(공격권 소진)
         }
 
         // 대상의 이름 가져오기 (디버그용)
@@ -102,6 +105,7 @@ namespace TCG_Project.Scripts.Systems
         {
             unit.Health -= damage;
             Console.WriteLine($"      🩸 {unit.Name} HP: {unit.Health + damage} -> {unit.Health}");
+            EventManager.OnUnitTakeDamage?.Invoke(unit, damage);
         }
 
         // 유닛 사망 처리
@@ -115,10 +119,11 @@ namespace TCG_Project.Scripts.Systems
             if (controller.ExtractCard(ZoneType.Field, unit))
             {
                 unit.ResetState();
-
                 // 원래 주인의 묘지로
                 Player owner = unit.OriginalOwner ?? controller;
-                owner.Graveyard.Add(unit); 
+                owner.InsertCard(ZoneType.Graveyard, unit);
+                EventManager.OnCardMove?.Invoke(unit, controller, ZoneType.Field, owner, ZoneType.Graveyard);
+                // owner.Graveyard.Add(unit); 
                 Console.WriteLine($"{unit.Name} : {owner.Name}의 묘지로 이동합니다.(현재 묘지 {owner.Graveyard.Count}장)");
             }
         }

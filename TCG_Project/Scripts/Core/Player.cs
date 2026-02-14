@@ -100,7 +100,7 @@ namespace TCG_Project.Scripts.Core
             return true;
         }
 
-        // [핵심 수정] PlayCard
+        // [핵심] 카드 사용 로직
         public void PlayCard(Card card, GameContext context)
         {
             if (!Hand.Contains(card)) return;
@@ -108,7 +108,7 @@ namespace TCG_Project.Scripts.Core
             // 1. 자원 소모
             Mana -= card.Cost;
             EventManager.OnManaChange?.Invoke(this, Mana); // 마나 썼으니 갱신
-            // [이벤트] 카드 사용 알림 (UI: 패에서 카드가 날아가는 연출)
+            // 카드 사용 알림 (UI: 패에서 카드가 날아가는 연출)
             EventManager.OnPlayCard?.Invoke(this, card);
 
             if (card.Type == CardType.Unit)
@@ -145,14 +145,13 @@ namespace TCG_Project.Scripts.Core
                 else
                 {
                     // 필드가 꽉 차서 소환 실패 시 -> 묘지로 가거나 핸드로 복귀 (룰에 따라 다름)
-                    // 여기서는 묘지로 보내고 경고
                     Console.WriteLine($"   🚫 [소환 실패] 필드가 꽉 찼습니다! {card.Name} 돌아감.");
                     Hand.Add(card);
                 }
             }
             else
             {
-                // [수정된 부분] 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
+                // 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
                 Player owner = card.OriginalOwner ?? this; // 안전장치
                 owner.Graveyard.Add(card);
                 // 상태 초기화 (묘지로 가니까)
@@ -317,7 +316,7 @@ namespace TCG_Project.Scripts.Core
             }
         }
 
-        // [신규] ZoneType에 따라 해당 영역의 카드 리스트를 반환하는 메서드
+        // ZoneType에 따라 해당 영역의 카드 리스트를 반환하는 메서드
         public List<Card> GetZone(ZoneType zone)
         {
             switch (zone)
