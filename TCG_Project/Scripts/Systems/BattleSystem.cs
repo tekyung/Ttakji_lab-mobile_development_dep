@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using TCG_Project.Scripts.Core;
+using TCG_Project.Scripts.Managers;
+using UnityEngine;
 
 namespace TCG_Project.Scripts.Systems
 {
@@ -26,22 +29,26 @@ namespace TCG_Project.Scripts.Systems
                 // (나중에 '직접 공격 데미지 증가' 버프가 있다면 여기서 directDamage += buff);
                 // [유닛 -> 플레이어] 명치 치기
                 Console.WriteLine($"   💥 {targetPlayer.Name}에게 다이렉트 어택!");
+                EventManager.OnLogMessage?.Invoke($"⚔️ {attacker.Name}가 {targetPlayer.Name}를 직접 공격!");
                 attacker.Controller.PrizePoints += directDamage;
+
                 Console.WriteLine($"      🏆 [전투 승점] {attacker.Controller.Name}가 {directDamage}점을 얻었습니다! (Total: {attacker.Controller.PrizePoints})");
-                // targetPlayer.TakeDamage(directDamage);
+                // targetPlayer.TakeDamage(directDamage); 과거 LP 관련 로직
             }
             else if (target is Card targetUnit)
             {
                 // [유닛 -> 유닛] 교전
                 Console.WriteLine($"   ⚔️ 교전: {attacker.Name}({attacker.Power}) vs {targetUnit.Name}({targetUnit.Power})");
-
+                EventManager.OnLogMessage?.Invoke($"⚔️ {attacker.Name} -> {targetUnit.Name} 공격!");
+                
                 // 공격 대상만 데미지를 입게 변경
                 int attackerDmg = attacker.Power;
                 // int defenderDmg = targetUnit.Power;
+                EventManager.OnUnitTakeDamage?.Invoke(targetUnit, attackerDmg);
 
                 ApplyDamage(targetUnit, attackerDmg);
                 // ApplyDamage(attacker, defenderDmg);
-
+                
                 if (targetUnit.Health <= 0)
                 {
                     ProcessDeath(targetUnit, attacker); // 죽음 처리
@@ -52,6 +59,7 @@ namespace TCG_Project.Scripts.Systems
                     {
                         attacker.Controller.PrizePoints += prize;
                         Console.WriteLine($"      🏆 [전투 승점] {attacker.Controller.Name}가 {prize}점을 얻었습니다! (Total: {attacker.Controller.PrizePoints})");
+                        EventManager.OnPrizeChange?.Invoke(attacker.Controller, attacker.Controller.PrizePoints);
                     }
                 }
             }
@@ -100,7 +108,7 @@ namespace TCG_Project.Scripts.Systems
         private void ProcessDeath(Card unit, Card attacker)
         {
             Console.WriteLine($"      💀 {unit.Name} 파괴됨!(전투)");
-
+            EventManager.OnUnitDeath?.Invoke(unit);
             Player controller = unit.Controller;
 
             // 필드에서 제거하고 묘지로
@@ -113,9 +121,6 @@ namespace TCG_Project.Scripts.Systems
                 owner.Graveyard.Add(unit); 
                 Console.WriteLine($"{unit.Name} : {owner.Name}의 묘지로 이동합니다.(현재 묘지 {owner.Graveyard.Count}장)");
             }
-            // 3. 전투 파괴 승점 처리
-            // TODO: 여기서 '처치 보상(Prize)' 로직 추가 가능
-            // if (enemyKilled) GainPrize(unit.Prize);
         }
     }
 }

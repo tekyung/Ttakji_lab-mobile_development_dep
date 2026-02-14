@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Core
@@ -106,10 +107,14 @@ namespace TCG_Project.Scripts.Core
 
             // 1. 자원 소모
             Mana -= card.Cost;
+            EventManager.OnManaChange?.Invoke(this, Mana); // 마나 썼으니 갱신
+            // [이벤트] 카드 사용 알림 (UI: 패에서 카드가 날아가는 연출)
+            EventManager.OnPlayCard?.Invoke(this, card);
 
             if (card.Type == CardType.Unit)
             {
                 Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
+                EventManager.OnUnitSummoned?.Invoke(card);
             }
             else
             {
@@ -161,6 +166,8 @@ namespace TCG_Project.Scripts.Core
         {
             Health -= amount;
             Console.WriteLine($"🔻 [{Name}] 가 {amount}의 피해를 입었습니다! (남은 체력: {Health})");
+            EventManager.OnHealthChange?.Invoke(this, Health);
+            EventManager.OnLogMessage?.Invoke($"🔻 [{Name}] 피해 {amount} (남은 체력: {Health})");
         }
 
         // HealEffect에서 호출할 메서드
@@ -175,6 +182,7 @@ namespace TCG_Project.Scripts.Core
         {
             Mana += amount;
             Console.WriteLine($"+ [{Name}] 가 {amount}의 마나를 회복했습니다. (현재 마나: {Mana})");
+            EventManager.OnManaChange?.Invoke(this, Mana);
         }
 
         // 카드 이동 로직
