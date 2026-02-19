@@ -26,6 +26,11 @@
       "enum_index": 1
     },
     {
+      "enum_category": "ECardCondition",
+      "enum_value": "OwnUnitExist",
+      "enum_index": 2
+    },
+    {
       "enum_category": "ECardEffectTarget",
       "enum_value": "None",
       "enum_index": 0
