@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using static session_manage;
 
 public class session_ui : MonoBehaviour
 {
@@ -13,7 +15,20 @@ public class session_ui : MonoBehaviour
     public Button session_start;            //세션시작
     public Button session_exit;             //세션나가기
 
-  
+    public Button btn_action_A; // 행동 A
+    public Button btn_action_B; // 행동 B
+    public Button btn_action_C; // 행동 C
+
+    public TextMeshProUGUI session_timer;
+
+    [System.Serializable]
+    public class ActionButton
+    {
+        public ActionType type; // 행동 종류 (A, B...)
+        public Button button;   // 연결할 버튼
+    }
+    public List<ActionButton> actionButtons;
+
     public string GetID()  //사용자ID를 반환            
     {
         return session_id.text; 
@@ -41,5 +56,45 @@ public class session_ui : MonoBehaviour
         session_join.interactable = isOn;
         session_code.interactable = isOn;
         session_random_match.interactable = isOn;
+    }
+    public void SetActionButtonsState(bool isActive)
+    {
+         btn_action_A.interactable = isActive;
+         btn_action_B.interactable = isActive;
+         btn_action_C.interactable = isActive;
+    }
+
+    public void DestroySessionTimer(float time) //세션 제한 시간
+    {
+        if (session_timer == null) return;
+        if (time > 0)
+        {
+            session_timer.text = $"Left session : {Mathf.CeilToInt(time)}";
+        }
+        else
+        {
+            session_timer.text = "";
+        }
+    }
+    public void CheckButton(ActionType targetType)
+    {
+        // 요청받은 타입과 똑같은 버튼을 찾음
+        foreach (var pair in actionButtons)
+        {
+            if (pair.type == targetType)
+            {
+                if (pair.button != null)
+                    pair.button.image.color = Color.green;
+            }
+        }
+    }
+
+    public void ResetButtons()
+    {
+        foreach (var pair in actionButtons)
+        {
+            if (pair.button != null)
+                pair.button.image.color = Color.white;
+        }
     }
 }

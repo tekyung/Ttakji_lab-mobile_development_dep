@@ -13,6 +13,9 @@ public class firebase_network : MonoBehaviour
 
     public event Action<string> OnGuestJoined;
     public event Action OnGameReady;
+
+    private EventHandler<ChildChangedEventArgs> eventHandler;
+    private DatabaseReference eventRef;
     public async Task<bool> Initialize()    //네트워크 초기화
     {
         var dependencystatus = await FirebaseApp.CheckAndFixDependenciesAsync();
@@ -112,21 +115,16 @@ public class firebase_network : MonoBehaviour
     // 세션에 등록된 host 또는 guest가 아니면 실패
     return false;
 }
-
-    public void ListenForGuest(string sessioncode)  //게스트 입장 감지
+    public async Task SendAction(string sessioncode, string actionType, string senderRole)
     {
-        dbRef.Child("sessions").Child(sessioncode).Child("guest").ValueChanged += (sender, args) =>
-        {
-            if (args.Snapshot.Exists && args.Snapshot.Value != null)
-            {
-                string guestID = args.Snapshot.Value.ToString();
-                if (!string.IsNullOrEmpty(guestID))
-                {
-                    OnGuestJoined?.Invoke(guestID); 
-                }
-
-            }
-        };
+        var actionData = new Dictionary<string, string>();
+        actionData["action"] = actionType;
+        actionData["sender"] = senderRole;
+        await dbRef.Child("sessions").Child(sessioncode).Child("events").Push().SetValueAsync(actionData);
+    }
+    public async Task ChangeTurn(string sessioncode, string nextTurn)
+    {
+        await dbRef.Child("sessions").Child(sessioncode).Child("turn").SetValueAsync(nextTurn);
     }
 
     public async Task SetGameReady(string sessioncode)  //게임상태를 READY로 변환
@@ -138,18 +136,79 @@ public class firebase_network : MonoBehaviour
         await dbRef.Child("sessions").Child(sessioncode).Child("state").SetValueAsync(SessionStatus.STATE_PLAYING);
     }
 
-    
+    public void ListenForGuest(string sessioncode)  //게스트 입장 감지
+    {
+        dbRef.Child("sessions").Child(sessioncode).Child("guest").ValueChanged += (sender, args) =>
+        {
+            if (args.Snapshot.Exists && args.Snapshot.Value != null)
+            {
+                string guestID = args.Snapshot.Value.ToString();
+                if (!string.IsNullOrEmpty(guestID))
+                {
+                    OnGuestJoined?.Invoke(guestID);
+                }
+
+            }
+        };
+    }
+
     public void ListenForGameStart(string sessioncode) //게임 시작 감지
     {
         dbRef.Child("sessions").Child(sessioncode).Child("state").ValueChanged += (sender, args) =>
         {
             if (args.Snapshot.Exists && args.Snapshot.Value.ToString() == SessionStatus.STATE_PLAYING)
             {
-                OnGameReady?.Invoke(); 
+                OnGameReady?.Invoke();
             }
         };
     }
 
+    //이벤트리스너
+    public void ListenForEvent(string sessioncode, Action<string,string> eventreceive)
+    {
+        StopListeningEvents();
+        eventRef = dbRef.Child("sessions").Child(sessioncode).Child("events");
+        eventHandler = (sender, args) =>
+        {
+            if (args.Snapshot.Exists)
+            {
+                var action = args.Snapshot.Child("action").Value?.ToString();
+                var who = args.Snapshot.Child("sender").Value?.ToString();
+                if (action != null && who != null) eventreceive?.Invoke(action, who);
+            }
+        };
+        eventRef.ChildAdded += eventHandler;
+    }
+    //이벤트 리스너 삭제
+    public void StopListeningEvents()
+    {
+        if (eventRef != null && eventHandler != null)
+        {
+            eventRef.ChildAdded -= eventHandler;
+            eventHandler = null;
+            eventRef = null;
+        }
+    }
+
+    //턴 변경 감지
+    public void ListenForTurn(string sessioncode, Action<string> onTurnChanged)
+    {
+        dbRef.Child("sessions").Child(sessioncode).Child("turn").ValueChanged += (sender, args) =>
+        {
+            if (args.Snapshot.Exists) onTurnChanged?.Invoke(args.Snapshot.Value.ToString());
+        };
+    }
+    public void ListenForSessionExit(string sessioncode, Action onDestroyed)
+    {
+        dbRef.Child("sessions").Child(sessioncode).ValueChanged += (sender, args) =>
+        {
+            // 방 존재 검사
+            if (!args.Snapshot.Exists)
+            {
+                onDestroyed?.Invoke();
+            }
+        };
+    }
     public async Task<String> GetSessionStatus(String sessioncode)  //세션 상태를 반환
     {
         var task= await dbRef.Child("sessions").Child(sessioncode).Child("state").GetValueAsync();
