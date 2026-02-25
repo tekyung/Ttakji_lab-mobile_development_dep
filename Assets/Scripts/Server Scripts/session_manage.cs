@@ -14,15 +14,9 @@ public class session_manage : MonoBehaviour
     private bool amIHost = false;
     private Coroutine DestroySessionTimer;
 
-    public float turn_time_limit = 10f; // 턴 제한 시간
     public float session_time_limit = 50f; // 세션 제한시간
     private Coroutine turnTimer;
 
-    public enum ActionType
-    {
-        A,
-        B
-    }
     async void Start()
     {
         bool isConnected = await networkService.Initialize();
@@ -261,122 +255,47 @@ public class session_manage : MonoBehaviour
         StartCoroutine(HandleGameStarted());
     }
 
-    private IEnumerator HandleGameStarted() // 게임 시작 신호가 왔을 때 (임시)
+    private IEnumerator HandleGameStarted()
     {
         uiManager.SetActionButtonsState(false);
         uiManager.UpdateStatus("3...");
         yield return new WaitForSeconds(1f);
-
         uiManager.UpdateStatus("2...");
         yield return new WaitForSeconds(1f);
-
         uiManager.UpdateStatus("1...");
         yield return new WaitForSeconds(1f);
-
         uiManager.UpdateStatus("Game Start!");
+        yield return new WaitForSeconds(1f);
 
-        networkService.ListenForEvent(currentSessionCode, HandleActionEvent);
-        networkService.ListenForTurn(currentSessionCode, HandleTurnChange);
+        GameData.SessionCode = currentSessionCode;
+        GameData.MyID = myID;
+        GameData.MyRole = amIHost ? "HOST" : "GUEST";
 
-        // 여기서 호스트면 켜지고, 게스트면 그대로 잠김 유지
-        if (amIHost) StartMyTurn();
-        else EndMyTurn();
-    }
-    // 이벤트(행동) 수신 처리
-    private void HandleActionEvent(string action, string sender)
-    {
-        uiManager.UpdateStatus($"{sender}: {action}");
-
-        if (System.Enum.TryParse(action, out ActionType receivedType))
+        string selectedName = PlayerPrefs.GetString("SelectedDeckName", "");
+      
+        if (!string.IsNullOrEmpty(selectedName) && selectedName != "덱 없음" && selectedName != "덱이 없습니다.")
         {
-            uiManager.CheckButton(receivedType);
+            string filePath = System.IO.Path.Combine(Application.dataPath, "MyDeck", selectedName + ".json");
+
+            if (System.IO.File.Exists(filePath))
+            {
+                string jsonText = System.IO.File.ReadAllText(filePath);
+                DeckSaveData parsedData = JsonUtility.FromJson<DeckSaveData>(jsonText);
+                GameData.MyDeck = new List<int>(parsedData.cardIdList);
+            }
+            else
+            {
+                Debug.LogError($"파일을 찾을 수 없습니다: {filePath}");
+            }
         }
-        uiManager.UpdateStatus($"{sender}: {action}");
-    }
-
-    // 턴 변경 수신 처리
-    private void HandleTurnChange(string newTurn)
-    {
-        uiManager.ResetButtons();
-        bool isMyTurn = (amIHost && newTurn == "HOST") || (!amIHost && newTurn == "GUEST");
-
-        if (isMyTurn) StartMyTurn();
-        else EndMyTurn();
-    }
-
-    // 내 턴 시작
-    private void StartMyTurn()
-    {
-        uiManager.SetActionButtonsState(true); // 버튼 켜기
-        turnTimer = StartCoroutine(TurnTimeoutRoutine());
-
-    }
-
-    // 내 턴 종료
-    private void EndMyTurn()
-    {
-        uiManager.SetActionButtonsState(false); // 버튼 끄기
-        if (turnTimer != null)
+        else
         {
-            StopCoroutine(turnTimer);
+            Debug.LogError("선택된 덱 이름이 비어있거나 유효하지 않습니다!");
         }
-    }
-    private IEnumerator TurnTimeoutRoutine()
-    {
-        float timer = turn_time_limit;
-        while (timer > 0)
-        {
-            timer -= Time.deltaTime;
-            yield return null;
-        }
-        OnBtnClick_C(); // 강제 턴 넘김
+
+        SceneManager.LoadScene("GameScene");
     }
 
-
-    public async void OnBtnClick_A()
-    {
-        if (string.IsNullOrEmpty(currentSessionCode))
-        {
-            return;
-        }
-        if (turnTimer != null) StopCoroutine(turnTimer);
-        turnTimer = StartCoroutine(TurnTimeoutRoutine());
-
-        string myRole = amIHost ? "HOST" : "GUEST";
-        await networkService.SendAction(currentSessionCode, ActionType.A.ToString(), myRole);
-    }
-
-    public async void OnBtnClick_B()
-    {
-        if (string.IsNullOrEmpty(currentSessionCode))
-        {
-            return;
-        }
-        if (turnTimer != null) StopCoroutine(turnTimer);
-        turnTimer = StartCoroutine(TurnTimeoutRoutine());
-
-        string myRole = amIHost ? "HOST" : "GUEST";
-        await networkService.SendAction(currentSessionCode, ActionType.B.ToString(), myRole);
-    }
-
-    public async void OnBtnClick_C() // 턴 넘기기
-    {
-        if (string.IsNullOrEmpty(currentSessionCode))
-        {
-            Debug.LogWarning("Session code is null. Action ignored.");
-            return;
-        }
-        if (turnTimer != null) StopCoroutine(turnTimer);
-        uiManager.SetActionButtonsState(false); // ui잠금
-
-        string myRole = amIHost ? "HOST" : "GUEST";
-        string nextTurn = amIHost ? "GUEST" : "HOST";
-
-        // 1. 이벤트 전송
-        await networkService.SendAction(currentSessionCode, "Pass Turn", myRole);
-        // 2. 턴 상태 변경
-        await networkService.ChangeTurn(currentSessionCode, nextTurn);
-    }
     void OnApplicationQuit()
     {
         networkService.GoOffline();

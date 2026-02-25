@@ -46,22 +46,25 @@ public class session_ui : MonoBehaviour
 
     public void ToggleHost(bool host)   //버튼 ON OFF
     {
-        session_start.interactable = host;
+        if (session_start != null)
+        {
+            session_start.interactable = host;
+        }
     }
 
     public void ToggleUI(bool isOn) //버튼 ON OFF
     {
-        session_id.interactable = isOn;
-        session_create.interactable = isOn;
-        session_join.interactable = isOn;
-        session_code.interactable = isOn;
-        session_random_match.interactable = isOn;
+        if (session_id != null) session_id.interactable = isOn;
+        if (session_create != null) session_create.interactable = isOn;
+        if (session_join != null) session_join.interactable = isOn;
+        if (session_code != null) session_code.interactable = isOn;
+        if (session_random_match != null) session_random_match.interactable = isOn;
     }
     public void SetActionButtonsState(bool isActive)
     {
-         btn_action_A.interactable = isActive;
-         btn_action_B.interactable = isActive;
-         btn_action_C.interactable = isActive;
+        if (btn_action_A != null) btn_action_A.interactable = isActive;
+        if (btn_action_B != null) btn_action_B.interactable = isActive;
+        if (btn_action_C != null) btn_action_C.interactable = isActive;
     }
 
     public void DestroySessionTimer(float time) //세션 제한 시간
@@ -78,13 +81,18 @@ public class session_ui : MonoBehaviour
     }
     public void CheckButton(ActionType targetType)
     {
-        // 요청받은 타입과 똑같은 버튼을 찾음
         foreach (var pair in actionButtons)
         {
-            if (pair.type == targetType)
+            if (pair.type == targetType && pair.button != null)
             {
-                if (pair.button != null)
-                    pair.button.image.color = Color.green;
+                ColorBlock cb = pair.button.colors;
+                cb.normalColor = Color.green;
+                cb.selectedColor = Color.green;
+                cb.highlightedColor = Color.green;
+                cb.pressedColor = Color.green;
+                cb.disabledColor = Color.green;
+
+                pair.button.colors = cb;
             }
         }
     }
@@ -94,7 +102,17 @@ public class session_ui : MonoBehaviour
         foreach (var pair in actionButtons)
         {
             if (pair.button != null)
-                pair.button.image.color = Color.white;
+            {
+                // image.color = Color.white 대신 ColorBlock 방식을 사용합니다.
+                ColorBlock cb = pair.button.colors;
+                cb.normalColor = Color.white;
+                cb.selectedColor = Color.white;
+                cb.highlightedColor = new Color(0.96f, 0.96f, 0.96f);
+                cb.pressedColor = new Color(0.78f, 0.78f, 0.78f);
+                cb.disabledColor = new Color(0.78f, 0.78f, 0.78f);
+
+                pair.button.colors = cb;
+            }
         }
     }
 }

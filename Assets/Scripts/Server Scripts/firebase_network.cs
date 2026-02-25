@@ -9,7 +9,7 @@ using static UnityEngine.EventSystems.StandaloneInputModule;
 
 public class firebase_network : MonoBehaviour
 {
-    private DatabaseReference dbRef;
+    private static DatabaseReference dbRef;
 
     public event Action<string> OnGuestJoined;
     public event Action OnGameReady;
@@ -215,6 +215,10 @@ public class firebase_network : MonoBehaviour
         return task.Value.ToString();
     }
 
+    public async Task UploadDeck(string sessioncode, string role, string Deck)
+    {
+        await dbRef.Child("sessions").Child(sessioncode).Child("decks").Child(role).SetRawJsonValueAsync(Deck);
+    }
 
     public void GoOffline() //네트워크 종료 함수
     {
