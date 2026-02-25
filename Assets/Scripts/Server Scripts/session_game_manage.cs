@@ -16,40 +16,6 @@ public class session_game_manage : MonoBehaviour
     private string pendingStatus = null;
 
 
-    //async void Start()
-    //{
-    //    await networkService.Initialize();
-
-    //    sessionRoom = GameData.SessionCode;
-    //    myRole = GameData.MyRole;
-    //    networkService.ListenForEvent(sessionRoom, HandleActionEvent);
-    //    networkService.ListenForTurn(sessionRoom, HandleTurnChange);
-
-    //    if (GameData.MyDeck != null && GameData.MyDeck.Count > 0)
-    //    { 
-    //        DeckSaveData myData = new DeckSaveData();
-    //        myData.cardIdList = GameData.MyDeck;
-
-    //        // 2. JSON 문자열로 변환
-    //        string jsonDeck = JsonUtility.ToJson(myData);
-
-    //        // 3. 파이어베이스로 전송
-    //        await networkService.UploadDeck(sessionRoom, myRole, jsonDeck);
-    //    }
-    //    else
-    //    {
-    //        Debug.LogError("Deck not exitst");
-    //    }
-
-    //    if (myRole == "HOST")
-    //    {
-    //        StartMyTurn();
-    //    }
-    //    else if (myRole == "GUEST")
-    //    {
-    //        EndMyTurn();
-    //    }
-    //}
     async void Start()
     {
         await networkService.Initialize();
@@ -59,29 +25,30 @@ public class session_game_manage : MonoBehaviour
         networkService.ListenForEvent(sessionRoom, HandleActionEvent);
         networkService.ListenForTurn(sessionRoom, HandleTurnChange);
 
-        Debug.Log("=====================================");
-        Debug.Log($"[게임 씬 진입] {myRole}의 덱 전송 준비...");
-
-        // 가방(GameData.MyDeck)을 열어봅니다.
         if (GameData.MyDeck != null && GameData.MyDeck.Count > 0)
         {
-            Debug.Log($"[전송 시작] 가방 안에 {GameData.MyDeck.Count}장의 카드가 있습니다. 서버로 보냅니다!");
-
             DeckSaveData myData = new DeckSaveData();
             myData.cardIdList = GameData.MyDeck;
+
+            // 2. JSON 문자열로 변환
             string jsonDeck = JsonUtility.ToJson(myData);
 
+            // 3. 파이어베이스로 전송
             await networkService.UploadDeck(sessionRoom, myRole, jsonDeck);
-            Debug.Log("[전송 완료] 파이어베이스 업로드 성공!");
         }
         else
         {
-            Debug.LogError("[전송 실패] Deck not exist! 가방(GameData.MyDeck)이 텅 비어있습니다.");
+            Debug.LogError("Deck not exitst");
         }
-        Debug.Log("=====================================");
 
-        if (myRole == "HOST") StartMyTurn();
-        else if (myRole == "GUEST") EndMyTurn();
+        if (myRole == "HOST")
+        {
+            StartMyTurn();
+        }
+        else if (myRole == "GUEST")
+        {
+            EndMyTurn();
+        }
     }
 
     private void HandleActionEvent(string action, string sender)
