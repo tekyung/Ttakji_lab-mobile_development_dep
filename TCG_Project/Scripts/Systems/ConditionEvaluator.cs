@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Linq; // [추가] Any() 사용을 위해 필요
+using System.Linq; // Any() 사용을 위해 필요
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Systems
@@ -12,7 +12,7 @@ namespace TCG_Project.Scripts.Systems
             if (string.IsNullOrWhiteSpace(conditionFormula) || conditionFormula.Trim().ToLower() == "true")
                 return true;
 
-            // [신규] 키워드 기반 조건 처리 (GameDataManager에서 변환된 키워드 대응)
+            // 키워드 기반 조건 처리 (GameDataManager에서 변환된 키워드 대응)
             // 수식 파싱 전에 빠르게 체크하여 처리합니다.
             switch (conditionFormula)
             {
@@ -28,8 +28,8 @@ namespace TCG_Project.Scripts.Systems
             }
 
             // 1. 변수 치환 (기존 로직 유지)
-            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context); // 로컬 메서드 대신 FormulaEvaluator 사용 권장 (코드상엔 로컬 메서드가 없으므로 아래 메서드 사용)
-            // * 참고: 사용자님이 주신 코드엔 ReplaceVariables가 private static으로 구현되어 있으므로 그걸 호출합니다.
+            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context); // 로컬 메서드 대신 FormulaEvaluator 사용 권장
+            // * 코드엔 ReplaceVariables가 private static으로 구현되어 있으므로 그걸 호출합니다.
             parsedFormula = ReplaceVariables(conditionFormula, context);
 
             // 2. C# 스타일 연산자를 DataTable 문법으로 변환
@@ -72,38 +72,39 @@ namespace TCG_Project.Scripts.Systems
             }
 
             // [Turn] (Program.turnCount 접근이 불가능하다면 context나 GameRules에서 가져오도록 수정 필요)
-            // 여기서는 기존 코드 유지
-            // formula = formula.Replace("turnCount", Program.turnCount.ToString()); 
+            formula = formula.Replace("turnCount", ConsoleRunner.globalTurn.ToString()); 
 
             // [Active Player]
-            formula = formula.Replace("activePlayer.Health", p.Health.ToString());
             formula = formula.Replace("activePlayer.Mana", p.Mana.ToString());
             formula = formula.Replace("activePlayer.Hand.Count", p.Hand.Count.ToString());
             formula = formula.Replace("activePlayer.Graveyard.Count", p.Graveyard.Count.ToString());
             formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
+            formula = formula.Replace("activePlayer.PrizePoints", p.PrizePoints.ToString());
+            formula = formula.Replace("activePlayer.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Opponent]
             if (opp != null)
             {
-                formula = formula.Replace("opponent.Health", opp.Health.ToString());
                 formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
                 formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
                 formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
                 formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
+                formula = formula.Replace("opponent.PrizePoints", opp.PrizePoints.ToString());
             }
 
             // [Rules]
             formula = formula.Replace("maxHandSize", GameRules.MaxHandSize.ToString());
-            formula = formula.Replace("manaGainPerTurn", GameRules.ManaGainPerTurn.ToString());
             formula = formula.Replace("drawPerTurn", GameRules.DrawPerTurn.ToString());
-            formula = formula.Replace("startingHealth", GameRules.StartingHealth.ToString());
-            formula = formula.Replace("startingMana", GameRules.StartingMana.ToString());
-            formula = formula.Replace("maxMana", GameRules.MaxMana.ToString());
+            formula = formula.Replace("prize_count_to_win", GameRules.WinPrizePoints.ToString());
+            formula = formula.Replace("maxFieldUnitCount", GameRules.MaxFieldUnitCount.ToString());
+            formula = formula.Replace("firstTurnEnergy", GameRules.FirstPlayerFirstTurnEnergy.ToString());
+            formula = formula.Replace("secondTurnEnergy", GameRules.SecondPlayerFirstTurnEnergy.ToString());
+            formula = formula.Replace("basicEnergy", GameRules.BasicEnergy.ToString());
 
             return formula;
         }
 
-        // [신규] 특정 타겟(Target)을 기준으로 조건 검사
+        // 특정 타겟(Target)을 기준으로 조건 검사
         public static bool EvaluateTarget(Target target, string condition, GameContext context)
         {
             if (string.IsNullOrWhiteSpace(condition) || condition.Trim().ToLower() == "true")

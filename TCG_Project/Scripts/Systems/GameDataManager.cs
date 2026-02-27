@@ -11,7 +11,14 @@ namespace TCG_Project.Scripts.Systems
     public class GameDataManager
     {
         // 1. Raw Data 클래스 (내부 데이터용)
-        private class RawCard { public int id; public string name; public string type; public string skin_res; }
+        private class RawCard 
+        { 
+            public int id; 
+            public string name; 
+            public string type; 
+            public string skin_res;
+            public int max_deck_count;
+        }
 
         private class RawUnit
         {
@@ -40,9 +47,12 @@ namespace TCG_Project.Scripts.Systems
             public int effect_target_condition_value1;
             public int effect_function_value1;
             public int effect_function_value2;
+
+            // ★ 기획에서 추가할 필드: "Manual", "HighestPower", "Random" 등
+            public string target_mode;
         }
 
-        // [신규] JSON 구조에 맞춘 래퍼 클래스 (상자 역할)
+        // JSON 구조에 맞춘 래퍼 클래스 (상자 역할)
         private class CardDataWrapper { public List<RawCard> Card; }
         private class UnitDataWrapper { public List<RawUnit> CardUnit; }
         private class SkillDataWrapper { public List<RawSkill> CardSkill; }
@@ -73,45 +83,54 @@ namespace TCG_Project.Scripts.Systems
                 Card newCard = new Card
                 {
                     Id = raw.id.ToString(),
+                    DataId = raw.id.ToString(), // 복제 시 원본 확인용으로 DataId도 명시 권장
                     Name = raw.name,
-                    SkinResource = raw.skin_res
+                    SkinResource = raw.skin_res,
+                    MaxDeckCount = raw.max_deck_count
                 };
 
-                // 유닛 처리
+                // [유닛 처리]
                 if (raw.type == "Unit" && unitLookup.ContainsKey(raw.id))
                 {
                     var u = unitLookup[raw.id];
                     newCard.Type = CardType.Unit;
                     newCard.Power = u.power;
-                    newCard.MaxHealth = u.power;
-                    newCard.Health = u.power;
+                    newCard.OriginalPower = u.power; // 원본 스탯 기록 필수
                     newCard.Prize = u.prize;
                     newCard.AttackCost = u.arts_cost;
                     newCard.Cost = 0;
+                    newCard.OriginalCost = 0;
                     newCard.Description = u.desc;
 
-                    // 유닛 효과 & 조건 연결
+                    // 1. 유닛 소환 조건 (PlayCondition) 맵핑
+                    // 이제 CardUnit.json의 on_play_condition_type은 카드를 "내기 위한" 조건이 됩니다.
+                    if (!string.IsNullOrEmpty(u.on_play_condition_type) && u.on_play_condition_type != "None")
+                    {
+                        newCard.PlayCondition = GetConditionFormula(u.on_play_condition_type, u.on_play_condition_value1);
+                    }
+
+                    // 2. 소환 시 효과 발동 조건 (EffectCondition) 자동 추론
                     if (u.on_play_effect_id != -1 && effectLookup.ContainsKey(u.on_play_effect_id))
                     {
-                        var extraParams = new Dictionary<string, object>();
-                        if (!string.IsNullOrEmpty(u.on_play_condition_type) && u.on_play_condition_type != "None")
-                        {
-                            extraParams["triggerCondition"] = GetConditionFormula(u.on_play_condition_type, u.on_play_condition_value1);
-                        }
+                        var rawEffect = effectLookup[u.on_play_effect_id];
 
-                        var effectObj = ConvertEffect(effectLookup[u.on_play_effect_id], extraParams);
+                        // CardEffect.json의 function_type을 보고 효과 발동 조건을 도출합니다.
+                        newCard.EffectCondition = DeriveEffectCondition(rawEffect);
+
+                        var effectObj = ConvertEffect(rawEffect, null); // extraParams 제거 (Card 로직에서 제어)
                         if (effectObj != null) newCard.Effects.Add(effectObj);
                     }
                 }
-                // 스킬 처리
+
+                // [스킬 처리]
                 else if (raw.type == "Skill" && skillLookup.ContainsKey(raw.id))
                 {
                     var s = skillLookup[raw.id];
                     newCard.Type = CardType.Skill;
                     newCard.Cost = s.skill_cost;
+                    newCard.OriginalCost = s.skill_cost;
                     newCard.Description = s.desc;
 
-                    // 스킬 발동 조건 변환
                     if (!string.IsNullOrEmpty(s.use_condition_type) && s.use_condition_type != "None")
                     {
                         newCard.PlayCondition = GetConditionFormula(s.use_condition_type, s.use_condition_value1);
@@ -146,6 +165,29 @@ namespace TCG_Project.Scripts.Systems
                 default:
                     return null;
             }
+        }
+
+        // CardEffect.json의 기능 타입을 보고 "효과가 발동할 수 있는지" 조건을 자동 부여합니다.
+        private string DeriveEffectCondition(RawEffect raw)
+        {
+            switch (raw.effect_function_type)
+            {
+                case "Draw":
+                    return "DeckNotEmpty"; // 덱이 있어야 드로우 효과 발동
+
+                case "KillUnit":
+                case "DamegeToUnit":
+                case "DamageToUnit":
+                    // 공격/파괴 효과인데 타겟이 적 유닛이면 -> 상대 필드에 유닛이 있어야 발동
+                    if (raw.effect_target_type == "OppentUnit") return "EnemyUnitExist";
+                    break;
+
+                case "Power_Up":
+                    // 버프 효과인데 타겟이 내 유닛이면 -> 내 필드에 유닛이 있어야 발동
+                    if (raw.effect_target_type == "OwnUnit") return "OwnUnitExist";
+                    break;
+            }
+            return "None"; // 조건 없음 (무조건 발동)
         }
 
         private ICardEffect ConvertEffect(RawEffect raw, Dictionary<string, object> extraParams = null)
@@ -225,7 +267,24 @@ namespace TCG_Project.Scripts.Systems
                 default: return "Self";
             }
 
-            dict["mode"] = "HighestPower";
+            // ★ JSON의 target_mode 값을 읽어서 적용
+            // 만약 값이 "Manual"이면 HumanChoice 모드로 맵핑, 
+            // 값이 비어있거나 없으면 기본값인 HighestPower로 설정
+            if (!string.IsNullOrEmpty(raw.target_mode))
+            {
+                if (raw.target_mode == "Manual")
+                {
+                    dict["mode"] = "HumanChoice"; // 유저가 직접 마우스로 선택하는 모드
+                }
+                else
+                {
+                    dict["mode"] = raw.target_mode; // 그 외 자동화 모드 (Random 등)
+                }
+            }
+            else
+            {
+                dict["mode"] = "HighestPower"; // 기본값 (Fallback)
+            }
             dict["count"] = 1;
 
             if (!string.IsNullOrEmpty(raw.effect_target_condition) && raw.effect_target_condition != "None")

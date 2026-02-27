@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Managers;
 
 namespace TCG_Project.Scripts.Core
 {
     public class Card
-    {   // 스펠 카드 종류
+    {   // 모든 카드 공통 속성 및 메서드 정의
         // 게임 중 변할 수 있는 고유 ID (인스턴스 식별용)
         public string InstanceId { get; set; }
 
@@ -17,12 +18,16 @@ namespace TCG_Project.Scripts.Core
         public string Description { get; set; }
         public string PlayCondition { get; set; } // 카드의 발동 조건
 
-        // --- 신규 유닛 스탯 ---
+        // ★ 카드의 "효과 발동" 조건 (CardEffect.json의 effect_function_type 참조)
+        public string EffectCondition { get; set; }
+
+        //  덱 최대 포함 가능 매수 (리미트 레귤레이션)
+        public int MaxDeckCount { get; set; }
+
+        // --- 유닛 스탯 ---
         public string Id { get; set; } // 여기가 대문자 'I'인지 확인
         public CardType Type { get; set; }
-        public int Power { get; set; }      // 공격력
-        public int MaxHealth { get; set; }  // 최대 체력 (Power로 초기화)
-        public int Health { get; set; }     // 현재 체력
+        public int Power { get; set; }      // 공격력이자 체력
         public int AttackCost { get; set; } // arts_cost (공격 시 필요한 코스트)
         public int Prize { get; set; }      // 처치 시 줄 보상
         public string SkinResource { get; set; } // 이미지 경로
@@ -33,14 +38,11 @@ namespace TCG_Project.Scripts.Core
         // [전투용 상태 변수]
         public bool IsExhausted { get; set; } = false; // 행동 완료(피로) 상태
 
-        // 턴 시작 시 상태 초기화 (Player.cs에서 호출 예정)
+        // 턴 시작 시 상태 초기화 (Player.cs에서 호출)
         public void RefreshUnitState()
         {
             IsExhausted = false;
         }
-
-        // 카드는 여러 개의 효과를 가질 수 있습니다.(구형)
-        // private List<ICardEffect> effects = new List<ICardEffect>();
 
         // 불변 스탯(초기화용 원본 데이터)
         public int OriginalCost { get; set; } // 원래 코스트 기억
@@ -52,7 +54,6 @@ namespace TCG_Project.Scripts.Core
 
         // 현재 컨트롤러 (누구 필드/패에 있는가, 가변)
         public Player Controller { get; set; }
-
 
         // 팩토리에서 카드 생성 시 호출 (최초 1회)
         public void InitializeData(int baseCost)
@@ -66,7 +67,7 @@ namespace TCG_Project.Scripts.Core
             if (Type == CardType.Unit)
             {
                 // 유닛 배치 시 초기화 로직
-                Health = MaxHealth;
+                Power = OriginalPower;
             }
         }
 
@@ -97,31 +98,68 @@ namespace TCG_Project.Scripts.Core
         }
 
         // 카드를 사용할 때 호출
-        public void Play(GameContext context)
+        // 카드를 사용할 때 호출 (Action 콜백 추가)
+        public void Play(GameContext context, Action onPlayComplete = null)
         {
             // 새 카드를 발동할 때 컨텍스트 변수 초기화
             context.ClearVariables();
 
-            // [디버깅] 스펠 사용 시작 로그
             if (this.Type == CardType.Skill)
             {
                 DebugHelper.LogSpell($"'{Name}' 발동 (보유 효과: {Effects.Count}개)");
-                Console.WriteLine($"--- {Name} / {Cost} / {Description} ---\n");
-                foreach (var effect in Effects)
-                { effect.Execute(context); }
+                EventManager.OnLogMessage?.Invoke($"--- {Name} / {Cost} / {Description} ---\n");
+
+                // ★ foreach 대신 순차 실행기 호출
+                ExecuteEffectsSequentially(0, context, onPlayComplete);
             }
-            else // 유닛일 경우: 기동 효과 사용
+            else // 유닛일 경우: 소환 시 효과 사용
             {
-                Console.WriteLine($"--- {Name} / {Power} / 효과 {Effects.Count}개 ---\n");
-                foreach (var effect in Effects)
+                EventManager.OnLogMessage?.Invoke($"--- {Name} / {Power} / 효과 {Effects.Count}개 ---\n");
+
+                if (Effects.Count > 0)
                 {
-                    Console.WriteLine($"    {Name}의 소환 시 효과 발동");
-                    Console.WriteLine($"    {Name} : {Description}");
-                    effect.Execute(context);
+                    bool canUseEffect = true;
+                    if (!string.IsNullOrEmpty(EffectCondition) && EffectCondition.Trim().ToLower() != "none")
+                    {
+                        canUseEffect = Systems.ConditionEvaluator.Evaluate(EffectCondition, context);
+                    }
+
+                    if (canUseEffect)
+                    {
+                        EventManager.OnLogMessage?.Invoke($"    {Name}의 소환 시 효과 발동");
+                        EventManager.OnLogMessage?.Invoke($"    {Name} : {Description}");
+
+                        // ★ foreach 대신 순차 실행기 호출
+                        ExecuteEffectsSequentially(0, context, onPlayComplete);
+                    }
+                    else
+                    {
+                        EventManager.OnLogMessage?.Invoke($"    (조건 미달로 {Name}의 효과는 발동하지 않습니다.)");
+                        onPlayComplete?.Invoke(); // 효과 발동 안 해도 완료 보고는 필수
+                    }
+                }
+                else
+                {
+                    onPlayComplete?.Invoke(); // 효과가 아예 없는 유닛도 완료 보고 필수
                 }
             }
-            
-            Console.WriteLine("---------------------------------------------\n");
+        }
+
+        // ★ 효과를 1번부터 순서대로 끝날 때까지 기다리며 실행하는 릴레이 함수
+        private void ExecuteEffectsSequentially(int index, GameContext context, Action onComplete)
+        {
+            // 모든 효과를 다 실행했다면 최종 완료 콜백 호출
+            if (index >= Effects.Count)
+            {
+                onComplete?.Invoke();
+                return;
+            }
+
+            // 현재 순서의 효과를 실행하고, 그 효과가 "나 끝났어!"라고 알려주면 다음 인덱스(+1)를 실행
+            Effects[index].Execute(context, () =>
+            {
+                ExecuteEffectsSequentially(index + 1, context, onComplete);
+            });
         }
 
         // [조건 판별] 이 카드를 지금 쓸 수 있는가?
@@ -130,7 +168,7 @@ namespace TCG_Project.Scripts.Core
             // 1. 마나 부족 체크
             if (Controller.Mana < this.Cost) return false;
 
-            // 2. [신규] 유닛 소환 공간 체크
+            // 2. 유닛 소환 공간 체크
             if (this.Type == CardType.Unit)
             {
                 // [나중에 구현] 제물 소환(Tribute Summon) 여부 확인
@@ -165,21 +203,19 @@ namespace TCG_Project.Scripts.Core
                 Cost = this.Cost,
                 Power = this.Power,
                 PlayCondition = this.PlayCondition,
+                EffectCondition = this.EffectCondition, // 소환 시 효과 조건도 복사 목록에 포함
                 Description = this.Description,
                 Id = this.Id, // Id도 복사 필요
                 OriginalCost = this.OriginalCost, // OriginalCost도 복사
-                
                 Type = this.Type,          // 이게 없으면 유닛으로 인식을 못함
-                MaxHealth = this.MaxHealth,
-                Health = this.Health,
                 AttackCost = this.AttackCost,
                 Prize = this.Prize,
-                SkinResource = this.SkinResource
+                SkinResource = this.SkinResource,
+                MaxDeckCount = this.MaxDeckCount
             };
 
             // 효과 리스트도 새로 만들어서 독립성 보장
-            // (주의: Effect 객체 자체도 상태를 가진다면 Effect.Clone()이 필요하지만, 
-            // 현재 단계에서는 리스트만 새로 파도 충분합니다.)
+            // 주의: Effect 객체 자체도 상태를 가진다면 Effect.Clone()이 필요
             foreach (var effect in this.Effects)
             {
                 newCard.AddEffect(effect);
@@ -201,6 +237,25 @@ namespace TCG_Project.Scripts.Core
                 // 현재는 클래스 이름(DamageEffect) 기반으로 약식 구현
             }
             return false;
+        }
+
+        /// <summary>
+        /// 카드의 파워(체력/공격력)를 변경하는 유일한 파이프라인 메서드입니다.
+        /// 전투 데미지, 스펠 버프, 턴 시작 회복 등 모든 변화는 여기를 거쳐야 합니다.
+        /// </summary>
+        /// <param name="amount">변화량 (+는 회복/버프, -는 데미지/디버프)</param>
+        /// <param name="reason">변화 원인 (로그 및 디버깅 용도)</param>
+        public void ModifyPower(int amount, string reason = "System")
+        {
+            if (amount == 0) return;
+
+            this.Power += amount;
+
+            // 중앙 집중화된 이벤트 송출 (여기서 UI 업데이트 이벤트도 쏠 수 있음)
+            // {amount:+#;-#;0} 는 양수일 때 +, 음수일 때 - 기호를 자동으로 붙여주는 C# 포맷팅입니다.
+            EventManager.OnLogMessage?.Invoke($"    ✨ [스탯 변경] {this.Name}의 Power {amount:+#;-#;0} 변동 -> {this.Power}) - 원인: {reason}");
+
+            EventManager.OnCardPowerChanged?.Invoke(this, amount);
         }
     }
 }

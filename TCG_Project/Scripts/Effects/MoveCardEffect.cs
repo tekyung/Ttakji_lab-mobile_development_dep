@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
+using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
@@ -53,7 +54,7 @@ namespace TCG_Project.Scripts.Effects
                 prizeOnKill = int.Parse(parameters["prizeOnKill"].ToString());
         }
 
-        public void Execute(GameContext context)
+        public void Execute(GameContext context, Action onComplete)
         {
             // 발동 조건(triggerCondition) 재확인
             if (!string.IsNullOrEmpty(triggerCondition))
@@ -61,7 +62,7 @@ namespace TCG_Project.Scripts.Effects
                 // ConditionEvaluator를 사용하여 조건 체크 (예: EnemyUnitExist)
                 if (!ConditionEvaluator.Evaluate(triggerCondition, context))
                 {
-                    System.Console.WriteLine($"🚫 조건 불만족({triggerCondition})으로 효과가 취소되었습니다.");
+                    Console.WriteLine($"🚫 조건 불만족({triggerCondition})으로 효과가 취소되었습니다.");
                     return;
                 }
             }
@@ -132,18 +133,18 @@ namespace TCG_Project.Scripts.Effects
                     {
                         Card cardToMove = t.CardVal;
 
-                        // [핵심 수정] Controller 속성보다 '실제 위치'를 우선합니다.
+                        // Controller 속성보다 '실제 위치'를 우선합니다.
                         // 훔친 카드를 버릴 때, Controller가 갱신 안 됐어도 실제 위치(FindOwnerOfCard)는 정확합니다.
                         Player currentHolder = FindOwnerOfCard(cardToMove, context);
 
                         if (currentHolder != null)
                         {
-                            // [수정 핵심] 이동하기 전에 값을 먼저 캡처합니다!
-                            // 묘지로 가면 Reset되어서 코스트 정보를 잃어버리기 때문입니다.
+                            // 이동하기 전에 값을 먼저 캡처합니다!
+                            // 묘지로 가면 Reset되어서 코스트 정보를 잃어버리기 때문.
                             int capturedValue = GetStatValue(cardToMove);
 
                             bool isMoved = ProcessMove(currentHolder, destPlayer, cardToMove);
-                            // 3. [기록] 카드를 다시 읽지 말고, 아까 캡처해둔 값을 더함!
+                            // 3. 카드를 다시 읽지 말고, 아까 캡처해둔 값을 더함!
                             if (isMoved)
                             {
                                 totalRecordedValue += capturedValue;
@@ -155,7 +156,7 @@ namespace TCG_Project.Scripts.Effects
             // CASE B: 타겟이 '플레이어'인 경우 (일반 이동/드로우)
             else
             {
-                // [핵심 수정] N:N 매칭 로직 (All -> All 드로우 지원)
+                // N:N 매칭 로직 (All -> All 드로우 지원)
                 // 소스와 목적지 리스트의 최대 길이만큼 반복하며 짝을 맞춥니다.
                 int iterations = Math.Max(srcTargets.Count, destTargets.Count);
 
@@ -173,8 +174,7 @@ namespace TCG_Project.Scripts.Effects
                         if (cardToMove == null) break;
 
                         // 일반 이동은 ProcessMove 대신 InsertCardToDest 사용 (ProcessMove 써도 되지만 로그 제어 위해)
-                        // 단, ProcessMove와 달리 여기선 초기화 로직을 수동으로 호출하거나
-                        // 단순 드로우/생성이라 가정하고 넘어갑니다. (드로우는 초기화 불필요)
+                        
                         InsertCardToDest(dPlayer, cardToMove);
 
                         RecordStat(cardToMove, ref totalRecordedValue);
@@ -183,7 +183,7 @@ namespace TCG_Project.Scripts.Effects
             }
         }
 
-        // [신규 헬퍼] 기록할 값을 추출하는 메서드
+        // 기록할 값을 추출하는 메서드
         private int GetStatValue(Card card)
         {
             if (string.IsNullOrEmpty(recordStatParam)) return 1; // 기본: 개수(1)
@@ -193,7 +193,7 @@ namespace TCG_Project.Scripts.Effects
         }
 
         // 카드 이동 단계, 성공 여부(bool) 반환
-        private bool ProcessMove(Player srcPlayer, Player destPlayer, Card card)
+        public bool ProcessMove(Player srcPlayer, Player destPlayer, Card card)
         {
             // 1. 룰 보정 (묘지행일 경우 원래 주인 묘지로)
             Player finalDestPlayer = destPlayer;
@@ -222,6 +222,7 @@ namespace TCG_Project.Scripts.Effects
                 DebugHelper.LogEffect("Move Card", $"{card.Name}: {srcZone} -> {destZone} ({destPlayer.Name})");
                 
                 Console.WriteLine($"🚚 [지정 이동] {card.Name}: {srcPlayer.Name}({srcZone}) -> {finalDestPlayer.Name}({destZone}) {(needReset ? "[Reset]" : "")}");
+                EventManager.OnCardMove?.Invoke(card, srcPlayer, srcZone, finalDestPlayer, destZone);
                 return true;
             }
             else
@@ -231,12 +232,13 @@ namespace TCG_Project.Scripts.Effects
             }
         }
 
-        private void InsertCardToDest(Player destPlayer, Card card, bool isSilent = false)
+        public void InsertCardToDest(Player destPlayer, Card card, bool isSilent = false)
         {
             bool success = destPlayer.InsertCard(destZone, card);
             if (success && !isSilent)
             {
                 Console.WriteLine($"🚚 [이동] {card.Name} -> {destPlayer.Name}({destZone})");
+                EventManager.OnCardDraw?.Invoke(card , destPlayer, destZone);
             }
         }
         
@@ -309,7 +311,7 @@ namespace TCG_Project.Scripts.Effects
 
             public void Initialize(Dictionary<string, object> parameters) { } // 미사용
 
-            public void Execute(GameContext context)
+            public void Execute(GameContext context, Action onComplete)
             {
                 foreach (var card in cardsToRevert)
                 {
@@ -323,6 +325,7 @@ namespace TCG_Project.Scripts.Effects
                         Console.WriteLine($"↩️ [만료] {card.Name}의 컨트롤이 {originalOwner.Name}에게 돌아갑니다.");
                     }
                 }
+                onComplete?.Invoke(); // 효과 종료 알림
             }
         }
 

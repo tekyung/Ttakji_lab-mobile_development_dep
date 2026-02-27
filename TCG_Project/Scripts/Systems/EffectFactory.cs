@@ -25,8 +25,8 @@ namespace TCG_Project.Scripts.Systems
         // 클래스 타입 레지스트리 (CardFactory에서 가져옴)
         private static readonly Dictionary<string, Type> effectTypeRegistry = new Dictionary<string, Type>
         {
-            { "Damage", typeof(DamageEffect) },
-            { "Heal", typeof(HealEffect) },
+            //{ "Damage", typeof(DamageEffect) },
+            //{ "Heal", typeof(HealEffect) },
             { "ManaGain", typeof(ManaGainEffect) },
             { "MoveCard", typeof(MoveCardEffect) },
             { "ModifyStat", typeof(ModifyStatEffect) },

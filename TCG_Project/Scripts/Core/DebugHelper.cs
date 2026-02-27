@@ -1,30 +1,28 @@
 ﻿using System;
+using TCG_Project.Scripts.Managers;
 
 namespace TCG_Project.Scripts.Core
 {
     public static class DebugHelper
     {
+        // 유니티와 콘솔 양쪽에서 색상을 표현하기 위해 Rich Text 태그(<color=...>)를 사용합니다.
         
         public static void LogSpell(string message)
         {
-            Console.ForegroundColor = ConsoleColor.Cyan; // 스펠은 하늘색
-            Console.WriteLine($"   🔮 [Spell Debug] {message}");
-            Console.ResetColor();
+            // Cyan 색상 태그 적용
+            EventManager.OnLogMessage?.Invoke($"<color=cyan>   🔮 [Spell Debug] {message}</color>");
         }
 
         public static void LogEffect(string effectType, string detail)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow; // 효과 상세는 노란색
-            Console.WriteLine($"      ⚡ [{effectType}] {detail}");
-            Console.ResetColor();
+            // Yellow 색상 태그 적용
+            EventManager.OnLogMessage?.Invoke($"<color=yellow>      ⚡ [{effectType}] {detail}</color>");
         }
 
         public static void LogWarning(string message)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"      ⚠️ [Warning] {message}");
-            Console.ResetColor();
+            // Red 색상 태그 적용
+            EventManager.OnLogMessage?.Invoke($"<color=red>      ⚠️ [Warning] {message}</color>");
         }
-        
     }
 }

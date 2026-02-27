@@ -20,10 +20,13 @@ namespace TCG_Project.Scripts.Core
             return Players.Find(p => p != me);
         }
 
-        // [신규] 변수 저장소 (Name -> Integer)
+        // ★ 게임 종료 여부를 판단하는 락(Lock)
+        public bool IsGameOver { get; set; } = false;
+
+        // 변수 저장소 (Name -> Integer)
         private Dictionary<string, int> variables = new Dictionary<string, int>();
 
-        // [신규] 예약된 효과 리스트
+        // 예약된 효과 리스트
         public List<PendingEffect> PendingEffects { get; private set; } = new List<PendingEffect>();
 
         public void RegisterPendingEffect(PendingEffect effect) // 후처리 효과 예약

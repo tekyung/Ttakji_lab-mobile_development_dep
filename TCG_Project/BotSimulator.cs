@@ -13,15 +13,20 @@ namespace TCG_Project
     class Program
     {
         // 전역 변수 : 룰에 관련된 상수는 GameRules로 이동됨
-        public static int turnCount = 1;
+        // public static int turnCount = 1;
 
         static void Main(string[] args)
         {   
             // 콘솔에서 UTF-8 인코딩 사용 설정
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
-            Console.WriteLine("\n엔터 키를 누르면 종료합니다2");
-            // 0. 룰 데이터 로드 (가장 먼저 실행)
+
+            ConsoleRunner.Run();
+
+            Console.WriteLine("\n엔터 키를 누르면 종료합니다.");
+            Console.ReadLine();
+            
+            /* 0. 룰 데이터 로드 (가장 먼저 실행)
             try
             {
                 string rulesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "Rules.json");
@@ -32,13 +37,18 @@ namespace TCG_Project
                 Console.WriteLine($"[Error] 룰 파일을 불러오는데 실패했습니다: {e.Message}");
                 return;
             }
+            */
 
-            BotSimulator2.Run();
-            Console.ReadLine();
-
-            RunBot1();
+            //BotSimulator2.Run();
+            //RunBot1();
         }
-
+        /*
+         * BotSimulator1 : 기존 방식 (룰이 코드에 하드코딩되어 있고, 드로우/턴 진행 로직이 분산되어 있음)
+         * BotSimulator2 : 개선된 방식 (룰을 외부 JSON으로 분리, 드로우/턴 진행 로직 통합, Context 활용 강화)
+         * 
+         * 현재는 BotSimulator2가 완성된 상태이며, BotSimulator1은 참고용으로 남겨둔 상태입니다.
+         * 필요에 따라 BotSimulator1의 코드를 BotSimulator2로 점진적으로 리팩토링하는 것도 가능합니다.
+         
         public static void RunBot1()
         {
             
@@ -302,7 +312,7 @@ namespace TCG_Project
                 context.PendingEffects.Remove(pe);
             }
         }
-        */
+        
         // 덱 생성 헬퍼 함수
         public static List<Card> BuildDeck(List<Card> database, int deckSize, int MaxSameCards)
         {
@@ -378,5 +388,6 @@ namespace TCG_Project
             }
             return false;
         }
+        */
     }
 }
