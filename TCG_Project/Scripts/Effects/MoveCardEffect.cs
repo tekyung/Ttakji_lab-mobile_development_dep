@@ -54,7 +54,7 @@ namespace TCG_Project.Scripts.Effects
                 prizeOnKill = int.Parse(parameters["prizeOnKill"].ToString());
         }
 
-        public void Execute(GameContext context)
+        public void Execute(GameContext context, Action onComplete)
         {
             // 발동 조건(triggerCondition) 재확인
             if (!string.IsNullOrEmpty(triggerCondition))
@@ -311,7 +311,7 @@ namespace TCG_Project.Scripts.Effects
 
             public void Initialize(Dictionary<string, object> parameters) { } // 미사용
 
-            public void Execute(GameContext context)
+            public void Execute(GameContext context, Action onComplete)
             {
                 foreach (var card in cardsToRevert)
                 {
@@ -325,6 +325,7 @@ namespace TCG_Project.Scripts.Effects
                         Console.WriteLine($"↩️ [만료] {card.Name}의 컨트롤이 {originalOwner.Name}에게 돌아갑니다.");
                     }
                 }
+                onComplete?.Invoke(); // 효과 종료 알림
             }
         }
 

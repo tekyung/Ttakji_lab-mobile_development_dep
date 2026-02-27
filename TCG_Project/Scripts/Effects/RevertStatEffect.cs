@@ -20,7 +20,7 @@ namespace TCG_Project.Scripts.Effects
 
         public void Initialize(Dictionary<string, object> parameters) { } // 미사용
 
-        public void Execute(GameContext context)
+        public void Execute(GameContext context, Action onComplete)
         {
             int count = 0;
             foreach (var card in targetsToRevert)

@@ -8,7 +8,6 @@ using TCG_Project.Scripts.Interfaces;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using UnityEngine;
-using static System.Net.Mime.MediaTypeNames;
 
 public class BattleManager : MonoBehaviour
 {
@@ -33,34 +32,61 @@ public class BattleManager : MonoBehaviour
     private bool isGameRunning = false;
     private int globalTurn = 1;
 
+    // ★ 1. 이벤트 구독/해지
+    private void OnEnable()
+    {
+        EventManager.OnGameSet += HandleGameSet;
+        EventManager.OnGameDraw += HandleGameDraw;
+    }
+
+    private void OnDisable()
+    {
+        EventManager.OnGameSet -= HandleGameSet;
+        EventManager.OnGameDraw -= HandleGameDraw;
+    }
+
+    // ★ 2. 게임 종료 이벤트 수신부
+    private void HandleGameSet(Player winner)
+    {
+        EventManager.OnLogMessage?.Invoke($"\n🎉 [GAME SET] {winner.Name} 승리!");
+        isGameRunning = false;
+        StopAllCoroutines(); // 유니티 코루틴 강제 종료로 오버킬 방지
+    }
+
+    private void HandleGameDraw(Player p1, Player p2, int turn)
+    {
+        EventManager.OnLogMessage?.Invoke($"\n🤝 [GAME DRAW] {p1.Name} vs {p2.Name} 무승부! (턴 {turn})");
+        isGameRunning = false;
+        StopAllCoroutines();
+    }
+
     private void Awake()
     {
-        // 싱글톤 설정
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
 
-    private void Start()
+    private void StartBot()
     {
-        Debug.Log("=== 🤖 봇 대전 시뮬레이터 (Unity Ver) ===");
-        EventManager.GameStart?.Invoke(p1, p2);
+        EventManager.OnLogMessage?.Invoke("=== 🤖 봇 대전 시뮬레이터 (Unity Ver) ===");
+
+        // 유니티 콘솔에서 Rich Text 색상을 보려면 BattleManager에서도 구독 필요
+        EventManager.OnLogMessage += msg => UnityEngine.Debug.Log(msg);
+
         StartCoroutine(GameLoop());
     }
 
     // 1. 초기화 및 게임 루프
     private IEnumerator GameLoop()
     {
-        // 시스템 초기화
         InitializeSystem();
 
-        // 데이터 로드 확인
         if (_dataManager.AllCards.Count == 0)
         {
-            Debug.LogError("[Error] 카드 데이터가 로드되지 않았습니다!");
+            EventManager.OnLogMessage?.Invoke("<color=red>[Error] 카드 데이터가 로드되지 않았습니다!</color>");
             yield break;
         }
 
-        // 봇 생성 및 설정 (BotSimulator2와 동일한 덱)
         p1 = CreateBotPlayer("Bot_Red", 11001, 11002, 11003, 11007, 21001, 21002, 21003, 21004);
         p2 = CreateBotPlayer("Bot_Blue", 11004, 11005, 11006, 21001, 21002, 21003, 21004);
 
@@ -68,9 +94,11 @@ public class BattleManager : MonoBehaviour
         context.Players.Add(p1);
         context.Players.Add(p2);
 
+        EventManager.OnGameStart?.Invoke(p1, p2);
+
         // 초기 드로우
-        DrawCards(p1, 3);
-        DrawCards(p2, 3);
+        DrawCards(p1, GameRules.StartingHands);
+        DrawCards(p2, GameRules.StartingHands);
 
         isGameRunning = true;
         globalTurn = 1;
@@ -84,53 +112,61 @@ public class BattleManager : MonoBehaviour
             context.ActivePlayer = activePlayer;
             context.TargetPlayer = targetPlayer;
 
-            Debug.Log($"\n========== [ TURN {globalTurn} : {activePlayer.Name} (Deck: {activePlayer.Deck.Count}) ] ==========");
+            EventManager.OnLogMessage?.Invoke($"\n========== [ TURN {globalTurn} : {activePlayer.Name} (Deck: {activePlayer.Deck.Count}) ] ==========");
+            EventManager.OnTurnStart?.Invoke(globalTurn, activePlayer.Name);
 
-            // 턴 시작 연출 대기
             yield return new WaitForSeconds(TurnDelay);
 
-            // 봇 턴 실행 (코루틴 대기)
-            yield return StartCoroutine(RunBotTurnRoutine(activePlayer, targetPlayer, globalTurn));
-
-            // 게임 종료 조건 체크 (승점이 7점 이상이면 종료)
-            if (GameSet(p1, p2))
-            {
-                isGameRunning = false;
-                break;
-            }
+            // 턴 진행 코루틴 체인 시작 (드로우 페이즈부터)
+            yield return StartCoroutine(ExecuteDrawPhaseRoutine(activePlayer, targetPlayer, globalTurn));
 
             globalTurn++;
         }
 
-        Debug.Log("\n=== 게임 종료 ===");
+        if (!context.IsGameOver && globalTurn > 20)
+        {
+            context.IsGameOver = true;
+            EventManager.OnGameDraw?.Invoke(p1, p2, 20);
+        }
+
+        EventManager.OnLogMessage?.Invoke("\n=== 게임 종료 ===");
         PrintGameResult(p1, p2);
     }
 
-    // 2. 봇 행동 로직 (코루틴)
-    private IEnumerator RunBotTurnRoutine(Player me, Player enemy, int currentTurn)
+    #region Phase Logic (코루틴 기반 페이즈 체인)
+
+    // 1. 드로우 페이즈 코루틴
+    private IEnumerator ExecuteDrawPhaseRoutine(Player me, Player enemy, int currentTurn)
     {
-        if (me.Health <= 0 || enemy.Health <= 0) yield break;
+        if (context.IsGameOver) yield break;
 
-        // 마나 규칙: 1턴=0, 2턴=1, 3턴+=3 (기존 보유량이 더 많으면 유지)
-        int setMana = 3;
-        if (currentTurn == 1) setMana = 0;
-        else if (currentTurn == 2) setMana = 1;
+        EventManager.OnDrawPhase?.Invoke(me.Name, currentTurn);
+        EventManager.OnLogMessage?.Invoke($"[ 🃏 드로우 페이즈 ]");
 
-        if (me.Mana > 3) setMana = me.Mana;
+        int setMana = GameRules.BasicEnergy;
+        if (currentTurn == 1) setMana = GameRules.FirstPlayerFirstTurnEnergy;
+        else if (currentTurn == 2) setMana = GameRules.SecondPlayerFirstTurnEnergy;
+
+        if (me.Mana > GameRules.BasicEnergy) setMana = me.Mana;
         me.Mana = setMana;
-        EventManager.OnManaChange?.Invoke(me, currentTurn);
+        EventManager.OnManaChange?.Invoke(me, me.Mana);
 
-        me.OnTurnStart();
-        EventManager.OnTurnStart?.Invoke(currentTurn, me.Name);
-        DrawCards(me, 1);
+        me.OnTurnStart(); // 턴 시작 피로도 회복 등
+        DrawCards(me, GameRules.DrawPerTurn); // 턴 당 1장 드로우 (GameRules 확인 필요, 기본 1)
 
-        Debug.Log($"--- HP: {me.Health} | Prize: {me.PrizePoints} | Mana: {me.Mana}/{setMana} | Hand: {me.Hand.Count} | Field: {me.Field.Count(c => c != null)} ---");
-        Debug.Log($"{me.Name} 의 패: {string.Join(", ", me.Hand.Select(c => c.Name))}");
+        yield return new WaitForSeconds(ActionDelay);
 
-        yield return new WaitForSeconds(ActionDelay); // 드로우 후 대기
+        yield return StartCoroutine(ExecuteMainPhaseRoutine(me, enemy, currentTurn));
+    }
 
-        // [Phase 1] 메인 페이즈
+    // 2. 메인 페이즈 코루틴
+    private IEnumerator ExecuteMainPhaseRoutine(Player me, Player enemy, int currentTurn)
+    {
+        if (context.IsGameOver) yield break;
+
         EventManager.OnMainPhase?.Invoke(me.Name, currentTurn);
+        EventManager.OnLogMessage?.Invoke($"[ ⚙️ 메인 페이즈 ]");
+
         bool actionTaken = true;
         int safetyCount = 0;
 
@@ -138,66 +174,97 @@ public class BattleManager : MonoBehaviour
         {
             safetyCount++;
             actionTaken = false;
+            if (context.IsGameOver) yield break;
+
             var handClone = new List<Card>(me.Hand);
 
-            // 1. 유닛 소환 (Power 높은 순)
-            var unitToPlay = handClone
-                .Where(c => c.Type == CardType.Unit && c.IsPlayable(context))
-                .OrderByDescending(c => c.Power)
-                .FirstOrDefault();
-
+            // --- 행동 1: 유닛 소환 ---
+            var unitToPlay = handClone.Where(c => c.Type == CardType.Unit && c.IsPlayable(context)).OrderByDescending(c => c.Power).FirstOrDefault();
             if (unitToPlay != null)
             {
-                me.PlayCard(unitToPlay, context);
+                bool isEffectRunning = true; // ★ 대기 플래그 활성화
+
+                // 카드를 내고, 콜백으로 플래그를 끄도록 지시함
+                me.PlayCard(unitToPlay, context, () => { isEffectRunning = false; });
+
+                // ★ 카드의 모든 효과(소환 시 효과, 타겟팅 등)가 끝날 때까지 이 코루틴을 일시 정지시킴
+                yield return new WaitUntil(() => !isEffectRunning);
+
                 actionTaken = true;
-                yield return new WaitForSeconds(ActionDelay); // 소환 후 대기
+                yield return new WaitForSeconds(ActionDelay); // 카드를 낸 직후 연출을 감상할 약간의 딜레이
                 continue;
             }
-            else
-            {
-                // 소환할 유닛이 없음 (로그 생략 가능)
-            }
 
-            // 2. 마나 보존 정책
+            // 마나 보존 정책 검사
             int unitCount = me.Field.Count(c => c != null);
             int manaThreshold = (unitCount <= 1) ? 1 : 2;
+            if (me.Mana <= manaThreshold) break;
 
-            if (me.Mana <= manaThreshold)
-            {
-                break; // 스펠 사용 중단, 배틀 페이즈로 이동
-            }
-
-            // 3. 스킬 사용
+            // --- 행동 2: 스킬 사용 ---
             var skills = handClone.Where(c => c.Type == CardType.Skill && c.IsPlayable(context)).ToList();
             foreach (var skill in skills)
             {
                 if (IsSkillUseful(skill, me, enemy))
                 {
-                    me.PlayCard(skill, context);
+                    bool isEffectRunning = true; // ★ 대기 플래그 활성화
+
+                    // 스킬 발동 (만약 타겟팅 모드가 HumanChoice라면 여기서 무한정 대기하게 됨)
+                    me.PlayCard(skill, context, () => { isEffectRunning = false; });
+
+                    // ★ 스킬 효과 연산(데미지 계산, 파괴 처리 등)이 다 끝날 때까지 대기
+                    yield return new WaitUntil(() => !isEffectRunning);
+
                     actionTaken = true;
-                    yield return new WaitForSeconds(ActionDelay); // 스킬 사용 후 대기
+                    yield return new WaitForSeconds(ActionDelay);
                     break;
                 }
             }
         }
 
-        // [Phase 2] 배틀 페이즈
-        if (me.Field.Count(c => c != null) > 0 && me.Mana >= 1)
+        if (context.IsGameOver) yield break;
+
+        // 메인 페이즈 결산 및 배틀 페이즈 진입 검사
+        int aliveUnitsCount = me.Field.Count(c => c != null);
+        EventManager.OnLogMessage?.Invoke($"\n[ ⚙️ 메인 페이즈 종료 ]");
+        EventManager.OnLogMessage?.Invoke($"--- 잔여 마나: {me.Mana} | 필드 유닛: {aliveUnitsCount}/{GameRules.MaxFieldUnitCount} ---");
+        EventManager.OnLogMessage?.Invoke($"{me.Name}의 필드 : {string.Join(" / ", me.Field.Select(c => c != null ? c.Name : "[빈칸]"))}");
+
+        if (aliveUnitsCount == 0)
         {
-            yield return StartCoroutine(ExecuteBattlePhaseRoutine(me, enemy));
+            EventManager.OnLogMessage?.Invoke($"{me.Name} : 필드에 유닛이 없어 배틀 페이즈를 건너뜁니다.");
         }
         else
         {
-            Debug.Log($"{me.Name} : 컨트롤하는 유닛이 없거나 배틀할 마나가 없습니다.");
+            var readyUnits = me.Field.Where(c => c != null && !c.IsExhausted).ToList();
+            if (readyUnits.Count == 0)
+            {
+                EventManager.OnLogMessage?.Invoke($"{me.Name} : 공격 가능한 상태의 유닛이 없어 배틀 페이즈를 건너뜁니다.");
+            }
+            else
+            {
+                int minAttackCost = readyUnits.Min(c => c.AttackCost);
+                if (me.Mana < minAttackCost)
+                {
+                    EventManager.OnLogMessage?.Invoke($"{me.Name} : 마나가 부족하여 배틀 페이즈를 건너뜁니다. (최소 필요: {minAttackCost}, 보유 마나: {me.Mana})");
+                }
+                else
+                {
+                    yield return StartCoroutine(ExecuteBattlePhaseRoutine(me, enemy, currentTurn));
+                }
+            }
         }
-        // 배틀이나 메인(배틀 건너뛸경우) 끝나면 턴 종료
-        EventManager.OnTurnEnd?.Invoke(me.Name);
+
+        yield return StartCoroutine(ExecuteEndPhaseRoutine(me, enemy, currentTurn));
     }
 
-    private IEnumerator ExecuteBattlePhaseRoutine(Player me, Player enemy)
+    // 3. 배틀 페이즈 코루틴
+    private IEnumerator ExecuteBattlePhaseRoutine(Player me, Player enemy, int currentTurn)
     {
-        Debug.Log("   ⚔️ [배틀 페이즈 시작]");
-        EventManager.OnBattlePhase?.Invoke(me.Name, globalTurn);
+        if (context.IsGameOver) yield break;
+
+        EventManager.OnBattlePhase?.Invoke(me.Name, currentTurn);
+        EventManager.OnLogMessage?.Invoke($"[ ⚔️ 배틀 페이즈 ]");
+
         int loopSafety = 0;
 
         while (loopSafety < 10)
@@ -205,32 +272,22 @@ public class BattleManager : MonoBehaviour
             loopSafety++;
             bool attackOccurred = false;
 
-            // 공격 가능한 유닛 탐색 (Power 높은 순)
-            var attackers = me.Field
-                .Where(c => c != null && !c.IsExhausted)
-                .OrderByDescending(c => c.Power)
-                .ToList();
-
+            var attackers = me.Field.Where(c => c != null && !c.IsExhausted).OrderByDescending(c => c.Power).ToList();
             if (attackers.Count == 0) break;
 
             var enemyUnits = enemy.Field.Where(c => c != null).ToList();
 
             foreach (var attacker in attackers)
             {
-                // 마나 체크
+                if (context.IsGameOver) yield break;
                 if (me.Mana < attacker.AttackCost) continue;
 
                 object finalTarget = null;
 
                 if (enemyUnits.Count > 0)
                 {
-                    // 적 유닛 중 가장 강한 놈 타겟팅 (단, 이길 수 있는 상대)
-                    var validTargets = enemyUnits
-                        .Where(e => e.Power <= attacker.Power)
-                        .OrderByDescending(e => e.Power)
-                        .ToList();
-
-                    if (validTargets.Count > 0) finalTarget = validTargets[0];
+                    finalTarget = enemyUnits.Where(e => e.Power <= attacker.Power).OrderByDescending(e => e.Power).FirstOrDefault();
+                    if (finalTarget == null) continue; // 이길 적이 없으면 공격 포기 (자살 방지)
                 }
                 else
                 {
@@ -241,49 +298,71 @@ public class BattleManager : MonoBehaviour
                 {
                     _battleSystem.Attack(attacker, finalTarget, context);
                     attackOccurred = true;
-                    yield return new WaitForSeconds(ActionDelay); // 공격 연출 대기
-
-                    // 승패 판정으로 조기 종료
-                    if (GameSet(me, enemy)) yield break;
-
-                    break; // 공격 발생 시 루프 재시작
+                    yield return new WaitForSeconds(ActionDelay);
+                    break;
                 }
             }
 
             if (!attackOccurred) break;
         }
-        Debug.Log("   ⚔️ [배틀 페이즈 종료]");
     }
 
-    // --- Helpers ---
+    // 4. 엔드 페이즈 코루틴
+    private IEnumerator ExecuteEndPhaseRoutine(Player me, Player enemy, int currentTurn)
+    {
+        if (context.IsGameOver) yield break;
 
+        EventManager.OnEndPhase?.Invoke(me.Name, currentTurn);
+        EventManager.OnLogMessage?.Invoke($"[ 🛑 엔드 페이즈 ]\n");
+
+        yield return new WaitForSeconds(TurnDelay);
+    }
+
+    #endregion
+
+    // --- Helpers ---
     private void InitializeSystem()
     {
-        // 유니티 에디터 경로 설정
-        // Assets/Resources/GameData 경로를 가리킵니다.
-        string resourcePath = Path.Combine(Application.dataPath, "Resources", "GameData");
+        // 1차 시도 경로: 유니티 환경 (Assets/Resources/GameData)
+        string primaryPath = Path.Combine(Application.dataPath, "Resources", "GameData");
 
-        // 1. 룰 로드
+        // 2차 시도 경로: 콘솔 환경 및 기본 폴백 (./Data)
+        string fallbackPath = "./Data";
+
+        // 최종 결정된 경로
+        string targetPath = primaryPath;
+
+        // 1. 폴백(Fallback) 로직: 1차 경로가 없으면 2차 경로로 전환
+        if (!Directory.Exists(primaryPath))
+        {
+            EventManager.OnLogMessage?.Invoke($"<color=yellow>[System] 1차 경로({primaryPath})를 찾을 수 없어 2차 경로({fallbackPath})를 시도합니다.</color>");
+            targetPath = fallbackPath;
+        }
+        else
+        {
+            EventManager.OnLogMessage?.Invoke($"<color=cyan>[System] 게임 데이터를 '{targetPath}'에서 로드합니다.</color>");
+        }
+
+        // 2. 룰 데이터 로드
         try
         {
-            string rulesPath = Path.Combine(resourcePath, "Rules.json");
+            string rulesPath = Path.Combine(targetPath, "CommonConfig.json");
             GameRules.LoadRules(rulesPath);
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[Rules Load Error] {e.Message}");
+            EventManager.OnLogMessage?.Invoke($"<color=red>[Rules Load Error] {e.Message}</color>");
         }
 
-        // 2. 데이터 매니저 초기화
+        // 3. 시스템 및 매니저 초기화
         _dataManager = new GameDataManager();
-        _dataManager.LoadAllData(resourcePath); // 경로 전달
-
+        _dataManager.LoadAllData(targetPath);
         _battleSystem = new BattleSystem();
     }
 
     private Player CreateBotPlayer(string name, params int[] ids)
     {
-        Player p = new Player { Name = name, Health = 7, Mana = 0 };
+        Player p = new Player { Name = name, PrizePoints = 0, Mana = 0 }; // Health 삭제, Prize 도입 반영
         List<Card> deck = new List<Card>();
         foreach (int id in ids)
         {
@@ -296,37 +375,39 @@ public class BattleManager : MonoBehaviour
 
     private void DrawCards(Player p, int count)
     {
-        for (int i = 0; i < count; i++)
+        if (p.Deck.Count >= count)
         {
-            var c = p.ExtractCard(ZoneType.Deck, "Top");
-            if (c != null) p.InsertCard(ZoneType.Hand, c);
+            for (int i = 0; i < count; i++)
+            {
+                var c = p.ExtractCard(ZoneType.Deck, "Top");
+                if (c != null) p.InsertCard(ZoneType.Hand, c);
+            }
+            EventManager.OnLogMessage?.Invoke($"{p.Name} 드로우: {count}장 (남은 덱: {p.Deck.Count}장)");
         }
-    }
-
-    private bool GameSet(Player me, Player enemy)
-    {
-        // 승점이 7점 이상이면 게임 종료
-        return me.PrizePoints >= 7 || enemy.PrizePoints >= 7;
+        else
+        {
+            int drawnCount = p.Deck.Count;
+            while (p.Deck.Count > 0)
+            {
+                var c = p.ExtractCard(ZoneType.Deck, "Top");
+                if (c != null) p.InsertCard(ZoneType.Hand, c);
+            }
+            EventManager.OnLogMessage?.Invoke($"{p.Name} 드로우 시도: {count}장 중 {drawnCount}장 성공 (덱 고갈)");
+        }
     }
 
     private void PrintGameResult(Player p1, Player p2)
     {
-        Debug.Log("\n========== [ Result ] ==========");
-        Debug.Log($"{p1.Name}: {p1.PrizePoints} Prize");
-        Debug.Log($"{p2.Name}: {p2.PrizePoints} Prize");
-        if (p1.PrizePoints >= 7 && p2.PrizePoints >= 7) Debug.Log("🤝 무승부!");
-        else if (p1.PrizePoints >= 7) Debug.Log($"🏆 승리: {p1.Name}");
-        else if (p2.PrizePoints >= 7) Debug.Log($"🏆 승리: {p2.Name}");
-        else Debug.Log("🤝 무승부 (턴 오버)");
-        EventManager.GameEnd?.Invoke(p1, p2, globalTurn);
+        EventManager.OnLogMessage?.Invoke("\n========== [ Result ] ==========");
+        EventManager.OnLogMessage?.Invoke($"{p1.Name}: {p1.PrizePoints} Prize");
+        EventManager.OnLogMessage?.Invoke($"{p2.Name}: {p2.PrizePoints} Prize");
+
+        // 여기서 승리 로그를 중복해서 출력하지 않음 (HandleGameSet에서 이미 처리됨)
     }
 
     private bool IsSkillUseful(Card skill, Player me, Player enemy)
     {
-        if (skill.Id == "21001" || skill.Effects.Any(e => e.GetType().Name.Contains("ModifyStat")))
-        {
-            if (enemy.Field.All(c => c == null)) return false;
-        }
+        if (skill.Id == "21001") { return enemy.Field.Any(c => c != null && c.Power <= 300); }
         if (skill.Id == "21003") { if (me.Field.All(c => c == null)) return false; }
         if (skill.Id == "21002") { if (me.Deck.Count == 0) return false; }
         if (skill.Id == "21004") { if (me.Hand.Count <= 1) return false; }

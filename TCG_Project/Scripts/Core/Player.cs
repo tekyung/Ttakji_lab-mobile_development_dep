@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
+using TCG_Project.Scripts.Interfaces;
 
 namespace TCG_Project.Scripts.Core
 {
@@ -11,7 +13,26 @@ namespace TCG_Project.Scripts.Core
         public string Name { get; set; }
         public int Health { get; set; }
         public int Mana { get; set; }
-        public int PrizePoints { get; set; } = 0; // 승점
+        private int _prizePoints;
+        public int PrizePoints
+        {
+            get => _prizePoints;
+            set
+            {
+                _prizePoints = value;
+                EventManager.OnPrizeChange?.Invoke(this, _prizePoints);
+
+                // ★ 점수가 오르는 즉시 게임 셋을 외친다!
+                if (_prizePoints >= GameRules.WinPrizePoints)
+                {
+                    EventManager.OnGameSet?.Invoke(this);
+                }
+            }
+        }
+        // ★ 플레이어의 타입과 두뇌
+        public UserType Type { get; set; } = UserType.Bot; // 기본값은 Bot
+        public IPlayerBrain Brain { get; set; } // 행동을 위임할 두뇌 인터페이스
+
 
         public List<Card> Deck { get; private set; } = new List<Card>();
         public List<Card> Hand { get; private set; } = new List<Card>();
@@ -23,8 +44,26 @@ namespace TCG_Project.Scripts.Core
         // 현재 사용 가능한 카드 목록
         public List<Card> EnableCardList { get; private set; } = new List<Card>();
 
-        // 필드 존 (예: 5칸 고정). null이면 빈 공간.
-        public Card[] Field { get; private set; } = new Card[5];
+        // (주의: 객체 생성 시점에 GameRules가 로드되어 있어야 함)
+        public Card[] Field { get; private set; }
+
+        // 플레이어 생성 후, Type에 맞는 두뇌를 셋팅해주는 초기화 메서드
+        public void InitializeBrain()
+        {
+            if (this.Type == UserType.Bot)
+            {
+                this.Brain = new BotBrain(this); // 기존 자동화 로직
+            }
+            else if (this.Type == UserType.Human)
+            {
+                this.Brain = new HumanBrain(this); // 입력을 기다리는 로직
+            }
+        }
+        public Player()
+        {
+            // 필드 최대 유닛 수(3칸) 적용
+            Field = new Card[GameRules.MaxFieldUnitCount];
+        }
 
         // 필드의 빈 자리 찾기 (-1이면 꽉 참)
         public int GetEmptyFieldSlot()
@@ -35,16 +74,6 @@ namespace TCG_Project.Scripts.Core
             }
             return -1;
         }
-
-        /* 턴 시작 시 호출할 메서드 (GameLoop에서 호출 필요)
-        public void OnTurnStart()
-        {
-            // 마나 회복 등은 GameLoop에서 하더라도, 유닛 상태 초기화는 여기서
-            foreach (var card in Field)
-            {
-                if (card != null) card.RefreshUnitState();
-            }
-        }*/
 
         public void SetDeck(List<Card> newDeck)
         {
@@ -70,7 +99,7 @@ namespace TCG_Project.Scripts.Core
             }
 
             // 디버깅용 로그 (너무 시끄러우면 주석 처리)
-            Console.WriteLine($"(플레이 가능한 카드: {EnableCardList.Count}장)");
+            EventManager.OnLogMessage?.Invoke($"(플레이 가능한 카드: {EnableCardList.Count}장)");
         }
 
         // 덱 셔플
@@ -80,93 +109,107 @@ namespace TCG_Project.Scripts.Core
             Deck = Deck.OrderBy(x => rng.Next()).ToList();
         }
 
-        // 1장만 드로우, 지금은 안 씀
-        public void Draw()
+        /// <summary>
+        /// 카드를 플레이(소환/발동)합니다. 
+        /// 카드의 모든 효과(타겟팅 대기 등)가 끝나면 onCardPlayed 콜백이 호출됩니다.
+        /// </summary>
+        // 카드 사용 로직 (비동기 콜백 지원)
+        public void PlayCard(Card card, GameContext context, Action onCardPlayed = null)
         {
-            DrawCard(1);
-        }
-
-        // 덱에서 카드 드로우(복수형), 안 씀
-        public bool DrawCard(int n)
-        {
-            if (Deck.Count - n < 0) return false;
-            for (int i = 0; i < n; i++)
+            if (!Hand.Contains(card))
             {
-                Card card = Deck[0];
-                Deck.RemoveAt(0);
-                Hand.Add(card);
+                // [안전장치] 패에 없는 카드면 무시하되, 대기 중인 엔진이 멈추지 않도록 콜백은 쏴줍니다.
+                onCardPlayed?.Invoke();
+                return;
             }
-            Console.WriteLine($"🎴 [{Name}] 가 카드를 {n}장 드로우했습니다. (남은 덱: {Deck.Count}장)");
-            return true;
-        }
-
-        // [핵심] 카드 사용 로직
-        public void PlayCard(Card card, GameContext context)
-        {
-            if (!Hand.Contains(card)) return;
 
             // 1. 자원 소모
             Mana -= card.Cost;
             EventManager.OnManaChange?.Invoke(this, Mana); // 마나 썼으니 갱신
+
             // 카드 사용 알림 (UI: 패에서 카드가 날아가는 연출)
             EventManager.OnPlayCard?.Invoke(this, card);
 
             if (card.Type == CardType.Unit)
             {
-                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
-                EventManager.OnUnitSummoned?.Invoke(card);
+                EventManager.OnLogMessage?.Invoke($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
             }
             else
             {
-                Console.WriteLine($"\n>>> [{Name}] 이 '{card.Name}' 사용 (Cost: {card.Cost}) / 남은 마나: {Mana}");
+                EventManager.OnLogMessage?.Invoke($"\n>>> [{Name}] 이 '{card.Name}' 사용 (Cost: {card.Cost}) / 남은 마나: {Mana}");
             }
 
             // 2. 패에서 PlayingCard 존으로 이동
             Hand.Remove(card);
             PlayingCard = card;
 
-            // 3. 효과 발동
-            if (card.Type == CardType.Skill) { card.Play(context); }
-
-            // 4. [종료 처리] PlayingCard -> Graveyard (원래 주인 묘지로!) / 소환 시 유닛 효과
-            PlayingCard = null;
-
-            // 유닛 소환시 효과 분기
-            if (card.Type == CardType.Unit)
+            // 3. 카드 타입별 비동기 효과 발동
+            if (card.Type == CardType.Skill)
             {
-                // [유닛] 필드로 이동
+                // [스펠] 효과를 실행하고, 유저의 타겟팅이나 처리가 모두 끝나면 람다식 안쪽이 실행됩니다.
+                card.Play(context, () =>
+                {
+                    // 효과가 끝난 후 PlayingCard를 비우고 묘지로 보냄
+                    PlayingCard = null;
+
+                    Player owner = card.OriginalOwner ?? this; // 안전장치
+                    owner.Graveyard.Add(card);
+                    card.ResetState(); // 상태 초기화
+
+                    EventManager.OnCardMove?.Invoke(card, this, ZoneType.Hand, owner, ZoneType.Graveyard);
+                    EventManager.OnLogMessage?.Invoke($"  ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
+
+                    // ★ 모든 물리적 처리가 끝났음을 엔진에 보고
+                    onCardPlayed?.Invoke();
+                });
+            }
+            else if (card.Type == CardType.Unit)
+            {
+                // [유닛] PlayingCard를 비우고 필드로 이동 시도
+                PlayingCard = null;
+
                 if (InsertCard(ZoneType.Field, card))
                 {
-                    // 소환 후유증 (바로 공격 불가) 미적용
+                    // 소환 성공
                     card.IsExhausted = false;
-                    Console.WriteLine($"   ⚔️ [소환] {card.Name} (Power:{card.Power})가 필드에 배치되었습니다.");
-                    card.Play(context);
+                    EventManager.OnUnitSummoned?.Invoke(card);
+                    EventManager.OnLogMessage?.Invoke($"   ⚔️ [소환] {card.Name} (Power:{card.Power})가 필드에 배치되었습니다.");
+
+                    // 소환 시 효과 비동기 실행
+                    card.Play(context, () =>
+                    {
+                        // 유저가 효과 대상을 다 고르거나, 자동으로 처리가 끝나면 엔진에 보고
+                        onCardPlayed?.Invoke();
+                    });
                 }
                 else
                 {
-                    // 필드가 꽉 차서 소환 실패 시 -> 묘지로 가거나 핸드로 복귀 (룰에 따라 다름)
-                    Console.WriteLine($"   🚫 [소환 실패] 필드가 꽉 찼습니다! {card.Name} 돌아감.");
+                    // 필드가 꽉 차서 소환 실패 시
+                    EventManager.OnLogMessage?.Invoke($"   🚫 [소환 실패] 필드가 꽉 찼습니다! {card.Name} 패로 돌아감.");
                     Hand.Add(card);
+
+                    // ★ 실패했어도 턴 진행이 멈추지 않도록 엔진에 보고
+                    onCardPlayed?.Invoke();
                 }
-            }
-            else
-            {
-                // 내 묘지가 아니라 '카드의 원래 주인' 묘지로 보냄
-                Player owner = card.OriginalOwner ?? this; // 안전장치
-                owner.Graveyard.Add(card);
-                // 상태 초기화 (묘지로 가니까)
-                card.ResetState();
-                Console.WriteLine($" ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
             }
         }
 
-        // DamageEffect에서 호출할 메서드
-        public void TakeDamage(int amount)
+        // 프라이즈(승점) 획득 및 종료 판별 함수(기존의 TakeDamage 대체)
+        public void GetPrize(int amount, GameContext context)
         {
-            Health -= amount;
-            Console.WriteLine($"🔻 [{Name}] 가 {amount}의 피해를 입었습니다! (남은 체력: {Health})");
-            EventManager.OnHealthChange?.Invoke(this, Health);
-            EventManager.OnLogMessage?.Invoke($"🔻 [{Name}] 피해 {amount} (남은 체력: {Health})");
+            // ★ [상태 가드] 이미 게임이 끝났다면 추가 점수 획득 무시
+            if (context.IsGameOver) return;
+
+            PrizePoints += amount;
+            EventManager.OnPrizeChange?.Invoke(this, PrizePoints);
+            EventManager.OnLogMessage?.Invoke($"🏆 [{Name}] 승점 {amount} 획득! (현재 승점: {PrizePoints}/{GameRules.WinPrizePoints})");
+
+            // GameRules.WinPrizePoints 사용
+            if (PrizePoints >= GameRules.WinPrizePoints)
+            {
+                context.IsGameOver = true; // 문을 잠가서 추가 연쇄 작용 차단
+                EventManager.OnGameSet?.Invoke(this); // "내가 이겼다!" 방송 송출
+            }
         }
 
         // HealEffect에서 호출할 메서드
@@ -180,8 +223,40 @@ namespace TCG_Project.Scripts.Core
         public void ManaGain(int amount)
         {
             Mana += amount;
-            Console.WriteLine($"+ [{Name}] 가 {amount}의 마나를 회복했습니다. (현재 마나: {Mana})");
+            EventManager.OnLogMessage?.Invoke($"+ [{Name}] 가 {amount}의 마나를 회복했습니다. (현재 마나: {Mana})");
             EventManager.OnManaChange?.Invoke(this, Mana);
+        }
+
+        /// <summary>
+        /// 내 패(Hand)에 있는 카드 중, 당장 소환이 가능하며 "소환 시 효과"의 발동 조건까지 만족하는 
+        /// 유닛 카드의 인덱스(Index) 리스트를 반환합니다.
+        /// (UI 하이라이팅 또는 AI 판단용)
+        /// </summary>
+        public List<int> GetUsableEffectCardIndices(GameContext context)
+        {
+            List<int> validIndices = new List<int>();
+
+            for (int i = 0; i < Hand.Count; i++)
+            {
+                Card card = Hand[i];
+
+                // 1차 필터: 유닛 카드이며, 효과가 하나 이상 있고, 당장 소환(코스트/자리/소환조건)이 가능한가?
+                if (card.Type == CardType.Unit && card.Effects.Count > 0 && card.IsPlayable(context))
+                {
+                    // 2차 필터: 소환 시 효과 발동 조건(EffectCondition)을 만족하는가?
+                    bool conditionMet = true;
+                    if (!string.IsNullOrEmpty(card.EffectCondition) && card.EffectCondition.Trim().ToLower() != "none")
+                    {
+                        conditionMet = Systems.ConditionEvaluator.Evaluate(card.EffectCondition, context);
+                    }
+
+                    if (conditionMet)
+                    {
+                        validIndices.Add(i); // 조건을 모두 만족하면 인덱스 저장
+                    }
+                }
+            }
+            return validIndices;
         }
 
         // 카드 이동 로직
@@ -304,13 +379,14 @@ namespace TCG_Project.Scripts.Core
                 {
                     // 1. 행동력 회복 (공격 기회 리필)
                     card.RefreshUnitState();
-                    
-                    // 2. [신규] 체력 완전 회복 (줄어든 HP 초기화)
-                    if (card.Health < card.MaxHealth)
+
+                    // 2. Power 완전 회복 (줄어든 Power 초기화)
+                    if (card.Power < card.OriginalPower)
                     {
-                        int healAmount = card.MaxHealth - card.Health;
-                        card.Health = card.MaxHealth;
-                        Console.WriteLine($"   ✨ [회복] {card.Name}의 체력이 초기화되었습니다. (+{healAmount})");
+                        int healAmount = card.OriginalPower - card.Power;
+
+                        // 연산자로 직접 조작하지 않고, 전담 파이프라인을 통해 안전하게 회복 (아직은 미사용)
+                        // card.ModifyPower(healAmount, "턴 시작 회복");
                     }
                 }
             }

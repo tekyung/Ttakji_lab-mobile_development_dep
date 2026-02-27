@@ -25,4 +25,10 @@ namespace TCG_Project.Scripts.Core
         Unit = 1,
         Skill = 2
     }
+    public enum UserType
+    {
+        Human,  // 실제 플레이어 (마우스/키보드 입력 대기)
+        Bot     // AI (즉시 자동 연산)
+    }
+
 }

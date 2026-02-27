@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
 using TCG_Project.Scripts.Systems;
+using System; // Action 콜백을 위해 추가
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -16,7 +17,7 @@ namespace TCG_Project.Scripts.Effects
             targetParam = parameters.ContainsKey("target") ? parameters["target"] : "Self";
         }
 
-        public void Execute(GameContext context)
+        public void Execute(GameContext context, Action onComplete)
         {
             // 1. 수식 계산 (var.recycle_amount 같은 변수도 여기서 처리됨)
             
@@ -36,6 +37,7 @@ namespace TCG_Project.Scripts.Effects
                 // [디버깅] 실제 변화 확인
                 DebugHelper.LogEffect("Result", $"{target.Name} Mana: {oldMana} -> {target.Mana}");
             }
+            onComplete?.Invoke(); // 효과 실행이 완료되었음을 알리는 콜백 호출
         }
     }
 }

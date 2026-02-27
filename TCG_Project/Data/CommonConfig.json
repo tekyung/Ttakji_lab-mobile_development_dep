@@ -41,8 +41,16 @@
       "Value": "20000"
     },
     {
-      "Name": "gain_prize_by_direct",
-      "Value": "1"
+        "Name": "gain_prize_by_direct",
+        "Value": "1"
+    },
+    {
+        "Name": "starting_hands",
+        "Value": "3"
+    },
+    {
+        "Name": "draw_per_turn",
+        "Value": "1"
     }
   ]
 }

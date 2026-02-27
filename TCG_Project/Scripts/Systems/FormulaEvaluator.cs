@@ -62,7 +62,7 @@ namespace TCG_Project.Scripts.Systems
             int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
 
-            // [신규] Context 변수 치환
+            // Context 변수 치환
             if (context.Variables.Count > 0)
             {
                 foreach (var kvp in context.Variables)
@@ -80,29 +80,32 @@ namespace TCG_Project.Scripts.Systems
             // if (formula.Contains("var.")) return "0"; 
 
             // [Turn]
-            formula = formula.Replace("turnCount", Program.turnCount.ToString());
+            formula = formula.Replace("turnCount", ConsoleRunner.globalTurn.ToString());
 
             // [Active Player]
-            formula = formula.Replace("activePlayer.Health", p.Health.ToString());
             formula = formula.Replace("activePlayer.Mana", p.Mana.ToString());
             formula = formula.Replace("activePlayer.Hand.Count", p.Hand.Count.ToString());
             formula = formula.Replace("activePlayer.Graveyard.Count", p.Graveyard.Count.ToString());
             formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
+            formula = formula.Replace("activePlayer.PrizePoints", p.PrizePoints.ToString());
+            formula = formula.Replace("activePlayer.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Opponent]
-            formula = formula.Replace("opponent.Health", opp.Health.ToString());
             formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
             formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
             formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
             formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
+            formula = formula.Replace("opponent.PrizePoints", opp.PrizePoints.ToString());
+            formula = formula.Replace("opponent.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Rules]
             formula = formula.Replace("maxHandSize", GameRules.MaxHandSize.ToString());
-            formula = formula.Replace("manaGainPerTurn", GameRules.ManaGainPerTurn.ToString());
             formula = formula.Replace("drawPerTurn", GameRules.DrawPerTurn.ToString());
-            formula = formula.Replace("startingHealth", GameRules.StartingHealth.ToString());
-            formula = formula.Replace("startingMana", GameRules.StartingMana.ToString());
-            formula = formula.Replace("maxMana", GameRules.MaxMana.ToString());
+            formula = formula.Replace("prize_count_to_win", GameRules.WinPrizePoints.ToString());
+            formula = formula.Replace("maxFieldUnitCount", GameRules.MaxFieldUnitCount.ToString());
+            formula = formula.Replace("firstTurnEnergy", GameRules.FirstPlayerFirstTurnEnergy.ToString());
+            formula = formula.Replace("secondTurnEnergy", GameRules.SecondPlayerFirstTurnEnergy.ToString());
+            formula = formula.Replace("basicEnergy", GameRules.BasicEnergy.ToString());
 
             // 필요하다면 더 많은 변수 추가 가능
             return formula;
