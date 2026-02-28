@@ -132,7 +132,7 @@ namespace TCG_Project.Scripts.Systems
             else if (target.Type == TargetType.Player)
             {
                 Player p = target.PlayerVal;
-                parsed = parsed.Replace("target.Health", p.Health.ToString());
+                // parsed = parsed.Replace("target.Health", p.Health.ToString());
                 parsed = parsed.Replace("target.Mana", p.Mana.ToString());
                 parsed = parsed.Replace("target.Hand.Count", p.Hand.Count.ToString());
             }

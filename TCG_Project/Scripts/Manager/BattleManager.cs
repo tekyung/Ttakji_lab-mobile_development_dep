@@ -66,7 +66,7 @@ public class BattleManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    private void StartBot()
+    private void Start()
     {
         EventManager.OnLogMessage?.Invoke("=== 🤖 봇 대전 시뮬레이터 (Unity Ver) ===");
 
@@ -335,8 +335,8 @@ public class BattleManager : MonoBehaviour
         // 1. 폴백(Fallback) 로직: 1차 경로가 없으면 2차 경로로 전환
         if (!Directory.Exists(primaryPath))
         {
-            EventManager.OnLogMessage?.Invoke($"<color=yellow>[System] 1차 경로({primaryPath})를 찾을 수 없어 2차 경로({fallbackPath})를 시도합니다.</color>");
-            targetPath = fallbackPath;
+            EventManager.OnLogMessage?.Invoke($"<color=yellow>[System] 1차 경로({primaryPath})를 찾을 수 없습니다.</color>");
+            // targetPath = fallbackPath;
         }
         else
         {

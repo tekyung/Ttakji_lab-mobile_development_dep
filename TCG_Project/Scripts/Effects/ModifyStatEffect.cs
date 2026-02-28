@@ -17,8 +17,36 @@ namespace TCG_Project.Scripts.Effects
         private string triggerCondition;
         private int prizeOnKill;
 
+        // 복제를 위해 초기화 파라미터를 기억해 둡니다.
+        private Dictionary<string, object> _cachedParams;
+
+        // 깊은 복사 구현체
+        public ICardEffect Clone()
+        {
+            var clone = new ModifyStatEffect(); // 자기 자신의 새 인스턴스 생성
+            clone.Initialize(this._cachedParams); // 기억해둔 똑같은 재료로 초기화
+            return clone;
+        }
+
         public void Initialize(Dictionary<string, object> parameters)
         {
+            _cachedParams = parameters; // 캐싱
+
+            // 1. 필수 파라미터 안전하게 읽기 (TryGetValue 사용 권장)
+            parameters.TryGetValue("target", out targetParam);
+            parameters.TryGetValue("amount", out amountParam);
+
+            // 2. [오류 해결] 'stat' 키가 없으면 기본값 "Power" 사용
+            if (parameters.ContainsKey("stat"))
+            {
+                statName = parameters["stat"].ToString();
+            }
+            else
+            {
+                // 번역기를 거치지 않은 생 JSON 데이터일 경우 대비
+                statName = "Power";
+            }
+
             targetParam = parameters["target"];
             statName = parameters["stat"].ToString();
             amountParam = parameters["amount"];

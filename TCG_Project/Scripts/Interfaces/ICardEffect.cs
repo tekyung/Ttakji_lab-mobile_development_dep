@@ -14,6 +14,9 @@ namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
 
         // ★ 콜백 : 효과 처리가 전부 끝나면 onComplete()를 호출해 주어야 함
         void Execute(GameContext context, Action onComplete);
+
+        // 자신과 완벽히 동일한 상태를 가진 새로운 인스턴스를 반환합니다.
+        ICardEffect Clone();
     }
 }
 

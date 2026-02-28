@@ -144,14 +144,14 @@ namespace TCG_Project.Scripts.Systems
                 }
                 AllCards[newCard.Id] = newCard;
             }
-            System.Console.WriteLine($"[System] 카드 데이터 {AllCards.Count}장 로드 완료.");
+            Console.WriteLine($"[System] 카드 데이터 {AllCards.Count}장 로드 완료.");
         }
 
         private string GetConditionFormula(string type, int val1)
         {
             switch (type)
             {
-                case "Draw":
+                case "Draw": // 드로우 조건 (덱에 카드가 있는가?)
                     return "activePlayer.Deck.Count > 0";
 
                 // 1. 애벌레용 (덱에 카드가 있는가?)
@@ -242,6 +242,13 @@ namespace TCG_Project.Scripts.Systems
                     if (raw.effect_function_value1 != 0) finalParams["prizeOnKill"] = raw.effect_function_value1;
                     dmgEffect.Initialize(finalParams);
                     return dmgEffect;
+
+                case "ReduceCost":
+                    var costEffect = new ModifyStatEffect();
+                    finalParams["stat"] = "Cost"; // ★ 반드시 지정해줘야 함
+                    finalParams["amount"] = -raw.effect_function_value1;
+                    costEffect.Initialize(finalParams);
+                    return costEffect;
 
                 default: return null;
             }

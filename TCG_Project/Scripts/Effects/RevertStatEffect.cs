@@ -11,6 +11,9 @@ namespace TCG_Project.Scripts.Effects
         private string statName;
         private int amountToRevert; // 되돌릴 수치 (이미 반대 부호여야 함)
 
+        // 복제를 위해 초기화 파라미터를 기억해 둡니다.
+        private Dictionary<string, object> _cachedParams;
+
         public RevertStatEffect(List<Card> targets, string stat, int amount)
         {
             this.targetsToRevert = targets;
@@ -51,6 +54,16 @@ namespace TCG_Project.Scripts.Effects
                 if (card.Cost < 0) card.Cost = 0;
             }
             // Power, HP 등 확장 가능
+        }
+
+        // 깊은 복사 구현체
+        public ICardEffect Clone()
+        {
+            // 이 효과는 JSON 파라미터가 아니라, 런타임에 지정된 특정 타겟들을 기억해야 합니다.
+            // 타겟 리스트(List<Card>)는 새 리스트로 얕은 복사본을 만들어 원본 훼손을 방지합니다.
+            // (내부 변수 이름이 _targets, _statName, _amount 라고 가정)
+
+            return new RevertStatEffect(new List<Card>(this.targetsToRevert), this.statName, this.amountToRevert);
         }
     }
 }

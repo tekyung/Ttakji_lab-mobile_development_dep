@@ -20,13 +20,15 @@ namespace TCG_Project.Scripts.Core
             set
             {
                 _prizePoints = value;
+                // 값 변경 시 UI 갱신 이벤트만 쏜다 (게임 오버 판별 삭제)
                 EventManager.OnPrizeChange?.Invoke(this, _prizePoints);
 
-                // ★ 점수가 오르는 즉시 게임 셋을 외친다!
+                /* ★ 점수가 오르는 즉시 게임 셋을 외친다!
                 if (_prizePoints >= GameRules.WinPrizePoints)
                 {
                     EventManager.OnGameSet?.Invoke(this);
                 }
+                */
             }
         }
         // ★ 플레이어의 타입과 두뇌
@@ -200,23 +202,18 @@ namespace TCG_Project.Scripts.Core
             // ★ [상태 가드] 이미 게임이 끝났다면 추가 점수 획득 무시
             if (context.IsGameOver) return;
 
-            PrizePoints += amount;
-            EventManager.OnPrizeChange?.Invoke(this, PrizePoints);
+            // 1. 점수 증가 (이때 setter가 호출되어 OnPrizeChange UI 갱신이 일어남)
+            PrizePoints += amount; 
+            
+            // 2. 점수 획득 로그를 "먼저" 출력!
             EventManager.OnLogMessage?.Invoke($"🏆 [{Name}] 승점 {amount} 획득! (현재 승점: {PrizePoints}/{GameRules.WinPrizePoints})");
 
-            // GameRules.WinPrizePoints 사용
+            // 3. 점수가 다 찼다면 게임 종료 선언을 "마지막"에 출력! / GameRules.WinPrizePoints 사용
             if (PrizePoints >= GameRules.WinPrizePoints)
             {
                 context.IsGameOver = true; // 문을 잠가서 추가 연쇄 작용 차단
                 EventManager.OnGameSet?.Invoke(this); // "내가 이겼다!" 방송 송출
             }
-        }
-
-        // HealEffect에서 호출할 메서드
-        public void Heal(int amount)
-        {
-            Health += amount;
-            Console.WriteLine($"💚 [{Name}] 가 {amount}의 체력을 회복했습니다. (현재 체력: {Health})");
         }
 
         // ManaGainEffect에서 호출할 메서드

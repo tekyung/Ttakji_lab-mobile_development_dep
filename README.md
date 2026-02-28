@@ -205,3 +205,15 @@ unity에 사용될 이벤트 로직 초안 구성 (노트북 사양 문제로 �
 
 유니티에서 EventManager를 구독하여 연출을 만들 때, 반드시 유니티의 OnEnable()에서 +=로 구독하고, OnDisable()이나 OnDestroy()에서 -=로 해지하도록 해야 합니다. (이거 안 하면 씬 전환 시 100% 에러가 터집니다.)
 
+
+## 26.02.28 진행사항
+
+LegacyEffect 제거 및 코드 정리
+
+파일 로딩 시스템 롤백
+
+MoveCardEffect 역할 분리: 단발성 카드 이동 효과는 MoveCardEffect로, 조건부 기간 이동은 RevertControllerEffect로 분리
+
+RevertStatusEffect 추가: 유닛의 상태 이상을 일정 턴 후 자동으로 해제하는 효과 구현 (구현 중)
+
+SwapCardEffect 추가: 카드의 위치를 동시에 서로 바꾸는 효과 구현 (복원 중)

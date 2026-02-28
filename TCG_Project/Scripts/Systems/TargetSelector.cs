@@ -7,7 +7,61 @@ namespace TCG_Project.Scripts.Systems
 {
     public static class TargetSelector
     {
-        // ★ 반환형이 List<Target>에서 void로 바뀌고, 콜백(onTargetSelected)이 추가되었습니다.
+        public static void Select(object targetParam, GameContext context, Action<List<Target>> onTargetSelected)
+        {
+            List<Target> results = new List<Target>();
+
+            // 1. 단순 문자열 처리 (ActivePlayer, Opponent 등)
+            if (targetParam is string strParam)
+            {
+                if (strParam == "ActivePlayer" || strParam == "Self") results.Add(new Target(context.ActivePlayer));
+                else if (strParam == "Opponent") results.Add(new Target(context.TargetPlayer));
+                onTargetSelected?.Invoke(results);
+                return;
+            }
+
+            // 2. 딕셔너리 기반 상세 타겟팅
+            if (targetParam is Dictionary<string, object> options)
+            {
+                Player targetPlayer = (options.ContainsKey("controller") && options["controller"].ToString() == "Opponent")
+                                      ? context.TargetPlayer : context.ActivePlayer;
+
+                List<Target> candidates = new List<Target>();
+
+                // 구역(Zones) 탐색
+                if (options.ContainsKey("zones"))
+                {
+                    var zones = options["zones"] as IEnumerable<object>; // 다양한 타입 대응
+                    foreach (var zName in zones)
+                    {
+                        if (Enum.TryParse(zName.ToString(), out ZoneType zone))
+                        {
+                            var cards = targetPlayer.GetZone(zone);
+                            candidates.AddRange(cards.Where(c => c != null && CheckCondition(c, options)).Select(c => new Target(c)));
+                        }
+                    }
+                }
+                else { candidates.Add(new Target(targetPlayer)); }
+
+                string mode = options.ContainsKey("mode") ? options["mode"].ToString() : "Random";
+                int count = options.ContainsKey("count") ? Convert.ToInt32(options["count"]) : 1;
+
+                // ★ HumanChoice 분기 처리
+                if (mode == "HumanChoice")
+                {
+                    if (candidates.Count == 0) onTargetSelected?.Invoke(new List<Target>());
+                    else context.ActivePlayer.Brain.SelectTarget(candidates, count, onTargetSelected);
+                }
+                else
+                {
+                    var finalTargets = SelectFinalTargets(candidates, count, mode, context);
+                    onTargetSelected?.Invoke(finalTargets);
+                }
+            }
+            else { onTargetSelected?.Invoke(results); }
+        }
+
+        /* ★ 반환형이 List<Target>에서 void로 바뀌고, 콜백(onTargetSelected)이 추가되었습니다.
         public static void Select(object targetParam, GameContext context, Action<List<Target>> onTargetSelected)
         {
             List<Target> results = new List<Target>();
@@ -87,62 +141,7 @@ namespace TCG_Project.Scripts.Systems
                 onTargetSelected?.Invoke(results);
             }
         }
-
-        public static List<Target> Select(object targetParam, GameContext context)
-        {
-            List<Target> results = new List<Target>();
-
-            // 1. 문자열 (ActivePlayer 등)
-            if (targetParam is string strParam)
-            {
-                if (strParam == "ActivePlayer" || strParam == "Self") results.Add(new Target(context.ActivePlayer));
-                else if (strParam == "Opponent") results.Add(new Target(context.TargetPlayer));
-                return results;
-            }
-
-            // 2. 딕셔너리 (상세 설정) - ★ JObject가 아니라 Dictionary여야 함 ★
-            if (targetParam is Dictionary<string, object> options)
-            {
-                Player targetPlayer = context.ActivePlayer;
-                if (options.ContainsKey("controller") && options["controller"].ToString() == "Opponent")
-                    targetPlayer = context.TargetPlayer;
-
-                if (options.ContainsKey("zones"))
-                {
-                    var zoneObj = options["zones"];
-                    string[] zones = zoneObj is string[] arr ? arr : ((IEnumerable<object>)zoneObj).Select(o => o.ToString()).ToArray();
-
-                    foreach (string zoneName in zones)
-                    {
-                        if (Enum.TryParse(zoneName, out ZoneType zone))
-                        {
-                            // Player.GetZone 메서드가 필요함 (없으면 Player.cs에 추가)
-                            var cardsInZone = targetPlayer.GetZone(zone);
-                            foreach (var card in cardsInZone)
-                            {
-                                if (card == null) continue;
-
-                                // ★ 조건 체크 (이게 없으면 파이어볼이 작동 안 함)
-                                if (CheckCondition(card, options))
-                                {
-                                    results.Add(new Target(card));
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    results.Add(new Target(targetPlayer));
-                }
-
-                string mode = options.ContainsKey("mode") ? options["mode"].ToString() : "Random";
-                int count = options.ContainsKey("count") ? Convert.ToInt32(options["count"]) : 1;
-                return SelectFinalTargets(results, count, mode, context);
-            }
-
-            return results;
-        }
+        */
 
         private static bool CheckCondition(Card card, Dictionary<string, object> options)
         {
