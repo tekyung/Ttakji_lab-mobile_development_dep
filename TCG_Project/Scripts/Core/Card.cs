@@ -197,28 +197,29 @@ namespace TCG_Project.Scripts.Core
         {
             Card newCard = new Card
             {
-                InstanceId = System.Guid.NewGuid().ToString(), // 고유한 주민등록번호 발급
-                DataId = this.DataId, // 원본 카드의 종류 유지
+                InstanceId = System.Guid.NewGuid().ToString(), // 고유 ID 발급
+                DataId = this.DataId,
                 Name = this.Name,
                 Cost = this.Cost,
                 Power = this.Power,
                 PlayCondition = this.PlayCondition,
-                EffectCondition = this.EffectCondition, // 소환 시 효과 조건도 복사 목록에 포함
+                EffectCondition = this.EffectCondition,
                 Description = this.Description,
-                Id = this.Id, // Id도 복사 필요
-                OriginalCost = this.OriginalCost, // OriginalCost도 복사
-                Type = this.Type,          // 이게 없으면 유닛으로 인식을 못함
+                Id = this.Id,
+                OriginalCost = this.OriginalCost,
+                OriginalPower = this.OriginalPower, // ★ 이거 누락 조심!
+                Type = this.Type,
                 AttackCost = this.AttackCost,
                 Prize = this.Prize,
                 SkinResource = this.SkinResource,
                 MaxDeckCount = this.MaxDeckCount
             };
 
-            // 효과 리스트도 새로 만들어서 독립성 보장
-            // 주의: Effect 객체 자체도 상태를 가진다면 Effect.Clone()이 필요
+            // ★ [핵심 변경] 효과 리스트 깊은 복사(Deep Copy) 적용
             foreach (var effect in this.Effects)
             {
-                newCard.AddEffect(effect);
+                // 다형성을 활용하여 각각의 효과가 스스로를 복제하게 만듦
+                newCard.AddEffect(effect.Clone());
             }
 
             return newCard;
