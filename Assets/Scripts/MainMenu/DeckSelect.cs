@@ -4,7 +4,7 @@ using TMPro; // 드롭다운용
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class MainDeckSelector : MonoBehaviour
+public class DeckSelector : MonoBehaviour
 {
     public TMP_Dropdown mainDeckDropdown; // 메인 화면에 있는 그 드롭다운 연결
 
@@ -13,6 +13,13 @@ public class MainDeckSelector : MonoBehaviour
     void Start()
     {
         RefreshDropdown();
+
+        if (mainDeckDropdown != null)
+        {
+            mainDeckDropdown.onValueChanged.RemoveAllListeners(); // 꼬임 방지용 초기화
+            mainDeckDropdown.onValueChanged.AddListener(OnDropdownValueChanged);
+        }
+
     }
 
     public void RefreshDropdown()

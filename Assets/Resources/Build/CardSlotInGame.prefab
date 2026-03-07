@@ -1412,8 +1412,9 @@ GameObject:
   - component: {fileID: 2091955563670244150}
   - component: {fileID: 2437875217985070433}
   - component: {fileID: 8816738818219391809}
+  - component: {fileID: 2982722102331041709}
   m_Layer: 5
-  m_Name: CardSlot 1
+  m_Name: CardSlotInGame
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1498,6 +1499,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CardInteraction
   holdTime: 0.5
   playZoneThreshold: 0.4
+--- !u!114 &2982722102331041709
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8456415601423846929}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c0d3cf4e625cfd4eba256e11b4bab84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CardUI
+  cardImage: {fileID: 3735853099852545396}
+  nameText: {fileID: 5871363151887443823}
+  descText: {fileID: 129157864138035248}
+  countText: {fileID: 1199899366643507778}
+  plusButton: {fileID: 8052258515721019850}
+  minusButton: {fileID: 6214432616402753860}
+  myCardID: 0
+  removeAllButton: {fileID: 0}
+  deckCount: {fileID: 5256251566545787355}
+  deckCountText: {fileID: 6409367353849208793}
 --- !u!1 &8906856896505022806
 GameObject:
   m_ObjectHideFlags: 0
