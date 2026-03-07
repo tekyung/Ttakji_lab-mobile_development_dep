@@ -180,4 +180,27 @@ public class CardUI : MonoBehaviour
         if (plusButton) plusButton.gameObject.SetActive(false);
         if (minusButton) minusButton.gameObject.SetActive(false);
     }
+
+    public void SetupForBattle(int id)
+    {
+        myCardID = id;
+
+        // 1. 데이터 불러오기
+        CardData data = CardDataManager.Instance.GetCard(id);
+        if (data == null) return;
+
+        // 2. 텍스트 설정
+        if (nameText) nameText.text = data.name;
+        //if (descText) descText.text = data.description; // 주석 해제하시면 설명도 뜹니다!
+
+        // 3. 이미지 로드 (기존에 잘 만들어두신 함수 재활용!)
+        LoadCardImage(data.skin_res);
+
+        // 4. 전투 씬에서는 필요 없는 '덱 편성용 UI' 전부 끄기
+        if (countText) countText.gameObject.SetActive(false);
+        if (deckCount) deckCount.SetActive(false);
+        if (plusButton) plusButton.gameObject.SetActive(false);
+        if (minusButton) minusButton.gameObject.SetActive(false);
+        if (removeAllButton) removeAllButton.gameObject.SetActive(false);
+    }
 }
