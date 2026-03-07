@@ -5,6 +5,7 @@ public class SceneChanger : MonoBehaviour
 {
     public void ChageScene(string sceneName)
     {
+        Debug.Log(sceneName);
         SceneManager.LoadScene(sceneName);
     }
 
