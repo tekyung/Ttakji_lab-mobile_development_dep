@@ -1,119 +1,139 @@
-# 📡 TCG 시스템 연동 API 및 공유 사항 가이드 (UI & 클라이언트 담당자용)
+---
 
-본 TCG 프로젝트는 코어 로직(Backend)과 뷰(Unity UI)가 완벽히 분리된 **이벤트 주도형(Event-Driven) 아키텍처**를 사용합니다. 유니티 클라이언트 담당자는 코어 시스템을 직접 수정할 필요 없이, `EventManager`의 신호를 **구독(Subscribe)**하여 UI 갱신 및 애니메이션 연출을 구현하면 됩니다.
+# 🎮 TCG 프로젝트: Core 로직 연동 가이드 (UI 개발팀용)
+
+TCG 코어 로직과 UI 연출을 연결하기 위한 가이드라인입니다.
+우리 게임은 코어 엔진과 화면 연출이 완벽하게 분리된 **이벤트 기반 아키텍처(Event-Driven Architecture)**를 사용합니다.
+
+UI 팀은 게임의 상태(HP, 덱의 남은 장수 등)를 직접 수정해서는 안 되며, 오직 `EventManager`가 쏘아주는 방송(Event)을 구독(Subscribe)하여 애니메이션과 이펙트를 재생하는 역할만 담당합니다.
 
 ---
 
-## 🛠 1. 이벤트 구독 및 해지 방법 (메모리 누수 방지 필수)
+## 📌 1. 이벤트 구독 및 해제 기본 수칙 (중요)
 
-유니티 스크립트에서 이벤트를 연결할 때는 반드시 `OnEnable`에서 구독(`+=`)하고, `OnDisable`에서 해지(`-=`)해야 합니다. 이를 지키지 않으면 씬 전환 시 치명적인 에러와 메모리 누수가 발생합니다.
+유니티에서 이벤트를 다룰 때 가장 중요한 것은 **메모리 누수(Memory Leak) 방지**입니다.
+이벤트를 구독할 때는 반드시 `OnEnable`에서 등록(`+=`)하고, `OnDisable`이나 `OnDestroy`에서 해제(`-=`)해야 합니다.
+
+```csharp
+using UnityEngine;
+using TCG_Project.Scripts.Managers;
+
+public class BattleUIManager : MonoBehaviour
+{
+    private void OnEnable()
+    {
+        // 구독: 방송국 주파수를 맞춥니다.
+        EventManager.OnLifeChange += UpdateHealthBar;
+        EventManager.OnCardMove += AnimateCardFly;
+    }
+
+    private void OnDisable()
+    {
+        // 해제: 오브젝트가 꺼지거나 파괴될 때 반드시 주파수를 끊어야 합니다! (누수 방지)
+        EventManager.OnLifeChange -= UpdateHealthBar;
+        EventManager.OnCardMove -= AnimateCardFly;
+    }
+
+    // 실제 연출 함수들
+    private void UpdateHealthBar(Player player, int currentLife) 
+    { 
+        /* 체력바 게이지가 줄어드는 애니메이션 재생 */ 
+    }
+
+    private void AnimateCardFly(Card card, Player fromPlayer, ZoneType fromZone, Player toPlayer, ZoneType toZone) 
+    { 
+        /* 카드가 A 위치에서 B 위치로 스르륵 날아가는 연출 */ 
+    }
+}
+
+```
+
+---
+
+## 📡 2. 이벤트 리스트 (Event Dictionary)
+
+UI 연출을 위해 `EventManager`에서 제공하는 핵심 이벤트 목록입니다. 용도에 맞게 구독하여 사용하세요.
+
+### ⚔️ A. 게임 흐름 및 상태 변경
+
+| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
+| --- | --- | --- |
+| `OnGameStart` | `Player p1, Player p2` | 게임 시작. 양측 플레이어 프로필 스폰, 초기 체력바/덱 UI 세팅 |
+| `OnTurnStart` | `int turn, string subject` | 매 라운드 시작. 화면 중앙에 "ROUND 1" 텍스트 애니메이션 |
+| `OnGameSet` | `Player winner` | 누군가의 HP가 0이 되어 게임 종료. 승리/패배 결과창 팝업 |
+| `OnGameDraw` | `Player p1, Player p2, int turn` | 동시 타격 등으로 무승부 처리 시 호출. 무승부 연출 |
+| `OnLifeChange` | `Player p, int newValue` | 체력 변동 시 호출. HP바 애니메이션 및 피격 화면 이펙트 재생 |
+
+### 🎴 B. 카드 이동 및 액션 (가장 중요)
+
+카드가 화면에서 움직이거나 효과가 터질 때 호출됩니다.
+| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
+|---|---|---|
+| `OnCardMove` | `Card c, Player p1, Zone z1, Player p2, Zone z2` | 카드가 존을 이동할 때. (예: 세트존 -> 전장존). 궤적 이동 애니메이션 |
+| `OnCardDraw` | `Card c, Player p, Zone z` | 덱에서 카드를 뽑을 때 호출. 덱에서 카드가 튀어나와 패로 들어가는 연출 |
+| `OnPlayCard` | `Player p, Card c` | 메인 페이즈나 스택 반응으로 카드가 '발동'될 때. 카드 일러스트 컷인 및 타격 이펙트 |
+
+### 🔄 C. 페이즈 전환 알림
+
+화면 상단의 "현재 페이즈 UI"를 빛나게 하거나 갱신할 때 사용합니다.
+| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
+|---|---|---|
+| `OnResourcePhase` | `string subject, int turn` | 자원 페이즈 시작 시. 자원 코인/에너지 UI 갱신 준비 |
+| `OnDrawPhase` | `string subject, int turn` | 드로우 페이즈 시작 시 |
+| `OnSetPhase` | `string subject, int turn` | 세트 페이즈 시작 시 |
+| `OnOpenPhase` | `string subject, int turn` | 오픈 페이즈 시작 시 |
+| `OnMainPhase` | `string subject, int turn` | 메인 페이즈 시작 시. 전투 시작 연출 (VS 마크 등) |
+
+---
+
+## ✋ 3. 플레이어 입력 처리 (Human Input)
+
+코어 엔진은 봇(Bot)의 행동은 스스로 결정하지만, **사람(Human)**의 차례가 오면 UI 쪽에 **"유저가 버튼을 누를 때까지 기다릴게!"** 라며 콜백(Callback)을 던져줍니다.
+UI 팀은 해당 이벤트를 구독하여 화면에 버튼을 띄우고, 유저가 선택을 마치면 **반드시 콜백 함수를 실행(`Invoke`)하여 엔진에 답을 돌려줘야 합니다.** (돌려주지 않으면 게임이 멈춥니다!)
+
+| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
+| --- | --- | --- |
+| `OnRequireSetPhaseAction` | `Player, GameContext, Action<Card>` | **세트 페이즈:** 내 패를 클릭할 수 있게 활성화. 유저가 카드를 고르면 `콜백(고른카드)` 호출 |
+| `OnRequireOpenPhaseAction` | `Player, Card, int, GameContext, Action<OpenPhaseChoice>` | **오픈 페이즈:** '공개' / '폐기' 2개 버튼 UI 팝업. 선택 시 `콜백(OpenPhaseChoice.Open 또는 Abandon)` 호출 |
+| `OnRequireStackResponse` | `Player, Card(내카드), Card(상대카드), Action<bool>` | **스택 발동:** 상대가 날 때렸을 때! 내 스택 카드를 발동할지 '예/아니오' 버튼 팝업. 선택 시 `콜백(true/false)` 호출 |
+
+### 📝 입력 처리 구현 예시 (오픈 페이즈)
 
 ```csharp
 private void OnEnable()
 {
-    EventManager.OnManaChange += UpdateManaUI;
-    EventManager.OnUnitSummoned += PlaySummonEffect;
+    EventManager.OnRequireOpenPhaseAction += ShowOpenAbandonUI;
 }
 
-private void OnDisable()
+private void ShowOpenAbandonUI(Player p, Card c, int cost, GameContext ctx, Action<OpenPhaseChoice> callback)
 {
-    EventManager.OnManaChange -= UpdateManaUI;
-    EventManager.OnUnitSummoned -= PlaySummonEffect;
+    // 1. 화면에 [공개(비용: cost)] / [폐기] 버튼 패널을 띄웁니다.
+    uiPanel.SetActive(true);
+
+    // 2. 버튼에 임시로 이벤트를 달아줍니다. (유저 클릭 대기)
+    btnOpen.onClick.AddListener(() => 
+    {
+        uiPanel.SetActive(false);
+        callback.Invoke(OpenPhaseChoice.Open); // ★ 코어 엔진으로 대답 전송! (게임 진행 재개)
+    });
+
+    btnAbandon.onClick.AddListener(() => 
+    {
+        uiPanel.SetActive(false);
+        callback.Invoke(OpenPhaseChoice.Abandon); // ★ 코어 엔진으로 대답 전송!
+    });
 }
 
-// 연결된 함수 구현
-private void UpdateManaUI(Player player, int currentMana)
-{
-    if (player.Name == "Player1") manaText.text = currentMana.ToString();
-}
-
-private void PlaySummonEffect(Card summonedCard)
-{
-    // 소환 파티클 재생 로직
-}
 ```
 
-## 📜 2. 전체 이벤트 목록 (Event List)
+---
 
-[1] 턴 진행 및 페이즈 (Phase)
+## ⚠️ 4. 기타 주의사항 (Caveats)
 
-| 이벤트 명 | 전달 데이터 | 발동 시점 |
-| :--- | :--- | :--- |
-| OnGameStart | "Player (P1), Player (P2)" | 게임이 최초 시작될 때 |
-| OnGameSet | Player (승리자) | 누군가 승리 조건을 달성해 게임이 끝났을 때 |
-| OnGameDraw | "Player (P1), Player (P2), int (종료 턴)" | 제한 턴을 초과하여 무승부 처리되었을 때 |
-| OnTurnStart / OnTurnEnd | "int (현재 턴수), string (진행자 이름)" | 새로운 턴이 시작/종료될 때 |
-| OnDrawPhase / OnMainPhase  OnBattlePhase / OnEndPhase | "string (진행자 이름), int (현재 턴수)" | 각 페이즈 진입 시 |
-
-[2] 플레이어 상태 (HUD 연동)
-참고: 플레이어의 HP 개념이 삭제되고 승점(Prize) 룰로 변경되었습니다.
-| 이벤트 명 | 전달 데이터 | 발동 시점 |
-| :--- | :--- | :--- |
-| OnManaChange | Player (대상), int (현재 마나) | 마나를 소모하거나 회복했을 때 |
-| OnPrizeChange | Player (대상), int (현재 승점) | 유닛을 파괴하여 승점을 획득했을 때 |
-
-[3] 전투 및 카드 연출 (VFX/Animation)
-| 이벤트 명 | 전달 데이터 | 발동 시점 |
-| :--- | :--- | :--- |
-| OnPlayCard | "Player (사용자), Card (사용된 카드)" | 패에서 카드를 필드로 냈을 때 |
-| OnUnitSummoned | Card (소환된 유닛) | 유닛이 필드에 정상적으로 배치되었을 때 |
-| OnAttack | "Card (공격 유닛), Card (타겟 유닛)" | 유닛이 타겟을 향해 공격을 시도할 때 (돌진 연출) |
-| OnUnitTakeDamage | "Card (맞은 유닛), int (데미지량)" | 유닛이 데미지를 입었을 때 (피격/데미지 폰트 연출) |
-| OnUnitDeath | Card (죽은 유닛) | 유닛이 파괴되었을 때 (사망 파티클/카드 파괴 연출) |
-| UnitStatusChange | "Card (대상 유닛), string (상태)" | "지침, 기절 등 유닛의 상태 이상이 적용되었을 때" |
-| OnCardPowerChanged | "Card (대상 유닛), int (변화량)" | 버프/디버프로 인해 파워가 변경되었을 때 (+/- 기호 포함 가능) |
-
-[4] 카드 단순 이동
-| 이벤트 명 | 전달 데이터 | 발동 시점 |
-| :--- | :--- | :--- |
-| OnCardDraw | "Card, Player, ZoneType" | 카드를 단순 드로우 할 때(패로 이동) |
-| OnCardMove | "Card, Player(출발), ZoneType(출발), Player(도착), ZoneType(도착)" | 필드->묘지 등 카드의 구역이 변경될 때 |
-
-
-## 🚨 3. [중요] 비동기 유저 입력 처리 (Human Input)
-
-코어 시스템이 봇(Bot)의 자동 연산에서 사람의 조작을 기다리는 비동기 시스템으로 진화했습니다. 사용자가 카드를 조작하거나 타겟을 지정해야 할 때 아래 이벤트가 호출됩니다.
-
-UI에서는 반드시 유저 입력이 끝난 뒤 매개변수로 넘어온 Action 콜백을 호출해야 합니다. 호출하지 않으면 게임 루프가 영원히 정지됩니다.
-
-| 이벤트 명 | 설명 및 UI 처리 지침 |
-| :--- | :--- |
-| OnRequireMainPhaseAction | "유저에게 턴 통제권이 넘어왔습니다. 패의 카드를 드래그해서 내거나, [턴 종료] 버튼을 누를 수 있게 UI를 활성화하세요. 액션이 끝나면 onComplete()를 호출하세요." |
-| OnRequireBattlePhaseAction | "배틀 페이즈입니다. 아군 유닛을 적에게 드래그해 공격하게 하거나, [배틀 종료] 버튼을 활성화하세요. 끝나면 onComplete()를 호출하세요." |
-| OnRequireTargetSelection | 파이어볼 같은 타겟팅 스펠을 썼을 때 발동합니다. 매개변수로 넘어온 candidates 리스트에 있는 카드들의 테두리를 붉게 빛나게 처리하세요. 유저가 그중 하나를 클릭하면 onTargetSelected(선택된타겟리스트)를 호출하여 백엔드에 알려주세요. |
-
-
-## 🛡️ 4. 덱 구축 시 리미트 레귤레이션 검증 방법
-
-유저가 로비 화면에서 자신만의 덱을 짰을 때, 게임 시작 전 해당 덱이 룰(최소/최대 장수 및 카드별 최대 포함 매수)에 어긋나지 않는지 검사해야 합니다. 직접 계산할 필요 없이 DeckValidator 유틸리티를 사용하세요.
-
-```
-using TCG_Project.Scripts.Utils;
-
-// 유저가 구성한 List<Card> 객체
-List<Card> customDeck = GetPlayerDeck(); 
-
-// 덱이 규칙을 위반했는지 검사
-if (DeckValidator.IsValidDeck(customDeck, out string errorMsg))
-{
-    // 검사 통과 -> 서버에 저장 또는 게임 시작
-    StartGame(customDeck);
-}
-else
-{
-    // 검사 실패 -> UI 팝업으로 사용자에게 안내
-    ShowWarningPopup(errorMsg); 
-    // 예: " '레드슬라임' 카드는 덱에 최대 2장까지만 넣을 수 있습니다. "
-}
-```
-
-
-## 📁 5. 데이터 로드 폴백(Fallback) 시스템 안내
-
-게임의 근간이 되는 JSON 데이터(.json)는 유니티 프로젝트 내 Assets/Resources/GameData 폴더에서 1차로 읽어옵니다.
-
-만약 유니티 환경이 아니거나 해당 경로에 폴더가 없다면, 시스템이 자동으로 실행 파일 위치의 ./Data 폴더를 2차로 탐색하여 로드합니다. 경로 에러로 인한 팅김을 방지하기 위함입니다.
-
+1. **절대 데이터 직접 수정 금지:** UI 스크립트에서 `Player.LifeTokens -= 1` 처럼 코어 데이터를 직접 조작하지 마세요. 모든 로직 연산은 이미 엔진이 끝마친 상태입니다. UI는 전달받은 값(`newValue`)을 화면의 텍스트 컴포넌트에 반영하기만 하면 됩니다.
+2. **연출 딜레이 (코루틴 대기):** 로직은 눈 깜짝할 새에 연산되지만 시각적 연출은 시간이 필요합니다. `BattleManager.cs` 내부에 페이즈 전환이나 카드 사용 시 `ActionDelay` 셋팅값이 있으니, UI 애니메이션 시간에 맞춰 유니티 인스펙터에서 이 시간을 조절해 주세요.
+3. **이펙트 종류 확인:**
+`OnPlayCard` 가 호출될 때, 해당 카드의 `Type` 이나 이름(`Name`)을 읽어서 공격 카드면 총알 이펙트, 방어 카드면 방패 이펙트 등 어셋을 분기하여 스폰하시면 됩니다.
 
 
 # 개발 진행 사항 기록
@@ -217,3 +237,16 @@ MoveCardEffect 역할 분리: 단발성 카드 이동 효과는 MoveCardEffect�
 RevertStatusEffect 추가: 유닛의 상태 이상을 일정 턴 후 자동으로 해제하는 효과 구현 (구현 중)
 
 SwapCardEffect 추가: 카드의 위치를 동시에 서로 바꾸는 효과 구현 (복원 중)
+
+
+## 26.03.09 진행사항
+
+이전 버전 코드 완전 제거 및 리펙토링 (전투! 용병의 시대 룰로 재이식)
+
+현재까지 발매된 카드 4+40장 모두 구현 완료 (검증은 공격, 방어만 완료)
+
+EventManager 설명서 업데이트
+
+DeckValidator.cs 새 룰에 맞춰 업데이트 (덱 유효성 검사)
+
+Scripts/UI 폴더 안에 유니티 전용 임시 파일들 생성. 덮어써도 무방함.
