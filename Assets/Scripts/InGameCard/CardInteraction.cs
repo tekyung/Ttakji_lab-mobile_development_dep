@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems; // 마우스/터치 이벤트를 처리하기 위해 꼭 필요합니다!
 
 // IPointerDownHandler(누를 때), IPointerUpHandler(뗄 때), IPointerExitHandler(영역을 벗어날 때) 인터페이스를 상속받습니다.
-public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler, IPointerExitHandler//, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("Zoom Settings")]
     public float holdTime = 0.5f; // 0.5초 동안 누르고 있으면 확대됨
@@ -11,6 +11,12 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     [Header("Drag Settings")]
     [Tooltip("화면 높이의 몇 % 이상 드래그해야 카드를 낸 것으로 판정할 것인가? (0.0 ~ 1.0)")]
     public float playZoneThreshold = 0.4f;
+
+    [Header("Select Settings")]
+    public float focusScaleFactor = 1.2f;
+    public GameObject actionButtonPanel; // 공개, 폐기 버튼
+    private bool isSelected = false; // 현재 내가 선택되었는가
+    private static CardInteraction currentlySelectedCard; // 현재 카드 기억하기
 
     private bool isPointerDown = false;
     private float pointerDownTimer = 0f;
@@ -20,6 +26,8 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     private Transform originalParent;
     private int originalSiblingIndex;
+
+    private Canvas myCanvas;
     private CanvasGroup canvasGroup;
 
     void Awake()
@@ -27,20 +35,26 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         // CanvasGroup 컴포넌트가 없으면 자동으로 추가합니다.
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
+
+        // ⭐ 카드가 개별적인 렌더링 순서를 가질 수 있도록 Canvas를 달아줍니다.
+        myCanvas = GetComponent<Canvas>();
+        if (myCanvas == null) myCanvas = gameObject.AddComponent<Canvas>();
+
+        // Canvas를 추가하면 클릭이 먹통이 될 수 있어 GraphicRaycaster도 짝꿍으로 달아줍니다.
+        if (GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
+            gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
     }
 
     void Update()
-    {
-        // 1. 마우스를 누르고 있는 동안 시간 체크
-        if (isPointerDown)
+    {        
+        if (isPointerDown && !isDragging)
         {
             pointerDownTimer += Time.deltaTime;
 
-            // 2. 설정한 시간이 다 지나면 줌 기능 실행
             if (pointerDownTimer >= holdTime)
             {
                 isPointerDown = false; // 계속 실행되는 것 방지
-                ShowZoomPanel();
+                //ShowZoomPanel();
             }
         }
     }
@@ -72,105 +86,193 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         pointerDownTimer = 0f;
     }
 
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (isPlayed || isDragging) return; // 필드에 나갔거나 드래그 중이면 무시
+
+        if (isSelected)
+        {
+            // 이미 튀어나와 있는 상태에서 또 누르면 -> 원상복구
+            DeselectCard();
+        }
+        else
+        {
+            // 안 튀어나와 있다면 -> 앞으로 꺼내기
+            SelectCard();
+        }
+    }
+
+    private void SelectCard()
+    {
+        // 1. 만약 내 패의 "다른 카드"가 이미 튀어나와 있다면, 그 녀석을 먼저 집어넣습니다.
+        if (currentlySelectedCard != null && currentlySelectedCard != this)
+        {
+            currentlySelectedCard.DeselectCard();
+        }
+
+        isSelected = true;
+        currentlySelectedCard = this;
+
+        // 2. 카드를 살짝 키움
+        transform.localScale = new Vector3(focusScaleFactor, focusScaleFactor, 1f);
+
+        // 3. 레이아웃 그룹의 순서를 무시하고 '무조건 화면 맨 앞'에 그리도록 덮어씌웁니다!
+        myCanvas.overrideSorting = true;
+        myCanvas.sortingOrder = 10;
+
+        if (actionButtonPanel != null) actionButtonPanel.SetActive(true);
+    }
+
+    public void DeselectCard()
+    {
+        if (!isSelected) return;
+
+        isSelected = false;
+        if (currentlySelectedCard == this) currentlySelectedCard = null;
+
+        // 1. 키웠던 카드를 다시 원래 높이로 빼줍니다.
+        transform.localScale = Vector3.one;
+
+        // 2. 맨 앞 그리기 취소 (다시 패 사이에 얌전히 들어감)
+        myCanvas.overrideSorting = false;
+
+        if (actionButtonPanel != null) actionButtonPanel.SetActive(false);
+    }
+
+    // 회수 버튼
+    public void OnClickReturn()
+    {
+        Debug.Log("🔄 회수 버튼 클릭! 카드를 다시 패로 가져옵니다.");
+
+        // 1. 씬에서 패(HandArea)를 찾습니다. 
+        GameObject handArea = GameObject.Find("MyHand");
+
+        if (handArea != null)
+        {
+            // 2. 카드의 부모를 다시 패(HandArea)로 바꿉니다.
+            // Horizontal Layout Group이 알아서 카드를 패의 오른쪽 끝에 예쁘게 정렬해 줍니다.
+            transform.SetParent(handArea.transform);
+
+            // 원래 인덱스 위치로 이동
+            transform.SetSiblingIndex(originalSiblingIndex);
+
+            // 3. 필드에 나갔다는 상태를 해제! (이제 다시 드래그/확대가 가능해집니다)
+            isPlayed = false;
+
+            // 4. 뒷면 이불을 치우고 다시 앞면을 보여줍니다.
+            CardUI cardUI = GetComponent<CardUI>();
+            if (cardUI != null) cardUI.SetFaceDown(false);
+
+            // 5. 손패에 카드가 다시 늘어났으니, 간격(Spacing)을 다시 예쁘게 맞춰줍니다.
+            // (이전에 작성하신 HandManager의 코루틴을 원격으로 실행합니다)
+            MyHandManager handManager = FindAnyObjectByType<MyHandManager>();
+
+            if (handManager != null)
+            {
+                // 카드 간격 맞추는 김에 버튼 끄기도 같이 시킵니다!
+                handManager.StartCoroutine("UpdateSpacingRoutine");
+                handManager.SetReadyButtonState(false);
+            }
+
+            DeselectCard();
+        }
+        else
+        {
+            Debug.LogError("🚨 HandArea(손패 패널)를 찾을 수 없습니다! 이름을 확인해주세요.");
+        }
+    }
+
     //-----------------------------
     //마우스 드래그
     //-----------------------------
     // 1. 드래그를 시작할 때
-    public void OnBeginDrag(PointerEventData eventData)
-    {
-        if (isPlayed) return;
+    //public void OnBeginDrag(PointerEventData eventData)
+    //{
+    //    if (isPlayed) return;
+    //    if (isSelected) DeselectCard();
 
-        Debug.Log("드래그 시작");
-        isDragging = true;
-        isPointerDown = false; // 드래그를 시작하면 줌 기능 취소
+    //    isDragging = true;
+    //    isPointerDown = false; // 드래그를 시작하면 줌 기능 취소
 
-        // 원래 있던 패 영역(HandArea)과 순서를 기억해 둡니다.
-        originalParent = transform.parent;
-        originalSiblingIndex = transform.GetSiblingIndex();
+    //    // 원래 있던 패 영역(HandArea)과 순서를 기억해 둡니다.
+    //    originalParent = transform.parent;
+    //    originalSiblingIndex = transform.GetSiblingIndex();
 
-        // 카드를 화면 맨 앞(Canvas 직속)으로 빼내어 LayoutGroup의 속박에서 벗어납니다.
-        transform.SetParent(transform.root);
+    //    // 카드를 화면 맨 앞(Canvas 직속)으로 빼내어 LayoutGroup의 속박에서 벗어납니다.
+    //    transform.SetParent(transform.root);
 
-        // 드래그 중에는 마우스 레이캐스트를 무시하게 해서, 카드 뒤에 있는 필드나 UI를 인식할 수 있게 합니다.
-        canvasGroup.blocksRaycasts = false;
+    //    transform.localScale = Vector3.one;
+    //    // 드래그 중에는 마우스 레이캐스트를 무시하게 해서, 카드 뒤에 있는 필드나 UI를 인식할 수 있게 합니다.
+    //    canvasGroup.blocksRaycasts = false;
+    //}
 
+    //// 2. 드래그 중일 때 (마우스 따라다니기)
+    //public void OnDrag(PointerEventData eventData)
+    //{
+    //    if (isPlayed) return;
 
-    }
+    //    Debug.Log("드래그 이동중");
+    //    RectTransformUtility.ScreenPointToWorldPointInRectangle(
+    //        (RectTransform)transform.parent,
+    //        eventData.position,
+    //        eventData.pressEventCamera,
+    //        out Vector3 globalMousePos);
 
-    // 2. 드래그 중일 때 (마우스 따라다니기)
-    public void OnDrag(PointerEventData eventData)
-    {
-        if (isPlayed) return;
+    //    // 카드의 위치를 마우스(터치) 위치로 이동시킵니다.
+    //    transform.position = globalMousePos;
+    //}
 
-        Debug.Log("드래그 이동중");
-        RectTransformUtility.ScreenPointToWorldPointInRectangle(
-            (RectTransform)transform.parent,
-            eventData.position,
-            eventData.pressEventCamera,
-            out Vector3 globalMousePos);
+    //// 3. 드래그를 끝냈을 때 (마우스에서 손을 뗐을 때)
+    //public void OnEndDrag(PointerEventData eventData)
+    //{
+    //    if (isPlayed) return;
 
-        // 카드의 위치를 마우스(터치) 위치로 이동시킵니다.
-        transform.position = globalMousePos;
-    }
+    //    isDragging = false;
+    //    canvasGroup.blocksRaycasts = true;
 
-    // 3. 드래그를 끝냈을 때 (마우스에서 손을 뗐을 때)
-    public void OnEndDrag(PointerEventData eventData)
-    {
-        if (isPlayed) return;
+    //    // 마우스 포인터가 가리키고 있는 UI 오브젝트를 가져옵니다.
+    //    GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
 
-        isDragging = false;
-        canvasGroup.blocksRaycasts = true;
+    //    // 마우스를 놓은 곳이 허공이 아니라면?
+    //    if (dropTarget != null)
+    //    {
+    //        // 놓은 곳이나, 그 부모 오브젝트 중에 'DropZone' 명찰이 있는지 찾습니다.
+    //        // (카드 위에 겹쳐서 놓더라도 부모인 FieldArea를 찾아냅니다!)
+    //        DropZone zone = dropTarget.GetComponentInParent<DropZone>();
 
-        // 마우스 포인터가 가리키고 있는 UI 오브젝트를 가져옵니다.
-        GameObject dropTarget = eventData.pointerCurrentRaycast.gameObject;
+    //        if (zone != null)
+    //        {
+    //            // 명찰을 찾았다면, 해당 구역(zone.transform)으로 카드를 냅니다!
+    //            PlayThisCard(zone.transform);
+    //            return; // 여기서 함수 종료
+    //        }
+    //    }
 
-        // 마우스를 놓은 곳이 허공이 아니라면?
-        if (dropTarget != null)
-        {
-            // 놓은 곳이나, 그 부모 오브젝트 중에 'DropZone' 명찰이 있는지 찾습니다.
-            // (카드 위에 겹쳐서 놓더라도 부모인 FieldArea를 찾아냅니다!)
-            DropZone zone = dropTarget.GetComponentInParent<DropZone>();
+    //    // DropZone을 못 찾았다면 무조건 패로 돌아갑니다.
+    //    ReturnToHand();
+    //}
 
-            if (zone != null)
-            {
-                // 명찰을 찾았다면, 해당 구역(zone.transform)으로 카드를 냅니다!
-                PlayThisCard(zone.transform);
-                return; // 여기서 함수 종료
-            }
-        }
+    //private void ShowZoomPanel()
+    //{
+    //    Debug.Log("🔍 카드 꾹 누르기 성공! 줌 패널 띄우기");
+    //     InGameUIManager.Instance.ShowCardZoom();
+    //}
 
-        // DropZone을 못 찾았다면 무조건 패로 돌아갑니다.
-        ReturnToHand();
-    }
-
-    private void ShowZoomPanel()
-    {
-        Debug.Log("🔍 카드 꾹 누르기 성공! 줌 패널 띄우기");
-         InGameUIManager.Instance.ShowCardZoom();
-    }
-
-    // 카드를 패로 다시 돌려보내는 함수
-    private void ReturnToHand()
-    {
-        Debug.Log("↩️ 카드 사용 취소. 패로 돌아갑니다.");
-        transform.SetParent(originalParent);
-        transform.SetSiblingIndex(originalSiblingIndex); // 원래 있던 순서(위치) 그대로 쏙 들어갑니다!
-    }
+    //// 카드를 패로 다시 돌려보내는 함수
+    //private void ReturnToHand()
+    //{
+    //    Debug.Log("↩️ 카드 사용 취소. 패로 돌아갑니다.");
+    //    transform.SetParent(originalParent);
+    //    transform.SetSiblingIndex(originalSiblingIndex); // 원래 있던 순서(위치) 그대로 쏙 들어갑니다!
+    //}
 
     // 카드를 사용(필드에 냄)하는 함수
-    private void PlayThisCard()
-    {
-        Debug.Log("⚔️ 카드 사용! 필드로 출격!");
-
-        // 일단 테스트용으로 카드를 투명하게 만들거나 파괴해봅시다.
-        // Destroy(gameObject); 
-
-        // 💡 나중에 여기에 "BattleManager.Instance.PlayCard(this.cardData);" 같은 로직을 연결하면 됩니다.
-    }
-
     private void PlayThisCard(Transform fieldTransform)
     {
         Debug.Log("⚔️ 카드 사용! 필드로 쏙 들어갑니다!");
+
+        // 카드 인덱스 기억하기
+        originalSiblingIndex = transform.GetSiblingIndex();
 
         // 1. 카드의 부모를 필드(FieldArea)로 완전히 바꿔줍니다.
         transform.SetParent(fieldTransform);
@@ -186,10 +288,59 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
         isPlayed = true;
 
-        // (선택) 혹시 카드가 회전해 있다면 똑바로 세워줍니다.
-        rect.localRotation = Quaternion.identity;
+        CardUI cardUI = GetComponent<CardUI>();
+        if (cardUI != null)
+        {
+            cardUI.SetFaceDown(true); // true = 뒷면으로 덮기!
+        }
 
-        // (선택) 필드에 놓인 카드는 더 이상 조작 못하게 막기
-        // Destroy(this); // 이 코드를 주석 해제하면 필드에 나간 카드는 더 이상 드래그되지 않습니다.
+        MyHandManager handManager = FindAnyObjectByType<MyHandManager>();
+        if (handManager != null)
+        {
+            handManager.SetReadyButtonState(true);
+        }
+    }
+
+    //--------------------------------------
+    // 공개 , 폐기 버튼
+    //--------------------------------------
+
+    // '공개' 버튼을 눌렀을 때 실행됩니다.
+    public void OnClickReveal()
+    {
+        Debug.Log("👁️ 공개 버튼 클릭! 세트 필드로 이동합니다.");
+        SendToSetField();
+    }
+
+    // '폐기' 버튼을 눌렀을 때 실행됩니다.
+    public void OnClickDiscard()
+    {
+        Debug.Log("🗑️ 폐기 버튼 클릭! 세트 필드로 이동합니다.");
+        SendToSetField();
+    }
+
+    // 카드를 찾아내서 세트 필드로 쏘아 보내는 공통 함수
+    private void SendToSetField()
+    {
+        // 씬(Scene)에서 '세트 필드' 역할을 하는 오브젝트를 이름으로 찾습니다.
+        GameObject setField = GameObject.Find("set");
+
+        if (setField != null)
+        {
+            if (setField.transform.childCount >= 2) // 세트존 이라는 글자 때문에 2로 둠
+            {
+                Debug.LogWarning("⚠️ 이미 세트 존에 카드가 있습니다! 더 이상 놓을 수 없습니다.");
+
+                DeselectCard();
+                return;
+            }
+            // 아까 만들어둔 완벽한 이동 함수를 불러서 필드 중앙에 꽂아버립니다!
+            DeselectCard();
+            PlayThisCard(setField.transform);
+        }
+        else
+        {
+            Debug.LogError("🚨 세트 필드를 찾을 수 없습니다! 하이어라키 창의 오브젝트 이름을 확인해주세요.");
+        }
     }
 }

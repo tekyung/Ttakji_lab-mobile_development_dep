@@ -18,6 +18,9 @@ public class MyHandManager : MonoBehaviour
 
     private List<int> currentDrawPile = new List<int>();
 
+    [Header("UI Elements")]
+    public Button readyButton;
+
     private void Start()
     {
         LoadDeckFromJSON(); // 게임 시작하자마자 덱을 불러옵니다!
@@ -129,6 +132,15 @@ public class MyHandManager : MonoBehaviour
         else
         {
             handLayoutGroup.spacing = -20f;
+        }
+    }
+
+    // 카드가 세트되거나 회수될 때 이 함수를 부르게 합니다.
+    public void SetReadyButtonState(bool isReady)
+    {
+        if (readyButton != null)
+        {
+            readyButton.gameObject.SetActive(isReady);
         }
     }
 }
