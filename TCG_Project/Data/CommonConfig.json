@@ -46,11 +46,19 @@
     },
     {
         "Name": "starting_hands",
-        "Value": "3"
+        "Value": "5"
     },
     {
         "Name": "draw_per_turn",
         "Value": "1"
+    },
+    {
+        "Name": "life_tokens",
+        "Value": "5"
+    },
+    {
+        "Name": "resource_deck_count",
+        "Value": "15"
     }
   ]
 }

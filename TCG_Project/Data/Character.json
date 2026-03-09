@@ -1,0 +1,44 @@
+{
+  "Characters": [
+    {
+      "id": "ELLI-01",
+      "name": "엘리",
+      "characterId": "ELLIE",
+      "rarity": "C2",
+      "triggerPhase": "MainPhase",
+      "condition": "usedAttackCardThisTurn",
+      "description": "메인 페이즈에 엘리의 공격카드 사용했다면 발동 가능하다. 자신의 패에있는 공격 카드 1장을 스피드에 맞게 사용한다.",
+      "flavorText": "붉은 늑대, 출격합니다."
+    },
+    {
+      "id": "VERO-01",
+      "name": "베로니카",
+      "characterId": "VERONICA",
+      "rarity": "C2",
+      "triggerPhase": "DrawPhase",
+      "condition": "optionalDrawSkip",
+      "description": "드로우 페이즈에 드로우를 하지 않고 발동할 수 있다. 메인덱 맨 위 3장을 자신만 보고 원하는 카드 1장을 패로 가지고 온다. 그 후, 2장은 덱 맨 위 혹은 맨 아래로 원하는 순서로 되돌린다.",
+      "flavorText": "....."
+    },
+    {
+      "id": "DAIN-01",
+      "name": "다이나",
+      "characterId": "DAINA",
+      "rarity": "C2",
+      "triggerPhase": "OpenPhase",
+      "condition": "onAbandon",
+      "description": "오픈 페이즈에 카드를 공개하지 않고 폐기(Trash)하면 발동 할 수 있다. 잃은 체력(코인) 1을 회복한다.",
+      "flavorText": "숨지 말고 나와!"
+    },
+    {
+      "id": "SONI-01",
+      "name": "소니아",
+      "characterId": "SONIA",
+      "rarity": "C2",
+      "triggerPhase": "SetPhase",
+      "condition": "beforeSet",
+      "description": "세트 페이즈에 세트하기 전에 발동 할 수 있다. 자신의 폐기존에서 소니아 카드 1장을 고르고 자신의 패로 가지고 온다.",
+      "flavorText": "그게 가능하냐고? 보여줄게"
+    }
+  ]
+}

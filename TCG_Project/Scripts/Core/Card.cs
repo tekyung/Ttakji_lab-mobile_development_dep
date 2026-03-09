@@ -27,49 +27,29 @@ namespace TCG_Project.Scripts.Core
         // --- 유닛 스탯 ---
         public string Id { get; set; } // 여기가 대문자 'I'인지 확인
         public CardType Type { get; set; }
-        public int Power { get; set; }      // 공격력이자 체력
-        public int AttackCost { get; set; } // arts_cost (공격 시 필요한 코스트)
-        public int Prize { get; set; }      // 처치 시 줄 보상
         public string SkinResource { get; set; } // 이미지 경로
 
         // 이 리스트가 있어야 GameDataManager에서 Effects.Add(...)를 할 수 있습니다.
         public List<ICardEffect> Effects { get; set; } = new List<ICardEffect>();
 
-        // [전투용 상태 변수]
-        public bool IsExhausted { get; set; } = false; // 행동 완료(피로) 상태
+        // [룰북] 카드 스피드 (1=빠름, 2, 3=느림). 메인 페이즈 해결 순서를 결정.
+        public CardSpeed Speed { get; set; } = CardSpeed.None;
 
-        // 턴 시작 시 상태 초기화 (Player.cs에서 호출)
-        public void RefreshUnitState()
-        {
-            IsExhausted = false;
-        }
+        // [룰북] 카드 소속 캐릭터 ID (예: "ELLIE", "VERONICA", "DAINA", "SONIA")
+        public string CharacterId { get; set; }
+
+        // [룰북] 스택 카드 여부. true이면 효과 발동 후 폐기존 대신 스택존으로 이동.
+        public bool IsStack { get; set; } = false;
+        public bool IsBattlefield { get; set; } = false; // 전장 카드 여부 (전장 효과 처리용)
 
         // 불변 스탯(초기화용 원본 데이터)
         public int OriginalCost { get; set; } // 원래 코스트 기억
 
-        public int OriginalPower { get; set; } // 원래 유닛 파워
-        
         // 원래 주인 (게임 시작 시 덱의 주인, 불변)
         public Player OriginalOwner { get; set; }
 
         // 현재 컨트롤러 (누구 필드/패에 있는가, 가변)
         public Player Controller { get; set; }
-
-        // 팩토리에서 카드 생성 시 호출 (최초 1회)
-        public void InitializeData(int baseCost)
-        {
-            this.OriginalCost = baseCost;
-            this.Cost = baseCost;
-        }
-
-        public void InitializeUnitStats()
-        {
-            if (Type == CardType.Unit)
-            {
-                // 유닛 배치 시 초기화 로직
-                Power = OriginalPower;
-            }
-        }
 
         // 게임 시작 시 덱 세팅할 때 호출
         public void SetOwner(Player owner)
@@ -86,10 +66,6 @@ namespace TCG_Project.Scripts.Core
 
             // 2. 소유권 복구 (원래 주인에게 돌아감)
             this.Controller = this.OriginalOwner;
-
-            // 추후 공격력/체력/상태이상 초기화 로직이 여기에 추가됨
-            this.Power = this.OriginalPower;
-
         }
 
         public void AddEffect(ICardEffect effect)
@@ -97,99 +73,82 @@ namespace TCG_Project.Scripts.Core
             Effects.Add(effect);
         }
 
-        // 카드를 사용할 때 호출
         // 카드를 사용할 때 호출 (Action 콜백 추가)
-        public void Play(GameContext context, Action onPlayComplete = null)
+        public void Play(GameContext context, Action onPlayComplete = null, bool isStackTrigger = false)
         {
             // 새 카드를 발동할 때 컨텍스트 변수 초기화
             context.ClearVariables();
+            // 스택 트리거 여부에 따라 로그 분리
+            string triggerType = isStackTrigger ? "[스택 발동]" : "[오픈 즉발]"; // 로그 메시지에 트리거 유형 명시
+            EventManager.OnLogMessage?.Invoke($"--- {triggerType} {Name} / Cost:{Cost} / {Description} ---");
 
-            if (this.Type == CardType.Skill)
-            {
-                DebugHelper.LogSpell($"'{Name}' 발동 (보유 효과: {Effects.Count}개)");
-                EventManager.OnLogMessage?.Invoke($"--- {Name} / {Cost} / {Description} ---\n");
+            ExecuteEffectsSequentially(0, context, onPlayComplete, isStackTrigger);
+        }
 
-                // ★ foreach 대신 순차 실행기 호출
-                ExecuteEffectsSequentially(0, context, onPlayComplete);
-            }
-            else // 유닛일 경우: 소환 시 효과 사용
-            {
-                EventManager.OnLogMessage?.Invoke($"--- {Name} / {Power} / 효과 {Effects.Count}개 ---\n");
+        // 카드를 사용할 때 호출 (Action 콜백 추가)
+        public void Play(GameContext context, Action onPlayComplete = null)
+        {
+            bool isStackTrigger = false; // 스택 트리거 여부를 명시적으로 false로 설정
+            // 새 카드를 발동할 때 컨텍스트 변수 초기화
+            context.ClearVariables();
+            // 스택 트리거 여부에 따라 로그 분리
+            string triggerType = "[오픈 즉발]"; // 로그 메시지에 트리거 유형 명시
+            EventManager.OnLogMessage?.Invoke($"--- {triggerType} {Name} / Cost:{Cost} / {Description} ---");
 
-                if (Effects.Count > 0)
-                {
-                    bool canUseEffect = true;
-                    if (!string.IsNullOrEmpty(EffectCondition) && EffectCondition.Trim().ToLower() != "none")
-                    {
-                        canUseEffect = Systems.ConditionEvaluator.Evaluate(EffectCondition, context);
-                    }
-
-                    if (canUseEffect)
-                    {
-                        EventManager.OnLogMessage?.Invoke($"    {Name}의 소환 시 효과 발동");
-                        EventManager.OnLogMessage?.Invoke($"    {Name} : {Description}");
-
-                        // ★ foreach 대신 순차 실행기 호출
-                        ExecuteEffectsSequentially(0, context, onPlayComplete);
-                    }
-                    else
-                    {
-                        EventManager.OnLogMessage?.Invoke($"    (조건 미달로 {Name}의 효과는 발동하지 않습니다.)");
-                        onPlayComplete?.Invoke(); // 효과 발동 안 해도 완료 보고는 필수
-                    }
-                }
-                else
-                {
-                    onPlayComplete?.Invoke(); // 효과가 아예 없는 유닛도 완료 보고 필수
-                }
-            }
+            ExecuteEffectsSequentially(0, context, onPlayComplete, isStackTrigger);
         }
 
         // ★ 효과를 1번부터 순서대로 끝날 때까지 기다리며 실행하는 릴레이 함수
-        private void ExecuteEffectsSequentially(int index, GameContext context, Action onComplete)
+        private void ExecuteEffectsSequentially(int index, GameContext context, Action onComplete, bool isStackTrigger)
         {
-            // 모든 효과를 다 실행했다면 최종 완료 콜백 호출
+            // 1. 종료 조건 (리스트 범위를 벗어났는지) 검사를 ★가장 먼저★ 수행해야 합니다!
             if (index >= Effects.Count)
             {
                 onComplete?.Invoke();
                 return;
             }
 
-            // 현재 순서의 효과를 실행하고, 그 효과가 "나 끝났어!"라고 알려주면 다음 인덱스(+1)를 실행
-            Effects[index].Execute(context, () =>
+            var currentEffect = Effects[index];
+
+            // 2. "그 후" 시맨틱 검사 (이전 효과가 실패했는지 확인)
+            if (index > 0 && currentEffect.RequirePreviousSuccess && !context.LastEffectSucceeded)
             {
-                ExecuteEffectsSequentially(index + 1, context, onComplete);
+                EventManager.OnLogMessage?.Invoke($"    🚫 [효과 중단] 이전 조건을 만족하지 못해 이후 효과가 취소됩니다.");
+                onComplete?.Invoke(); // 취소 후 종료
+                return;
+            }
+
+            // 3. 타이밍 필터링: 스택 카드의 경우 스택용 효과와 오픈 즉발용 효과를 구분
+            if (this.IsStack)
+            {
+                if (currentEffect.IsStackAction != isStackTrigger)
+                {
+                    // 타이밍이 맞지 않으면 이 효과를 스킵하고 다음 인덱스로 즉시 넘어감
+                    ExecuteEffectsSequentially(index + 1, context, onComplete, isStackTrigger);
+                    return;
+                }
+            }
+
+            // 4. 현재 이펙트 실행 및 콜백 체인 연결
+            currentEffect.Execute(context, () =>
+            {
+                ExecuteEffectsSequentially(index + 1, context, onComplete, isStackTrigger);
             });
         }
 
         // [조건 판별] 이 카드를 지금 쓸 수 있는가?
         public bool IsPlayable(GameContext context)
         {
-            // 1. 마나 부족 체크
-            if (Controller.Mana < this.Cost) return false;
+            // 자원존 기반 코스트 체크
+            if (Controller != null && !Controller.CanAfford(this.Cost)) return false;
 
-            // 2. 유닛 소환 공간 체크
-            if (this.Type == CardType.Unit)
-            {
-                // [나중에 구현] 제물 소환(Tribute Summon) 여부 확인
-                // 예: Level 5 이상이라 제물이 필요하다면, 필드가 꽉 차 있어도 
-                // 제물을 바치고 그 자리에 들어갈 수 있으므로 공간 체크를 건너뜀(true).
-                bool isTributeSummon = false; // (임시 플래그)
-
-                if (!isTributeSummon)
-                {
-                    // 일반 소환이면 빈 자리가 있어야 함
-                    if (!Controller.HasSpaceInZone(ZoneType.Field)) return false;
-                }
-            }
-
-            // 2. 커스텀 발동 조건 확인
+            // 커스텀 발동 조건 확인
             if (!string.IsNullOrEmpty(PlayCondition))
             {
                 return Systems.ConditionEvaluator.Evaluate(PlayCondition, context);
             }
 
-            return true; // 조건이 없으면 마나만 되면 OK
+            return true;
         }
 
         // 깊은 복사 메서드
@@ -201,21 +160,18 @@ namespace TCG_Project.Scripts.Core
                 DataId = this.DataId,
                 Name = this.Name,
                 Cost = this.Cost,
-                Power = this.Power,
-                PlayCondition = this.PlayCondition,
-                EffectCondition = this.EffectCondition,
                 Description = this.Description,
                 Id = this.Id,
                 OriginalCost = this.OriginalCost,
-                OriginalPower = this.OriginalPower, // ★ 이거 누락 조심!
                 Type = this.Type,
-                AttackCost = this.AttackCost,
-                Prize = this.Prize,
+                Speed = this.Speed,
                 SkinResource = this.SkinResource,
-                MaxDeckCount = this.MaxDeckCount
+                CharacterId = this.CharacterId,
+                IsStack = this.IsStack,
+                IsBattlefield = this.IsBattlefield
             };
 
-            // ★ [핵심 변경] 효과 리스트 깊은 복사(Deep Copy) 적용
+            // ★ 효과 리스트 깊은 복사(Deep Copy) 적용
             foreach (var effect in this.Effects)
             {
                 // 다형성을 활용하여 각각의 효과가 스스로를 복제하게 만듦
@@ -241,22 +197,23 @@ namespace TCG_Project.Scripts.Core
         }
 
         /// <summary>
-        /// 카드의 파워(체력/공격력)를 변경하는 유일한 파이프라인 메서드입니다.
-        /// 전투 데미지, 스펠 버프, 턴 시작 회복 등 모든 변화는 여기를 거쳐야 합니다.
+        /// 카드의 코스트, 스피드를 변경하는 유일한 파이프라인 메서드입니다.
         /// </summary>
         /// <param name="amount">변화량 (+는 회복/버프, -는 데미지/디버프)</param>
         /// <param name="reason">변화 원인 (로그 및 디버깅 용도)</param>
-        public void ModifyPower(int amount, string reason = "System")
+        public void ModifyCost(int amount, string reason = "System")
         {
             if (amount == 0) return;
-
-            this.Power += amount;
-
+            this.Cost += amount;
             // 중앙 집중화된 이벤트 송출 (여기서 UI 업데이트 이벤트도 쏠 수 있음)
             // {amount:+#;-#;0} 는 양수일 때 +, 음수일 때 - 기호를 자동으로 붙여주는 C# 포맷팅입니다.
-            EventManager.OnLogMessage?.Invoke($"    ✨ [스탯 변경] {this.Name}의 Power {amount:+#;-#;0} 변동 -> {this.Power}) - 원인: {reason}");
-
-            EventManager.OnCardPowerChanged?.Invoke(this, amount);
+            EventManager.OnLogMessage?.Invoke($"    ✨ [스탯 변경] {this.Name}의 Cost {amount:+#;-#;0} 변동 -> {this.Cost}) - 원인: {reason}");
+        }
+        public void ModifySpeed(int amount, string reason = "System")
+        {
+            if (amount == 0) return;
+            this.Speed -= amount;
+            EventManager.OnLogMessage?.Invoke($"    ✨ [스탯 변경] {this.Name}의 Speed {amount:+#;-#;0} 변동 -> {this.Speed}) - 원인: {reason}");
         }
     }
 }

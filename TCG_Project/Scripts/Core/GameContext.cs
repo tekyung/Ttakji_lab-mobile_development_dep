@@ -20,8 +20,27 @@ namespace TCG_Project.Scripts.Core
             return Players.Find(p => p != me);
         }
 
+        // 현재 진행 중인 페이즈 (UI 상태 표시 및 효과 발동 타이밍 판단용)
+        public GamePhase CurrentPhase { get; set; } = GamePhase.TurnStart;
+
         // ★ 게임 종료 여부를 판단하는 락(Lock)
         public bool IsGameOver { get; set; } = false;
+
+        /// <summary>
+        /// Phase 18: "그 후" 시맨틱 — 선행 효과 실패 시 후속 효과 불발.
+        /// CompositeEffect가 Step N 실행 전에 검사. Effect가 실패 시 false로 설정.
+        /// </summary>
+        public bool LastEffectSucceeded { get; set; } = true;
+
+        // 각 플레이어(Name 또는 ID 기준)의 이번 턴 오픈 페이즈 결과 기록
+        public Dictionary<string, PlayerOpenPhaseState> OpenPhaseStates { get; set; }
+            = new Dictionary<string, PlayerOpenPhaseState>();
+
+        // 오픈 페이즈 시작 시 이전 턴 기록 초기화
+        public void ClearOpenPhaseStates()
+        {
+            OpenPhaseStates.Clear();
+        }
 
         // 변수 저장소 (Name -> Integer)
         private Dictionary<string, int> variables = new Dictionary<string, int>();
@@ -65,7 +84,24 @@ namespace TCG_Project.Scripts.Core
             variables.Clear();
         }
 
+        // 상대방이 특정 타입의 카드를 공개했는지 확인하는 유틸리티
+        public bool DidOpponentRevealCardType(Player me, CardType targetType)
+        {
+            Player opponent = GetOpponent(me);
+            if (opponent == null || !OpenPhaseStates.ContainsKey(opponent.Name))
+                return false;
+
+            var state = OpenPhaseStates[opponent.Name];
+            return state.HasOpened && state.RevealedCard != null && state.RevealedCard.Type == targetType;
+        }
+
         // 읽기 전용 접근자 (Evaluator용)
         public IReadOnlyDictionary<string, int> Variables => variables;
+    }
+    // 오픈 페이즈에서의 플레이어 행동 기록용 클래스
+    public class PlayerOpenPhaseState
+    {
+        public bool HasOpened { get; set; } = false; // true: 공개, false: 폐기
+        public Card RevealedCard { get; set; } = null; // 공개한 카드 (폐기했으면 null)
     }
 }

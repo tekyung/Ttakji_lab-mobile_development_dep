@@ -7,7 +7,7 @@ using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Conditions
 {
-    // 플레이어의 특정 스탯(Mana, PrizePoints 등)을 비교하는 범용 조건기
+    // 플레이어의 특정 스탯(PrizePoints, HandCount 등)을 비교하는 범용 조건기
     public class ComparePlayerStatCondition : ICardCondition
     {
         private string targetType; // "Self" or "Opponent"
@@ -21,8 +21,7 @@ namespace TCG_Project.Scripts.Conditions
             targetType = parameters.ContainsKey("target") ? parameters["target"].ToString() : "Self";
             op = parameters.ContainsKey("operator") ? parameters["operator"].ToString() : "Equal";
 
-            // 어떤 스탯을 비교할지 결정 (기본값은 Mana로 설정하여 크래시 방지)
-            statName = parameters.ContainsKey("stat") ? parameters["stat"].ToString() : "Mana";
+            statName = parameters.ContainsKey("stat") ? parameters["stat"].ToString() : "HandCount";
 
             valueParam = parameters.ContainsKey("value") ? parameters["value"] : 0;
         }
@@ -58,15 +57,8 @@ namespace TCG_Project.Scripts.Conditions
         {
             switch (stat)
             {
-                case "Mana": return player.Mana;
-                case "PrizePoints": return player.PrizePoints;
                 case "DeckCount": return player.Deck.Count;
                 case "HandCount": return player.Hand.Count;
-                case "FieldCount":
-                    int count = 0;
-                    foreach (var card in player.Field)
-                        if (card != null) count++;
-                    return count;
                 case "GraveyardCount": return player.Graveyard.Count;
 
                 default:

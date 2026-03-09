@@ -6,16 +6,16 @@ namespace TCG_Project.Scripts.Systems
 {
     public static class TargetEvaluator
     {
-        // Å¸°Ù ¹®ÀÚ¿­À» ºĞ¼®ÇØ ´ë»ó ÇÃ·¹ÀÌ¾î ¸®½ºÆ®¸¦ ¹İÈ¯
+        // íƒ€ê²Ÿ ë¬¸ìì—´ì„ ë¶„ì„í•´ ëŒ€ìƒ í”Œë ˆì´ì–´ ë¦¬ìŠ¤íŠ¸ë¥¼ ë°˜í™˜
         public static List<Player> Evaluate(object targetParam, GameContext context)
         {
             var targets = new List<Player>();
-            string key = targetParam.ToString().ToLower(); // ´ë¼Ò¹®ÀÚ ¹«½Ã
+            string key = targetParam.ToString().ToLower(); // ëŒ€ì†Œë¬¸ì ë¬´ì‹œ
 
             switch (key)
             {
                 case "self":
-                case "activeplayer": // ½ºÅ©¸³Æ® ½ºÅ¸ÀÏ Áö¿ø
+                case "activeplayer": // ìŠ¤í¬ë¦½íŠ¸ ìŠ¤íƒ€ì¼ ì§€ì›
                     targets.Add(context.ActivePlayer);
                     break;
 
@@ -25,13 +25,13 @@ namespace TCG_Project.Scripts.Systems
 
                 case "all":
                 case "both":
-                    // GameContext¿¡ Players ¸®½ºÆ®°¡ ÀÖ´Ù°í °¡Á¤
+                    // GameContextì— Players ë¦¬ìŠ¤íŠ¸ê°€ ìˆë‹¤ê³  ê°€ì •
                     if (context.Players != null)
                         targets.AddRange(context.Players);
                     break;
 
                 default:
-                    Console.WriteLine($"[Warning] ¾Ë ¼ö ¾ø´Â Å¸°Ù: {key}");
+                    Console.WriteLine($"[Warning] ì•Œ ìˆ˜ ì—†ëŠ” íƒ€ê²Ÿ: {key}");
                     break;
             }
 

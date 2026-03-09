@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
-using TCG_Project.Scripts.Managers; // ¡Ú EventManager¸¦ ¾²±â À§ÇØ Ãß°¡
+using TCG_Project.Scripts.Managers; // â˜… EventManagerë¥¼ ì“°ê¸° ìœ„í•´ ì¶”ê°€
 
 namespace TCG_Project.Scripts.Systems
 {
-    // JSON ±¸Á¶¿¡ ¸ÂÃá ·¡ÆÛ Å¬·¡½º
+    // JSON êµ¬ì¡°ì— ë§ì¶˜ ë˜í¼ í´ë˜ìŠ¤
     [Serializable]
     public class ConfigItem
     {
@@ -22,14 +22,14 @@ namespace TCG_Project.Scripts.Systems
 
     public static class GameRules
     {
-        // ÆÄ½ÌµÈ µ¥ÀÌÅÍ¸¦ ´ãÀ» µñ¼Å³Ê¸®
+        // íŒŒì‹±ëœ ë°ì´í„°ë¥¼ ë‹´ì„ ë”•ì…”ë„ˆë¦¬
         private static Dictionary<string, int> _configDict = new Dictionary<string, int>();
 
         public static void LoadRules(string jsonPath)
         {
             if (!File.Exists(jsonPath))
             {
-                EventManager.OnLogMessage?.Invoke($"[Error] ·ê ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù: {jsonPath}");
+                EventManager.OnLogMessage?.Invoke($"[Error] ë£° íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤: {jsonPath}");
                 return;
             }
 
@@ -41,23 +41,23 @@ namespace TCG_Project.Scripts.Systems
             {
                 foreach (var item in wrapper.CommonConfig)
                 {
-                    // Value°¡ ¹®ÀÚ¿­ÀÌ¹Ç·Î int·Î º¯È¯ÇØ¼­ ÀúÀå
+                    // Valueê°€ ë¬¸ìì—´ì´ë¯€ë¡œ intë¡œ ë³€í™˜í•´ì„œ ì €ì¥
                     if (int.TryParse(item.Value, out int val))
                     {
                         _configDict[item.Name] = val;
                     }
                 }
             }
-            EventManager.OnLogMessage?.Invoke($"[System] °ÔÀÓ ·ê µ¥ÀÌÅÍ {_configDict.Count}°³ ·Îµå ¿Ï·á.");
+            EventManager.OnLogMessage?.Invoke($"[System] ê²Œì„ ë£° ë°ì´í„° {_configDict.Count}ê°œ ë¡œë“œ ì™„ë£Œ.");
         }
 
-        // ¾ÈÀüÇÏ°Ô °ªÀ» ²¨³»¿À´Â ³»ºÎ ÇïÆÛ (°ªÀÌ ¾øÀ¸¸é ±âº»°ª ¹İÈ¯)
+        // ì•ˆì „í•˜ê²Œ ê°’ì„ êº¼ë‚´ì˜¤ëŠ” ë‚´ë¶€ í—¬í¼ (ê°’ì´ ì—†ìœ¼ë©´ ê¸°ë³¸ê°’ ë°˜í™˜)
         private static int GetValue(string key, int defaultValue = 0)
         {
             return _configDict.TryGetValue(key, out int val) ? val : defaultValue;
         }
 
-        // === ¾îµğ¼­µç Á¢±Ù °¡´ÉÇÑ ÇÁ·ÎÆÛÆ¼µé ===
+        // === ì–´ë””ì„œë“  ì ‘ê·¼ ê°€ëŠ¥í•œ í”„ë¡œí¼í‹°ë“¤ ===
         public static int FirstPlayerFirstTurnEnergy => GetValue("first_player_first_turn_having_energy", 0);
         public static int SecondPlayerFirstTurnEnergy => GetValue("second_player_first_turn_having_energy", 1);
         public static int BasicEnergy => GetValue("basic_having_energy", 3);
@@ -73,7 +73,11 @@ namespace TCG_Project.Scripts.Systems
 
         public static int RoomSessionTime => GetValue("room_session_time", 120000);
         public static int ChooseWaitTime => GetValue("choose_wait_time", 20000);
-        public static int StartingHands => GetValue("starting_hands", 4);
+        public static int StartingHands => GetValue("starting_hands", 5);
         public static int DrawPerTurn => GetValue("draw_per_turn", 1);
+
+        // --- ë£°ë¶ ì‹ ê·œ ë£° ---
+        public static int LifeTokens => GetValue("life_tokens", 5);
+        public static int ResourceDeckCount => GetValue("resource_deck_count", 15);
     }
 }

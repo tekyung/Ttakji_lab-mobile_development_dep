@@ -1,35 +1,53 @@
-﻿// Scripts/Systems/HumanBrain.cs 신규 생성
-using System;
+// Scripts/Systems/HumanBrain.cs — Phase 8 구현: 6페이즈 Human 입력 위임
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
-using TCG_Project.Scripts.Managers;
 
 namespace TCG_Project.Scripts.Systems
 {
+    /// <summary>
+    /// Human 플레이어의 행동 결정 구현체.
+    ///
+    /// Unity BattleManager에서는 Human 플레이어의 결정을 이 클래스를 통해 직접 호출하지 않고,
+    /// BattleManager가 player.Type == UserType.Human을 확인한 뒤
+    /// EventManager의 OnRequire* 이벤트를 발생시키고 WaitUntil로 응답을 기다린다.
+    ///
+    /// 이 클래스의 IPlayerBrain 구현은 비상용 폴백(콘솔 테스트 등)에만 사용된다.
+    /// </summary>
     public class HumanBrain : IPlayerBrain
     {
-        private Player me;
-        public HumanBrain(Player player) { me = player; }
+        private readonly Player _me;
+        public HumanBrain(Player player) { _me = player; }
 
-        public void ExecuteMainPhase(GameContext context, Player enemy, Action onPhaseFinished)
-        {
-            // UI에 신호 전송: "내 턴이다! 카드 클릭 가능하게 활성화하고, 완료 버튼 열어줘!"
-            // 유저가 UI에서 [턴 종료] 또는 [배틀 돌입] 버튼을 누르면 UI가 onPhaseFinished를 실행해줄 것입니다.
-            EventManager.OnRequireMainPhaseAction?.Invoke(me, context, onPhaseFinished);
-        }
+        // ─── 6페이즈 결정 (BattleManager에서 직접 호출되지 않음) ─────────────
 
-        public void ExecuteBattlePhase(GameContext context, Player enemy, Action onPhaseFinished)
-        {
-            // UI에 신호 전송: "내 유닛들 클릭해서 적 유닛 드래그로 타겟팅하게 해줘!"
-            EventManager.OnRequireBattlePhaseAction?.Invoke(me, context, onPhaseFinished);
-        }
+        /// <summary>
+        /// 세트 카드 선택. Unity에서는 BattleManager가 OnRequireSetPhaseAction 이벤트로 처리한다.
+        /// 폴백: 패의 첫 번째 카드 반환.
+        /// </summary>
+        public Card ChooseSetCard(Player me, GameContext ctx)
+            => me.Hand.Count > 0 ? me.Hand[0] : null;
 
-        public void SelectTarget(List<Target> candidates, int count, Action<List<Target>> onTargetSelected)
-        {
-            // 스펠(파이어볼 등)을 썼을 때 타겟을 고르는 상황
-            // UI에 신호 전송: "candidates 애들 테두리 빨갛게 빛내고, 유저가 클릭하면 onTargetSelected 실행해줘!"
-            EventManager.OnRequireTargetSelection?.Invoke(candidates, count, onTargetSelected);
-        }
+        /// <summary>
+        /// 오픈/폐기 결정. Unity에서는 BattleManager가 OnRequireOpenPhaseAction 이벤트로 처리한다.
+        /// 폴백: 항상 폐기 (안전한 기본값).
+        /// </summary>
+        public OpenPhaseChoice ChooseOpenOrAbandon(Player me, Card setCard, int effectiveCost, GameContext ctx)
+            => OpenPhaseChoice.Abandon;
+
+        /// <summary>
+        /// 스택 발동 결정. Unity에서는 BattleManager가 OnRequireStackResponse 이벤트로 처리한다.
+        /// 폴백: 발동하지 않음.
+        /// </summary>
+        public bool ChooseStackActivation(Player me, Card stackCard, Card opponentCard, GameContext ctx)
+            => false;
+
+        /// <summary>
+        /// 존에서 카드 선택. Unity에서는 BattleManager가 OnRequireCardChoice 이벤트로 처리한다.
+        /// 폴백: 빈 목록 반환.
+        /// </summary>
+        public List<Card> ChooseCardsFromZone(Player me, ZoneType zone, int count, string filter, GameContext ctx)
+            => new List<Card>();
+
     }
 }
