@@ -24,6 +24,9 @@ public class CardUI : MonoBehaviour
 
     private bool isDeckMode = false; //덱 리스트인지 아닌지
 
+    [Header("Card Back")]
+    public GameObject cardBackObj;
+
     // 매니저가 이 함수를 호출해서 카드를 설정해줍니다.
     public void Setup(int id, int currentCount, int maxCount, DeckBuilderManager manager, bool isDeck)
     {
@@ -202,5 +205,15 @@ public class CardUI : MonoBehaviour
         if (plusButton) plusButton.gameObject.SetActive(false);
         if (minusButton) minusButton.gameObject.SetActive(false);
         if (removeAllButton) removeAllButton.gameObject.SetActive(false);
+    }
+
+    // 카드 뒤집는 함수
+    public void SetFaceDown(bool isFaceDown)
+    {
+        if (cardBackObj != null)
+        {
+            // true면 뒷면 이불을 덮고, false면 이불을 치워서 앞면을 보여줍니다!
+            cardBackObj.SetActive(isFaceDown);
+        }
     }
 }
