@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -10,306 +11,513 @@ namespace TCG_Project.Scripts.Systems
 {
     public class GameDataManager
     {
-        // 1. Raw Data Å¬·¡½º (³»ºÎ µ¥ÀÌÅÍ¿ë)
-        private class RawCard 
-        { 
-            public int id; 
-            public string name; 
-            public string type; 
-            public string skin_res;
-            public int max_deck_count;
-        }
-
-        private class RawUnit
-        {
-            public int id; public int prize; public int arts_cost; public int power;
-            public int on_play_effect_id;
-            public string desc;
-            public string on_play_condition_type;
-            public int on_play_condition_value1;
-        }
-
-        private class RawSkill
-        {
-            public int id; public int skill_cost;
-            public int after_use_effect_id;
-            public string desc;
-            public string use_condition_type;
-            public int use_condition_value1;
-        }
-
-        private class RawEffect
-        {
-            public int id;
-            public string effect_function_type;
-            public string effect_target_type;
-            public string effect_target_condition;
-            public int effect_target_condition_value1;
-            public int effect_function_value1;
-            public int effect_function_value2;
-
-            // ¡Ú ±âÈ¹¿¡¼­ Ãß°¡ÇÒ ÇÊµå: "Manual", "HighestPower", "Random" µî
-            public string target_mode;
-        }
-
-        // JSON ±¸Á¶¿¡ ¸ÂÃá ·¡ÆÛ Å¬·¡½º (»óÀÚ ¿ªÇÒ)
-        private class CardDataWrapper { public List<RawCard> Card; }
-        private class UnitDataWrapper { public List<RawUnit> CardUnit; }
-        private class SkillDataWrapper { public List<RawSkill> CardSkill; }
-        private class EffectDataWrapper { public List<RawEffect> CardEffect; }
-
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
 
         public void LoadAllData(string basePath)
         {
-            // 1. ·¡ÆÛ Å¬·¡½º·Î ¸ÕÀú ÀĞ¾îµéÀÌ±â (Object -> Wrapper)
-            var cardsWrapper = ReadJson<CardDataWrapper>(basePath + "/Card.json");
-            var unitsWrapper = ReadJson<UnitDataWrapper>(basePath + "/CardUnit.json");
-            var skillsWrapper = ReadJson<SkillDataWrapper>(basePath + "/CardSkill.json");
-            var effectsWrapper = ReadJson<EffectDataWrapper>(basePath + "/CardEffect.json");
+            // Card.json, CardUnit.json ë“± êµ¬ íŒŒì¼ ì œê±°ë¨.
+        }
 
-            // 2. ·¡ÆÛ ¾È¿¡¼­ ½ÇÁ¦ ¸®½ºÆ® ²¨³»±â (null Ã¼Å© Æ÷ÇÔ)
-            var cardsData = cardsWrapper?.Card ?? new List<RawCard>();
-            var unitsData = unitsWrapper?.CardUnit ?? new List<RawUnit>();
-            var skillsData = skillsWrapper?.CardSkill ?? new List<RawSkill>();
-            var effectsData = effectsWrapper?.CardEffect ?? new List<RawEffect>();
+        // â”€â”€â”€ ë£°ë¶ ì¹´ë“œ ë¡œë” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-            var effectLookup = effectsData.ToDictionary(e => e.id);
-            var unitLookup = unitsData.ToDictionary(u => u.id);
-            var skillLookup = skillsData.ToDictionary(s => s.id);
+        private class RawRulebookEffect
+        {
+            public string type;
+            public int amount;
+            public string duration;
+            public int count;
+            public string mode;
+            public string filter;
+            public int times;
+            public string buffType;
+            public int costReduction;
+            public int reduction;
+            // â˜… ì‹ ê·œ ì¶”ê°€: JSONì˜ "isStackAction": true/false ë¥¼ ë°›ì•„ì˜¬ ë³€ìˆ˜
+            // (JSONì— ì—†ì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•´ ê¸°ë³¸ê°’ì„ ë„ëŸ¬ë¸”(bool?)ë¡œ í•˜ê±°ë‚˜, ê¸°ë³¸ê°’ì„ falseë¡œ ë‘¡ë‹ˆë‹¤.)
+            public bool isStackAction;
 
-            foreach (var raw in cardsData)
+            // (ì´ì „ íŒ¨ì¹˜ì—ì„œ ë§ì”€í•˜ì‹  "ê·¸ í›„" ì‹œë§¨í‹± í”Œë˜ê·¸ë„ ì—¬ê¸°ì„œ ë°›ì•„ì•¼ í•©ë‹ˆë‹¤!)
+            public bool requirePreviousSuccess;
+        }
+
+        private class RawRulebookCard
+        {
+            public string id;
+            public string characterId;
+            public string name;
+            public string type;
+            public int speed;
+            public int cost;
+            public string rarity;
+            public bool isStack;
+            public bool isBattlefield;
+            public string description;
+            public List<RawRulebookEffect> effects;
+        }
+
+        // â”€â”€â”€ ìºë¦­í„° ì¹´ë“œ ë¡œë” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        private class RawCharacterCard
+        {
+            public string id;
+            public string name;
+            public string characterId;
+            public string rarity;
+            public string triggerPhase;
+            public string condition;
+            public string description;
+            public string flavorText;
+        }
+
+        private class CharacterCardWrapper
+        {
+            public List<RawCharacterCard> Characters;
+        }
+
+        private Dictionary<string, RawCharacterCard> _characterCards
+            = new Dictionary<string, RawCharacterCard>();
+
+        /// <summary>Data/Character.json ì„ ì½ì–´ ìºë¦­í„° ì¹´ë“œ ë°ì´í„°ë¥¼ ë¡œë“œí•œë‹¤.</summary>
+        public void LoadCharacterCards(string basePath)
+        {
+            var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
+            if (wrapper?.Characters == null)
             {
-                Card newCard = new Card
+                Console.WriteLine("[System] Character.json ì—†ìŒ, ìºë¦­í„° ì¹´ë“œ ë¡œë“œ ìƒëµ.");
+                return;
+            }
+
+            foreach (var raw in wrapper.Characters)
+                _characterCards[raw.characterId] = raw;
+
+            Console.WriteLine($"[System] ìºë¦­í„° ì¹´ë“œ {_characterCards.Count}ì¢… ë¡œë“œ ì™„ë£Œ.");
+        }
+
+        private class RawResourceCard
+        {
+            public string id;
+            public string name;
+            public string type;
+            public int speed;
+            public int cost;
+            public string description;
+        }
+
+        private class ResourceCardWrapper
+        {
+            public List<RawResourceCard> ResourceCards;
+        }
+
+        /// Data/ResourceCards.json ì„ ì½ì–´ AllCardsì— ì¶”ê°€í•œë‹¤.
+        public void LoadResourceCards(string basePath)
+        {
+            var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
+            if (wrapper?.ResourceCards == null)
+            {
+                Console.WriteLine("[System] ResourceCards.json ì—†ìŒ, ìì› ì¹´ë“œ ë¡œë“œ ìƒëµ.");
+                return;
+            }
+
+            foreach (var raw in wrapper.ResourceCards)
+            {
+                CardSpeed speed = raw.speed switch
                 {
-                    Id = raw.id.ToString(),
-                    DataId = raw.id.ToString(), // º¹Á¦ ½Ã ¿øº» È®ÀÎ¿ëÀ¸·Î DataIdµµ ¸í½Ã ±ÇÀå
-                    Name = raw.name,
-                    SkinResource = raw.skin_res,
-                    MaxDeckCount = raw.max_deck_count
+                    1 => CardSpeed.Speed1,
+                    2 => CardSpeed.Speed2,
+                    3 => CardSpeed.Speed3,
+                    _ => CardSpeed.None
                 };
 
-                // [À¯´Ö Ã³¸®]
-                if (raw.type == "Unit" && unitLookup.ContainsKey(raw.id))
+                if (!Enum.TryParse<CardType>(raw.type, out CardType cardType)) continue;
+
+                var card = new Card
                 {
-                    var u = unitLookup[raw.id];
-                    newCard.Type = CardType.Unit;
-                    newCard.Power = u.power;
-                    newCard.OriginalPower = u.power; // ¿øº» ½ºÅÈ ±â·Ï ÇÊ¼ö
-                    newCard.Prize = u.prize;
-                    newCard.AttackCost = u.arts_cost;
-                    newCard.Cost = 0;
-                    newCard.OriginalCost = 0;
-                    newCard.Description = u.desc;
+                    Id = raw.id,
+                    DataId = raw.id,
+                    Name = raw.name,
+                    Type = cardType,
+                    Speed = speed,
+                    Cost = raw.cost,
+                    OriginalCost = raw.cost,
+                    Description = raw.description ?? "",
+                };
+                AllCards[card.Id] = card;
+            }
+            Console.WriteLine($"[System] ìì› ì¹´ë“œ {wrapper.ResourceCards.Count}ì¢… ë¡œë“œ ì™„ë£Œ.");
+        }
 
-                    // 1. À¯´Ö ¼ÒÈ¯ Á¶°Ç (PlayCondition) ¸ÊÇÎ
-                    // ÀÌÁ¦ CardUnit.jsonÀÇ on_play_condition_typeÀº Ä«µå¸¦ "³»±â À§ÇÑ" Á¶°ÇÀÌ µË´Ï´Ù.
-                    if (!string.IsNullOrEmpty(u.on_play_condition_type) && u.on_play_condition_type != "None")
-                    {
-                        newCard.PlayCondition = GetConditionFormula(u.on_play_condition_type, u.on_play_condition_value1);
-                    }
+        private class RulebookCardWrapper
+        {
+            public List<RawRulebookCard> RulebookCards;
+        }
 
-                    // 2. ¼ÒÈ¯ ½Ã È¿°ú ¹ßµ¿ Á¶°Ç (EffectCondition) ÀÚµ¿ Ãß·Ğ
-                    if (u.on_play_effect_id != -1 && effectLookup.ContainsKey(u.on_play_effect_id))
-                    {
-                        var rawEffect = effectLookup[u.on_play_effect_id];
+        /// <summary>Data/RulebookCards.json ì„ ì½ì–´ AllCardsì— ì¶”ê°€í•œë‹¤.</summary>
+        public void LoadRulebookCards(string basePath)
+        {
+            var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
+            if (wrapper?.RulebookCards == null)
+            {
+                Console.WriteLine("[System] RulebookCards.json ì—†ìŒ, ë£°ë¶ ì¹´ë“œ ë¡œë“œ ìƒëµ.");
+                return;
+            }
 
-                        // CardEffect.jsonÀÇ function_typeÀ» º¸°í È¿°ú ¹ßµ¿ Á¶°ÇÀ» µµÃâÇÕ´Ï´Ù.
-                        newCard.EffectCondition = DeriveEffectCondition(rawEffect);
+            int loaded = 0;
+            foreach (var raw in wrapper.RulebookCards)
+            {
+                CardSpeed speed = raw.speed switch
+                {
+                    1 => CardSpeed.Speed1,
+                    2 => CardSpeed.Speed2,
+                    3 => CardSpeed.Speed3,
+                    _ => CardSpeed.None
+                };
 
-                        var effectObj = ConvertEffect(rawEffect, null); // extraParams Á¦°Å (Card ·ÎÁ÷¿¡¼­ Á¦¾î)
-                        if (effectObj != null) newCard.Effects.Add(effectObj);
-                    }
+                if (!Enum.TryParse<CardType>(raw.type, out CardType cardType)) continue;
+
+                var card = new Card
+                {
+                    Id = raw.id,
+                    DataId = raw.id,
+                    Name = raw.name,
+                    Type = cardType,
+                    Speed = speed,
+                    Cost = raw.cost,
+                    OriginalCost = raw.cost,
+                    Description = raw.description,
+                    CharacterId = raw.characterId,
+                    IsStack = raw.isStack,
+                    IsBattlefield = raw.isBattlefield,
+                };
+
+                foreach (var eff in raw.effects ?? new List<RawRulebookEffect>())
+                {
+                    var effect = CreateKeywordEffect(eff);
+                    if (effect != null) card.Effects.Add(effect);
                 }
 
-                // [½ºÅ³ Ã³¸®]
-                else if (raw.type == "Skill" && skillLookup.ContainsKey(raw.id))
-                {
-                    var s = skillLookup[raw.id];
-                    newCard.Type = CardType.Skill;
-                    newCard.Cost = s.skill_cost;
-                    newCard.OriginalCost = s.skill_cost;
-                    newCard.Description = s.desc;
+                AllCards[card.Id] = card;
+                loaded++;
+            }
+            Console.WriteLine($"[System] ë£°ë¶ ì¹´ë“œ {loaded}ì¢… ë¡œë“œ ì™„ë£Œ.");
+        }
 
-                    if (!string.IsNullOrEmpty(s.use_condition_type) && s.use_condition_type != "None")
+        // â”€â”€â”€ CreateKeywordEffect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // JSONì˜ ê¸°ì¡´ type ì´ë¦„ì„ ë°›ì•„ ìƒˆë¡œìš´ í†µí•© Effect í´ë˜ìŠ¤ ì¸ìŠ¤í„´ìŠ¤ë¥¼ ë°˜í™˜í•œë‹¤.
+        // íŒŒë¼ë¯¸í„° Dictionaryë¥¼ ë¹Œë“œí•˜ì—¬ Initialize()ë¡œ ì „ë‹¬í•˜ê±°ë‚˜
+        // BattlefieldEffect ê°™ì´ sub-effectê°€ í•„ìš”í•œ ê²½ìš° ì§ì ‘ ì†ì„±ì„ ì„¤ì •í•œë‹¤.
+
+        private ICardEffect CreateKeywordEffect(RawRulebookEffect raw)
+        {
+            // â”€â”€ ë°ë¯¸ì§€ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "DamageEffect" ||
+                raw.type == "PiercingDamageEffect" ||
+                raw.type == "MultiHitDamageEffect" ||
+                raw.type == "SelfDamageEffect")
+            {
+                var p = new Dictionary<string, object>();
+                if (raw.amount != 0) p["amount"] = raw.amount;
+                if (raw.type == "PiercingDamageEffect") p["isPiercing"] = true;
+                if (raw.type == "MultiHitDamageEffect" && raw.times != 0) p["times"] = raw.times;
+                if (raw.type == "SelfDamageEffect") p["targetSelf"] = true;
+
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
+                p["isStackAction"] = raw.isStackAction;
+                p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
+                var e = new DamageEffect();
+                e.Initialize(p);
+                return e;
+            }
+
+            // â”€â”€ ë²„í”„ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "ArmorEffect" ||
+                raw.type == "SuperArmorEffect" ||
+                raw.type == "InvincibilityEffect" ||
+                raw.type == "FirepowerEffect" ||
+                raw.type == "CounterAttackEffect" ||
+                raw.type == "NextTurnBuffEffect")
+            {
+                var p = new Dictionary<string, object>();
+
+                string bt = raw.type switch
+                {
+                    "ArmorEffect" => "Armor",
+                    "SuperArmorEffect" => "SuperArmor",
+                    "InvincibilityEffect" => "Invincible",
+                    "FirepowerEffect" => "Firepower",
+                    "CounterAttackEffect" => "CounterAttack",
+                    "NextTurnBuffEffect" => string.IsNullOrEmpty(raw.buffType) ? "Firepower" : raw.buffType,
+                    _ => "Armor"
+                };
+                p["buffType"] = bt;
+
+                if (raw.amount != 0) p["amount"] = raw.amount;
+
+                if (!string.IsNullOrEmpty(raw.duration))
+                    p["duration"] = raw.duration;
+                else if (raw.type == "NextTurnBuffEffect")
+                    p["duration"] = "NextTurn";
+
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
+                p["isStackAction"] = raw.isStackAction;
+                p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
+
+                var e = new BuffEffect();
+                e.Initialize(p);
+                return e;
+            }
+
+            // â”€â”€ ì¹´ë“œ ì´ë™ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "DrawEffect" ||
+                raw.type == "DiscardFromHandEffect" ||
+                raw.type == "ResourceGainEffect" ||
+                raw.type == "RecoverFromDiscardEffect" ||
+                raw.type == "ShuffleReturnEffect" ||
+                raw.type == "TopDeckToDiscardEffect" ||
+                raw.type == "SearchDeckEffect" ||
+                raw.type == "ResourceFromDiscardEffect" ||
+                raw.type == "ReturnFromDiscardEffect")
+            {
+                var p = BuildMoveParams(raw);
+                var e = new MoveEffect();
+                e.Initialize(p);
+                return e;
+            }
+
+            // â”€â”€ ìê¸° ìì‹  ë°°ì¹˜ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "SelfAsResourceEffect")
+            {
+                var p = new Dictionary<string, object> { ["to"] = "ResourceZone" };
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
+                p["isStackAction"] = raw.isStackAction;
+                p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
+
+                var e = new SelfPlaceEffect();
+                e.Initialize(p);
+                return e;
+            }
+
+            // â”€â”€ ì „ì¥ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "BattlefieldEffect" ||
+                raw.type == "ArmorBattlefieldEffect" ||
+                raw.type == "FirepowerBattlefieldEffect" ||
+                raw.type == "PeriodicRecoveryBattlefieldEffect" ||
+                raw.type == "CostReductionBattlefieldEffect")
+            {
+                return BuildBattlefieldEffect(raw);
+            }
+
+            // â”€â”€ ë³µí•© íš¨ê³¼: íê¸°ì¡´ ì¹´ë“œ ì„ íƒ â†’ ì„ì‹œ ì½”ìŠ¤íŠ¸ ê°ì†Œ â†’ PlayBufferì—ì„œ ë°œë™ â”€â”€â”€â”€â”€
+            if (raw.type == "ReplayCardEffect")
+            {
+                int reduction = raw.costReduction != 0 ? raw.costReduction : 1;
+                string filter = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
+
+                // Step 1: íê¸°ì¡´ì—ì„œ íš¨ê³¼ ì¹´ë“œ 1ì¥ â†’ PlayBuffer
+                var moveParams = new Dictionary<string, object>
+                {
+                    ["from"] = "Graveyard",
+                    ["to"] = "PlayBuffer",
+                    ["mode"] = "Random",
+                    ["count"] = 1,
+                    ["filter"] = filter,
+                    ["excludeSelf"] = true
+                };
+                var moveEff = new MoveEffect();
+                moveEff.Initialize(moveParams);
+
+                // Step 2: PlayBuffer ì¹´ë“œ ì½”ìŠ¤íŠ¸ ì„ì‹œ ê°ì†Œ
+                var tempCostParams = new Dictionary<string, object> { ["reduction"] = reduction };
+                var tempCostEff = new TemporaryCostEffect();
+                tempCostEff.Initialize(tempCostParams);
+
+                // Step 3: PlayBuffer ì¹´ë“œ ë°œë™ í›„ íê¸°ì¡´ìœ¼ë¡œ
+                var playEff = new PlayFromBufferEffect();
+                playEff.Initialize(new Dictionary<string, object>());
+
+                var composite = new CompositeEffect();
+                composite.Initialize(new Dictionary<string, object>());
+                composite.AddStep(moveEff);
+                composite.AddStep(tempCostEff);
+                composite.AddStep(playEff);
+                return composite;
+            }
+
+            Console.WriteLine($"[GameDataManager] ì•Œ ìˆ˜ ì—†ëŠ” Effect íƒ€ì…: {raw.type}");
+            return null;
+        }
+
+        // â”€â”€â”€ MoveEffect íŒŒë¼ë¯¸í„° ë¹Œë“œ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        private Dictionary<string, object> BuildMoveParams(RawRulebookEffect raw)
+        {
+            var p = new Dictionary<string, object>();
+            // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬ (ê°€ì¥ ìœ„ì— ì¶”ê°€í•´ ì£¼ì„¸ìš”)
+            p["isStackAction"] = raw.isStackAction;
+            p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
+
+            switch (raw.type)
+            {
+                case "DrawEffect":
+                    p["from"] = "Deck";
+                    p["to"] = "Hand";
+                    p["mode"] = "Top";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    break;
+
+                case "DiscardFromHandEffect":
+                    p["from"] = "Hand";
+                    p["to"] = "Graveyard";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Random" : Capitalize(raw.mode);
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    break;
+
+                case "ResourceGainEffect":
+                    p["from"] = "ResourceDeck";
+                    p["to"] = "ResourceZone";
+                    p["mode"] = "Top";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    break;
+
+                case "RecoverFromDiscardEffect":
+                    p["from"] = "Graveyard";
+                    p["to"] = "Hand";
+                    p["mode"] = "Random";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    if (!string.IsNullOrEmpty(raw.filter)) p["filter"] = raw.filter;
+                    break;
+
+                case "ShuffleReturnEffect":
+                    p["from"] = "Hand";
+                    p["to"] = "Deck";
+                    p["mode"] = "Random";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    p["shuffleAfter"] = true;
+                    break;
+
+                case "TopDeckToDiscardEffect":
+                    p["from"] = "Deck";
+                    p["to"] = "Graveyard";
+                    p["mode"] = "Top";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    break;
+
+                case "SearchDeckEffect":
+                    p["from"] = "Deck";
+                    p["to"] = "Hand";
+                    p["mode"] = "First";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    p["shuffleAfter"] = true;
+                    if (!string.IsNullOrEmpty(raw.filter)) p["filter"] = raw.filter;
+                    break;
+
+                case "ResourceFromDiscardEffect":
+                    p["from"] = "Graveyard";
+                    p["to"] = "ResourceZone";
+                    p["mode"] = "Top";
+                    p["count"] = raw.count != 0 ? raw.count : 99;  // ê¸°ë³¸ ì „ë¶€
+                    p["filter"] = "type:Resource";
+                    break;
+
+                case "ReturnFromDiscardEffect":
+                    p["from"] = "Graveyard";
+                    p["to"] = "Deck";
+                    p["mode"] = "Last";
+                    p["count"] = raw.count != 0 ? raw.count : 1;
+                    p["filter"] = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
+                    p["shuffleAfter"] = true;
+                    p["excludeSelf"] = true;
+                    break;
+            }
+
+            return p;
+        }
+
+        // â”€â”€â”€ BattlefieldEffect ë¹Œë“œ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        private BattlefieldEffect BuildBattlefieldEffect(RawRulebookEffect raw)
+        {
+            var bf = new BattlefieldEffect();
+            bf.Initialize(new Dictionary<string, object>());
+
+            switch (raw.type)
+            {
+                case "ArmorBattlefieldEffect":
                     {
-                        newCard.PlayCondition = GetConditionFormula(s.use_condition_type, s.use_condition_value1);
+                        int amt = raw.amount != 0 ? raw.amount : 1;
+                        var buffParams = new Dictionary<string, object>
+                        { ["buffType"] = "Armor", ["amount"] = amt };
+                        var buffEff = new BuffEffect();
+                        buffEff.Initialize(buffParams);
+                        bf.PerTurnEffect = buffEff;
+                        break;
                     }
 
-                    if (s.after_use_effect_id != -1 && effectLookup.ContainsKey(s.after_use_effect_id))
+                case "FirepowerBattlefieldEffect":
                     {
-                        var effectObj = ConvertEffect(effectLookup[s.after_use_effect_id]);
-                        if (effectObj != null) newCard.Effects.Add(effectObj);
+                        int amt = raw.amount != 0 ? raw.amount : 1;
+                        var buffParams = new Dictionary<string, object>
+                        { ["buffType"] = "Firepower", ["amount"] = amt };
+                        var buffEff = new BuffEffect();
+                        buffEff.Initialize(buffParams);
+                        bf.PerTurnEffect = buffEff;
+                        break;
                     }
-                }
-                AllCards[newCard.Id] = newCard;
-            }
-            Console.WriteLine($"[System] Ä«µå µ¥ÀÌÅÍ {AllCards.Count}Àå ·Îµå ¿Ï·á.");
-        }
 
-        private string GetConditionFormula(string type, int val1)
-        {
-            switch (type)
-            {
-                case "Draw": // µå·Î¿ì Á¶°Ç (µ¦¿¡ Ä«µå°¡ ÀÖ´Â°¡?)
-                    return "activePlayer.Deck.Count > 0";
+                case "PeriodicRecoveryBattlefieldEffect":
+                    {
+                        string filter = string.IsNullOrEmpty(raw.filter) ? "type:Attack" : raw.filter;
+                        var moveParams = new Dictionary<string, object>
+                        {
+                            ["from"] = "Graveyard",
+                            ["to"] = "Hand",
+                            ["mode"] = "Random",
+                            ["count"] = 1,
+                            ["filter"] = filter
+                        };
+                        var moveEff = new MoveEffect();
+                        moveEff.Initialize(moveParams);
+                        bf.PerResourcePhaseEffect = moveEff;
+                        break;
+                    }
 
-                // 1. ¾Ö¹ú·¹¿ë (µ¦¿¡ Ä«µå°¡ ÀÖ´Â°¡?)
-                case "DeckNotEmpty":
-                    return "DeckNotEmpty"; // ConditionEvaluator¿¡¼­ Ã³¸®ÇÒ Å°¿öµå ¹İÈ¯
-
-                // 2. ÇÈ½Ãµå·¡°ï/ÆøÅº¹ú¿ë (Àû À¯´ÖÀÌ ÀÖ´Â°¡?)
-                case "EnemyUnitExist":
-                    return "EnemyUnitExist";
-
-                default:
-                    return null;
-            }
-        }
-
-        // CardEffect.jsonÀÇ ±â´É Å¸ÀÔÀ» º¸°í "È¿°ú°¡ ¹ßµ¿ÇÒ ¼ö ÀÖ´ÂÁö" Á¶°ÇÀ» ÀÚµ¿ ºÎ¿©ÇÕ´Ï´Ù.
-        private string DeriveEffectCondition(RawEffect raw)
-        {
-            switch (raw.effect_function_type)
-            {
-                case "Draw":
-                    return "DeckNotEmpty"; // µ¦ÀÌ ÀÖ¾î¾ß µå·Î¿ì È¿°ú ¹ßµ¿
-
-                case "KillUnit":
-                case "DamegeToUnit":
-                case "DamageToUnit":
-                    // °ø°İ/ÆÄ±« È¿°úÀÎµ¥ Å¸°ÙÀÌ Àû À¯´ÖÀÌ¸é -> »ó´ë ÇÊµå¿¡ À¯´ÖÀÌ ÀÖ¾î¾ß ¹ßµ¿
-                    if (raw.effect_target_type == "OppentUnit") return "EnemyUnitExist";
+                case "CostReductionBattlefieldEffect":
+                    bf.CostReductionFilter = raw.filter ?? "";
+                    bf.CostReduction = raw.reduction != 0 ? raw.reduction : 1;
                     break;
 
-                case "Power_Up":
-                    // ¹öÇÁ È¿°úÀÎµ¥ Å¸°ÙÀÌ ³» À¯´ÖÀÌ¸é -> ³» ÇÊµå¿¡ À¯´ÖÀÌ ÀÖ¾î¾ß ¹ßµ¿
-                    if (raw.effect_target_type == "OwnUnit") return "OwnUnitExist";
-                    break;
+                    // "BattlefieldEffect": ë‹¨ìˆœ ì „ì¥ ë°°ì¹˜ (ë‚´ë¶€ íš¨ê³¼ ì—†ìŒ)
             }
-            return "None"; // Á¶°Ç ¾øÀ½ (¹«Á¶°Ç ¹ßµ¿)
+
+            return bf;
         }
 
-        private ICardEffect ConvertEffect(RawEffect raw, Dictionary<string, object> extraParams = null)
+        /// <summary>
+        /// ì§€ì • ìºë¦­í„°ì˜ íš¨ê³¼ ì¹´ë“œ ID ëª©ë¡ ë°˜í™˜ (ìºë¦­í„° ì¹´ë“œ ì œì™¸).
+        /// ì˜ˆ: "ELLI-01" â†’ ["ELLI-02", "ELLI-03", ..., "ELLI-11"]
+        /// </summary>
+        public List<string> GetEffectCardIdsForCharacter(string characterCardId)
         {
-            var targetInfo = ConvertTarget(raw);
-            var finalParams = new Dictionary<string, object>();
-            if (extraParams != null) foreach (var kvp in extraParams) finalParams[kvp.Key] = kvp.Value;
-            finalParams["target"] = targetInfo;
+            if (string.IsNullOrEmpty(characterCardId)) return new List<string>();
+            int dashIdx = characterCardId.IndexOf('-');
+            string prefix = dashIdx > 0 ? characterCardId.Substring(0, dashIdx) : characterCardId;
 
-            switch (raw.effect_function_type)
-            {
-                case "Draw":
-                    var drawEffect = new MoveCardEffect();
-                    finalParams["src"] = "Deck";
-                    finalParams["dest"] = "Hand";
-                    finalParams["count"] = raw.effect_function_value1;
-                    drawEffect.Initialize(finalParams);
-                    return drawEffect;
-
-                case "Gain_Mana":
-                    var manaEffect = new ManaGainEffect();
-                    int manaAmt = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    finalParams["amount"] = manaAmt;
-                    finalParams["target"] = "ActivePlayer";
-                    manaEffect.Initialize(finalParams);
-                    return manaEffect;
-
-                case "KillUnit":
-                    var killEffect = new MoveCardEffect();
-                    finalParams["src"] = "Field";
-                    finalParams["dest"] = "Graveyard";
-                    if (raw.effect_function_value1 != 0) finalParams["prizeOnKill"] = raw.effect_function_value1;
-                    killEffect.Initialize(finalParams);
-                    return killEffect;
-
-                case "Power_Up":
-                    var buffEffect = new ModifyStatEffect();
-                    int buffAmt = raw.effect_function_value1 > 0 ? raw.effect_function_value1 : raw.effect_function_value2;
-                    if (buffAmt == 0) buffAmt = 100;
-
-                    finalParams["stat"] = "Power";
-                    finalParams["amount"] = buffAmt;
-                    buffEffect.Initialize(finalParams);
-                    return buffEffect;
-
-                case "DamegeToUnit":
-                case "DamageToUnit":
-                    var dmgEffect = new ModifyStatEffect();
-                    int dmg = raw.effect_function_value2 != -1 ? raw.effect_function_value2 : raw.effect_function_value1;
-                    finalParams["stat"] = "Power";
-                    finalParams["amount"] = -dmg;
-                    if (raw.effect_function_value1 != 0) finalParams["prizeOnKill"] = raw.effect_function_value1;
-                    dmgEffect.Initialize(finalParams);
-                    return dmgEffect;
-
-                case "ReduceCost":
-                    var costEffect = new ModifyStatEffect();
-                    finalParams["stat"] = "Cost"; // ¡Ú ¹İµå½Ã ÁöÁ¤ÇØÁà¾ß ÇÔ
-                    finalParams["amount"] = -raw.effect_function_value1;
-                    costEffect.Initialize(finalParams);
-                    return costEffect;
-
-                default: return null;
-            }
+            return AllCards.Keys
+                .Where(k => k.StartsWith(prefix + "-") && k != characterCardId)
+                .OrderBy(x => x)
+                .ToList();
         }
 
-        private object ConvertTarget(RawEffect raw)
-        {
-            var dict = new Dictionary<string, object>();
+        // â”€â”€â”€ ê³µí†µ ìœ í‹¸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-            switch (raw.effect_target_type)
-            {
-                case "OppentUnit":
-                    dict["controller"] = "Opponent";
-                    dict["zones"] = new[] { "Field" };
-                    break;
-                case "OwnUnit":
-                    dict["controller"] = "Self";
-                    dict["zones"] = new[] { "Field" };
-                    break;
-                case "OwnDeck": return "ActivePlayer";
-                case "OppentDeck": return "Opponent";
-                case "OwnMana": return "ActivePlayer";
-                default: return "Self";
-            }
-
-            // ¡Ú JSONÀÇ target_mode °ªÀ» ÀĞ¾î¼­ Àû¿ë
-            // ¸¸¾à °ªÀÌ "Manual"ÀÌ¸é HumanChoice ¸ğµå·Î ¸ÊÇÎ, 
-            // °ªÀÌ ºñ¾îÀÖ°Å³ª ¾øÀ¸¸é ±âº»°ªÀÎ HighestPower·Î ¼³Á¤
-            if (!string.IsNullOrEmpty(raw.target_mode))
-            {
-                if (raw.target_mode == "Manual")
-                {
-                    dict["mode"] = "HumanChoice"; // À¯Àú°¡ Á÷Á¢ ¸¶¿ì½º·Î ¼±ÅÃÇÏ´Â ¸ğµå
-                }
-                else
-                {
-                    dict["mode"] = raw.target_mode; // ±× ¿Ü ÀÚµ¿È­ ¸ğµå (Random µî)
-                }
-            }
-            else
-            {
-                dict["mode"] = "HighestPower"; // ±âº»°ª (Fallback)
-            }
-            dict["count"] = 1;
-
-            if (!string.IsNullOrEmpty(raw.effect_target_condition) && raw.effect_target_condition != "None")
-            {
-                string cond = raw.effect_target_condition;
-                //if (cond == "DeckMoreOrEqual") cond = "DeckHighOrEqual";
-
-                dict["condition"] = cond;
-                dict["conditionValue"] = raw.effect_target_condition_value1;
-            }
-
-            return dict;
-        }
+        private string Capitalize(string s)
+            => string.IsNullOrEmpty(s)
+                ? s
+                : char.ToUpper(s[0]) + s.Substring(1);
 
         private T ReadJson<T>(string path)
         {
             if (!File.Exists(path)) return default;
-            string json = File.ReadAllText(path);
+            string json = File.ReadAllText(path, System.Text.Encoding.UTF8);
             return JsonConvert.DeserializeObject<T>(json);
         }
     }

@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using Newtonsoft.Json.Linq; // JObject »ç¿ë ÇÊ¼ö
+using Newtonsoft.Json.Linq; // JObject ì‚¬ìš© í•„ìˆ˜
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Systems
@@ -9,28 +9,28 @@ namespace TCG_Project.Scripts.Systems
     {
         public static int Evaluate(object value, GameContext context)
         {
-            // 1. ÀÌ¹Ì ¼ıÀÚ¸é ¹İÈ¯
+            // 1. ì´ë¯¸ ìˆ«ìë©´ ë°˜í™˜
             if (value is int || value is long || value is double)
                 return Convert.ToInt32(value);
 
-            // 2. Selector °´Ã¼ Ã³¸® ({ "type": "Select", ... })
+            // 2. Selector ê°ì²´ ì²˜ë¦¬ ({ "type": "Select", ... })
             if (value is JObject obj)
             {
                 if (obj["type"]?.ToString() == "Select")
                 {
-                    // Á¶°Ç È®ÀÎ
+                    // ì¡°ê±´ í™•ì¸
                     string condition = obj["condition"].ToString();
                     bool isTrue = ConditionEvaluator.Evaluate(condition, context);
 
-                    // Á¶°Ç¿¡ µû¶ó trueValue ¶Ç´Â falseValue ¼±ÅÃ
+                    // ì¡°ê±´ì— ë”°ë¼ trueValue ë˜ëŠ” falseValue ì„ íƒ
                     var selectedValue = isTrue ? obj["trueValue"] : obj["falseValue"];
 
-                    // ¼±ÅÃµÈ °ªÀÌ ¶Ç ¼ö½ÄÀÏ ¼ö ÀÖÀ¸¹Ç·Î Àç±Í È£Ãâ
+                    // ì„ íƒëœ ê°’ì´ ë˜ ìˆ˜ì‹ì¼ ìˆ˜ ìˆìœ¼ë¯€ë¡œ ì¬ê·€ í˜¸ì¶œ
                     return Evaluate(selectedValue, context);
                 }
             }
 
-            // 3. ¹®ÀÚ¿­ ¼ö½Ä Ã³¸® (±âÁ¸ ·ÎÁ÷)
+            // 3. ë¬¸ìì—´ ìˆ˜ì‹ ì²˜ë¦¬ (ê¸°ì¡´ ë¡œì§)
             string formula = value.ToString();
             formula = ReplaceVariables(formula, context);
 
@@ -42,32 +42,32 @@ namespace TCG_Project.Scripts.Systems
             }
             catch (Exception e)
             {
-                Console.WriteLine($"[Error] ¼ö½Ä °è»ê ½ÇÆĞ: {formula} / {e.Message}");
+                Console.WriteLine($"[Error] ìˆ˜ì‹ ê³„ì‚° ì‹¤íŒ¨: {formula} / {e.Message}");
                 return 0;
             }
         }
 
-        // º¯¼ö Ä¡È¯ ¸Ş¼­µå
+        // ë³€ìˆ˜ ì¹˜í™˜ ë©”ì„œë“œ
         public static string ReplaceVariables(string formula, GameContext context)
         {
             Player p = context.ActivePlayer;
             Player opp = context.GetOpponent(p);
 
-            // [±ÔÄ¢] ´õ ±ä ¹®ÀÚ¿­À» ¸ÕÀú Ä¡È¯ÇØ¾ß ºÎºĞ ÀÏÄ¡ ¿À·ù¸¦ ¸·À» ¼ö ÀÖ½À´Ï´Ù.
-            // ¿¹: "Hand.Count"¸¦ ¸ÕÀú Ä¡È¯ÇÏ¸é "Hand.CountInclusive"°¡ "5Inclusive"°¡ µÇ¾î¹ö¸²!
-            // 1. Inclusive (³»°í ÀÖ´Â Ä«µå Æ÷ÇÔ) º¯¼ö °è»ê ¹× Ä¡È¯
+            // [ê·œì¹™] ë” ê¸´ ë¬¸ìì—´ì„ ë¨¼ì € ì¹˜í™˜í•´ì•¼ ë¶€ë¶„ ì¼ì¹˜ ì˜¤ë¥˜ë¥¼ ë§‰ì„ ìˆ˜ ìˆìŠµë‹ˆë‹¤.
+            // ì˜ˆ: "Hand.Count"ë¥¼ ë¨¼ì € ì¹˜í™˜í•˜ë©´ "Hand.CountInclusive"ê°€ "5Inclusive"ê°€ ë˜ì–´ë²„ë¦¼!
+            // 1. Inclusive (ë‚´ê³  ìˆëŠ” ì¹´ë“œ í¬í•¨) ë³€ìˆ˜ ê³„ì‚° ë° ì¹˜í™˜
             int myHandInc = p.Hand.Count + (p.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("activePlayer.Hand.CountInclusive", myHandInc.ToString());
 
             int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
 
-            // Context º¯¼ö Ä¡È¯
+            // Context ë³€ìˆ˜ ì¹˜í™˜
             if (context.Variables.Count > 0)
             {
                 foreach (var kvp in context.Variables)
                 {
-                    // ¿¹: "var.moved_count" -> "2"
+                    // ì˜ˆ: "var.moved_count" -> "2"
                     string key = $"var.{kvp.Key}";
                     if (formula.Contains(key))
                     {
@@ -76,27 +76,21 @@ namespace TCG_Project.Scripts.Systems
                 }
             }
 
-            // (¼±ÅÃ »çÇ×) Á¤ÀÇµÇÁö ¾ÊÀº º¯¼ö(var.xxx)°¡ ³²¾Ò´Ù¸é 0À¸·Î Ã³¸®ÇÏ¿© ¿¡·¯ ¹æÁö
+            // (ì„ íƒ ì‚¬í•­) ì •ì˜ë˜ì§€ ì•Šì€ ë³€ìˆ˜(var.xxx)ê°€ ë‚¨ì•˜ë‹¤ë©´ 0ìœ¼ë¡œ ì²˜ë¦¬í•˜ì—¬ ì—ëŸ¬ ë°©ì§€
             // if (formula.Contains("var.")) return "0"; 
 
             // [Turn]
             formula = formula.Replace("turnCount", ConsoleRunner.globalTurn.ToString());
 
             // [Active Player]
-            formula = formula.Replace("activePlayer.Mana", p.Mana.ToString());
             formula = formula.Replace("activePlayer.Hand.Count", p.Hand.Count.ToString());
             formula = formula.Replace("activePlayer.Graveyard.Count", p.Graveyard.Count.ToString());
             formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
-            formula = formula.Replace("activePlayer.PrizePoints", p.PrizePoints.ToString());
-            formula = formula.Replace("activePlayer.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Opponent]
             formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
             formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
             formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
-            formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
-            formula = formula.Replace("opponent.PrizePoints", opp.PrizePoints.ToString());
-            formula = formula.Replace("opponent.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Rules]
             formula = formula.Replace("maxHandSize", GameRules.MaxHandSize.ToString());
@@ -107,7 +101,7 @@ namespace TCG_Project.Scripts.Systems
             formula = formula.Replace("secondTurnEnergy", GameRules.SecondPlayerFirstTurnEnergy.ToString());
             formula = formula.Replace("basicEnergy", GameRules.BasicEnergy.ToString());
 
-            // ÇÊ¿äÇÏ´Ù¸é ´õ ¸¹Àº º¯¼ö Ãß°¡ °¡´É
+            // í•„ìš”í•˜ë‹¤ë©´ ë” ë§ì€ ë³€ìˆ˜ ì¶”ê°€ ê°€ëŠ¥
             return formula;
         }
     }

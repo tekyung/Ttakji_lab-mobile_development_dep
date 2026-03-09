@@ -11,43 +11,169 @@ namespace TCG_Project.Scripts.Core
     public class Player
     {
         public string Name { get; set; }
-        public int Health { get; set; }
-        public int Mana { get; set; }
-        private int _prizePoints;
-        public int PrizePoints
-        {
-            get => _prizePoints;
-            set
-            {
-                _prizePoints = value;
-                // 값 변경 시 UI 갱신 이벤트만 쏜다 (게임 오버 판별 삭제)
-                EventManager.OnPrizeChange?.Invoke(this, _prizePoints);
-
-                /* ★ 점수가 오르는 즉시 게임 셋을 외친다!
-                if (_prizePoints >= GameRules.WinPrizePoints)
-                {
-                    EventManager.OnGameSet?.Invoke(this);
-                }
-                */
-            }
-        }
         // ★ 플레이어의 타입과 두뇌
         public UserType Type { get; set; } = UserType.Bot; // 기본값은 Bot
         public IPlayerBrain Brain { get; set; } // 행동을 위임할 두뇌 인터페이스
 
+        // 이 플레이어가 선택한 1번째(주) 캐릭터 카드 ID. 능력 발동에 사용.
+        // 예: "ELLI-01"(엘리), "VERO-01"(베로니카)
+        public string CharacterCardId { get; set; } = null;
 
+        // 2번째(부) 캐릭터 카드 ID. 듀얼 덱 시에만 사용. null이면 단일 캐릭터.
+        public string SecondaryCharacterId { get; set; } = null;
+
+        // 듀얼 덱: 이 플레이어가 해당 캐릭터를 보유하는지 (주 또는 부).
+        public bool HasCharacter(string characterCardId)
+            => CharacterCardId == characterCardId || SecondaryCharacterId == characterCardId;
+
+        // 듀얼 덱: 캐릭터별 능력 사용 여부. Phase 17 확장 — 각 캐릭터당 1회, 총 2회 가능.
+        // ResetForNewGame() 호출 시 초기화.
+        private HashSet<string> _usedCharacterAbility = new HashSet<string>();
+
+        // 해당 캐릭터의 고유 능력을 이 게임에서 이미 사용했는지 여부를 반환한다.
+        public bool HasUsedCharacterAbility(string characterCardId)
+            => _usedCharacterAbility.Contains(characterCardId);
+
+        // 해당 캐릭터의 고유 능력을 이 게임에서 사용했음을 표시한다 (듀얼: 캐릭터당 1회).
+        public void MarkCharacterAbilityUsed(string characterCardId)
+        {
+            if (!string.IsNullOrEmpty(characterCardId))
+                _usedCharacterAbility.Add(characterCardId);
+        }
+
+        // --- 기존 존 ---
         public List<Card> Deck { get; private set; } = new List<Card>();
         public List<Card> Hand { get; private set; } = new List<Card>();
         public List<Card> Graveyard { get; private set; } = new List<Card>();
 
-        // 효과 처리 중인 카드를 잠시 보관하는 장소 (스택)
+        // --- 룰북 신규 존 ---
+        public List<Card> ResourceDeck { get; private set; } = new List<Card>();
+        public List<Card> ResourceZone { get; private set; } = new List<Card>(); // 자원 존
+        public Card SetZoneCard { get; private set; } = null; // 세트 존 (뒷면 카드 1장 보관) - 공개 시 RevealSetCard()로 반환 후 null로 초기화
+        public List<Card> StackZone { get; private set; } = new List<Card>(); // 스택 효과 카드 보관
+        public Card BattlefieldCard { get; private set; } = null; // 전장 효과 카드 보관
+
+        // 임시 발동 대기 존 (ReplayCardEffect 등 복합 효과에서 카드 보관)
+        public List<Card> PlayBuffer { get; private set; } = new List<Card>();
+
+        // 라이프 토큰 (기본 5개, 0이 되면 패배)
+        public int LifeTokens { get; private set; } = GameRules.LifeTokens;
+
+        // 효과 처리 중인 카드를 잠시 보관하는 장소 (BattlefieldEffect 등에서 사용)
         public Card PlayingCard { get; set; } = null;
+
+        // --- 전투 버프 (라운드 단위, EndPhase에서 ClearCombatBuffs로 초기화) ---
+        // --- 이번 턴 오픈 카드 버프 (턴 종료 시 초기화) ---
+        public int ArmorBonus     { get; set; } = 0;  // 일반 데미지만 N 감소
+        public int SuperArmorBonus{ get; set; } = 0;  // 관통 포함 모든 데미지 N 감소
+        public bool IsInvincible  { get; set; } = false; // 키워드 데미지 전체 차단
+        public int FirepowerBonus { get; set; } = 0;  // 자신의 데미지/관통 수치 +N
+        public bool HasCounterAttack { get; set; } = false; // 받은 원본 데미지 반환
+
+        // --- 스택형 버프 (1회성, 개별 방어구로 관리) ---
+        public List<int> StackArmors { get; set; } = new List<int>();   // 1회용 일반 방어
+        public List<int> StackSuperArmors { get; set; } = new List<int>();  // 1회용 관통 방어
+        public List<Card> StackCounterAttacks { get; set; } = new List<Card>(); // 1회용 반격 카드
+        public List<Card> StackInvincibilities { get; set; } = new List<Card>(); // 1회용 무적 카드
+        public List<int> StackFirepowers { get; set; } = new List<int>(); // 1회용 화력 카드
+
+        // --- 다음 턴 예약 버프 (NextTurnBuffEffect에서 설정, 다음 드로우 페이즈에서 적용) ---
+        public int NextTurnFirepowerBonus { get; set; } = 0;
+        public int NextTurnArmorBonus     { get; set; } = 0;
+        public int NextTurnSuperArmorBonus{ get; set; } = 0;
+        public bool NextTurnIsInvincible  { get; set; } = false;
+
+        /// <summary>
+        /// 라운드 종료 시 전투 버프를 초기화한다 (ThisTurn 효과 만료).
+        /// NextTurn 예약 버프는 여기서 초기화하지 않는다 (다음 드로우 페이즈에서 소비).
+        /// </summary>
+        public void ClearCombatBuffs()
+        {
+            ArmorBonus      = 0;
+            SuperArmorBonus = 0;
+            IsInvincible    = false;
+            FirepowerBonus  = 0;
+            HasCounterAttack= false;
+        }
+
+        // 다음 턴 예약 버프를 이번 턴 버프로 적용하고 예약을 소비한다 (드로우 페이즈 시작 시 호출).
+        public void ApplyNextTurnBuffs()
+        {
+            if (NextTurnFirepowerBonus > 0)
+            {
+                FirepowerBonus += NextTurnFirepowerBonus;
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [다음 턴 버프] {Name} 화력 +{NextTurnFirepowerBonus} 적용 (이번 턴 총: {FirepowerBonus})");
+                NextTurnFirepowerBonus = 0;
+            }
+            if (NextTurnArmorBonus > 0)
+            {
+                ArmorBonus += NextTurnArmorBonus;
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [다음 턴 버프] {Name} 아머 +{NextTurnArmorBonus} 적용 (이번 턴 총: {ArmorBonus})");
+                NextTurnArmorBonus = 0;
+            }
+            if (NextTurnSuperArmorBonus > 0)
+            {
+                SuperArmorBonus += NextTurnSuperArmorBonus;
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [다음 턴 버프] {Name} 슈퍼아머 +{NextTurnSuperArmorBonus} 적용 (이번 턴 총: {SuperArmorBonus})");
+                NextTurnSuperArmorBonus = 0;
+            }
+            if (NextTurnIsInvincible)
+            {
+                IsInvincible = true;
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [다음 턴 버프] {Name} 무적 상태 적용");
+                NextTurnIsInvincible = false;
+            }
+        }
+
+        
+        // 라이프 토큰을 회복한다 (캐릭터 능력 등에서 사용).
+        public void GainLife(int amount)
+        {
+            int before = LifeTokens;
+            LifeTokens = Math.Min(GameRules.LifeTokens, LifeTokens + amount);
+            int gained = LifeTokens - before;
+            if (gained > 0)
+                EventManager.OnLogMessage?.Invoke(
+                    $"💚 [{Name}] 라이프 +{gained} 회복 (현재: {LifeTokens}/{GameRules.LifeTokens})");
+        }
+
+        // 새 게임 시작 시 플레이어 상태를 완전 초기화한다 (MatchManager에서 호출).
+        public void ResetForNewGame(List<Card> newDeck, List<Card> newResourceDeck)
+        {
+            SetDeck(newDeck);
+            SetResourceDeck(newResourceDeck);
+            InitializeLifeTokens();
+            ClearCombatBuffs();
+
+            _usedCharacterAbility.Clear();
+            Hand.Clear();
+            Graveyard.Clear();
+            ResourceZone.Clear();
+            SetZoneCard      = null;
+            StackZone.Clear();
+            BattlefieldCard  = null;
+            PlayBuffer.Clear();
+            PlayingCard      = null;
+            EnableCardList.Clear();
+            
+            NextTurnFirepowerBonus = 0;
+            NextTurnArmorBonus     = 0;
+            NextTurnIsInvincible = false;
+            NextTurnSuperArmorBonus = 0;
+
+            StackArmors.Clear();
+            StackSuperArmors.Clear();
+            StackCounterAttacks.Clear();
+            StackInvincibilities.Clear();
+            StackFirepowers.Clear();
+        }
 
         // 현재 사용 가능한 카드 목록
         public List<Card> EnableCardList { get; private set; } = new List<Card>();
-
-        // (주의: 객체 생성 시점에 GameRules가 로드되어 있어야 함)
-        public Card[] Field { get; private set; }
 
         // 플레이어 생성 후, Type에 맞는 두뇌를 셋팅해주는 초기화 메서드
         public void InitializeBrain()
@@ -61,22 +187,156 @@ namespace TCG_Project.Scripts.Core
                 this.Brain = new HumanBrain(this); // 입력을 기다리는 로직
             }
         }
-        public Player()
+
+        // --- 라이프 토큰 초기화 (게임 시작 시 호출) ---
+        public void InitializeLifeTokens()
         {
-            // 필드 최대 유닛 수(3칸) 적용
-            Field = new Card[GameRules.MaxFieldUnitCount];
+            LifeTokens = GameRules.LifeTokens;
         }
 
-        // 필드의 빈 자리 찾기 (-1이면 꽉 참)
-        public int GetEmptyFieldSlot()
+        // --- 자원덱 초기화 ---
+        public void SetResourceDeck(List<Card> deck)
         {
-            for (int i = 0; i < Field.Length; i++)
+            ResourceDeck = new List<Card>(deck);
+        }
+
+        // --- 자원 페이즈: 자원덱에서 자원존으로 1장 이동 ---
+        public bool TakeResourceCard()
+        {
+            if (ResourceDeck.Count == 0)
             {
-                if (Field[i] == null) return i;
+                EventManager.OnLogMessage?.Invoke($"[{Name}] 자원덱이 비어있습니다.");
+                return false;
             }
-            return -1;
+            Card resource = ResourceDeck[0];
+            ExtractCard(ZoneType.ResourceDeck, ResourceDeck[0]); // 자원덱에서 제거
+            InsertCard(ZoneType.ResourceZone, resource); // 자원존으로 이동
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 자원 획득 (자원존: {ResourceZone.Count}개 / 자원덱 잔여: {ResourceDeck.Count}장)");
+            return true;
         }
 
+        // --- 현재 사용 가능한 자원 수 (자원존 카드 수) ---
+        public int GetResourceCount() => ResourceZone.Count;
+
+        // --- 코스트 지불 가능 여부 ---
+        public bool CanAfford(int cost) => ResourceZone.Count >= cost;
+
+        // --- 코스트 지불: 자원존 → 폐기존 ---
+        public bool PayCost(int cost)
+        {
+            if (!CanAfford(cost))
+            {
+                EventManager.OnLogMessage?.Invoke($"[{Name}] 코스트 부족 (필요: {cost}, 보유: {ResourceZone.Count})");
+                return false;
+            }
+            for (int i = 0; i < cost; i++)
+            {
+                Card resource = ResourceZone[ResourceZone.Count - 1];
+                ExtractCard(ZoneType.ResourceZone, ResourceZone[ResourceZone.Count - 1]); // 자원존에서 제거
+                InsertCard(ZoneType.Graveyard, resource);
+            }
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 코스트 {cost} 지불 (자원존 잔여: {ResourceZone.Count}개)");
+            return true;
+        }
+
+        // --- 세트 페이즈: 패에서 세트존으로 카드 이동 (뒷면) ---
+        public bool SetCard(Card card)
+        {
+            if (!Hand.Contains(card)) return false;
+            if (SetZoneCard != null)
+            {
+                return false; // 세트존에 이미 카드가 있으면 실패 (룰북 기준)
+
+                EventManager.OnLogMessage?.Invoke($"[{Name}] 세트존에 이미 카드('{SetZoneCard.Name}')가 있어 교체합니다.");
+                Card oldSet = SetZoneCard;
+                ExtractCard(ZoneType.SetZone, SetZoneCard);
+                InsertCard(ZoneType.Hand, oldSet); // 기존 카드는 패로 복귀
+            }
+            ExtractCard(ZoneType.Hand, card); // 패에서 제거
+            InsertCard(ZoneType.SetZone, card); // 세트존으로 이동
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 세트존에 카드('{SetZoneCard.Name}')를 뒷면으로 세트했습니다.");
+            return true;
+        }
+
+        // --- 오픈 페이즈 - 폐기 선택: 세트 카드를 뒷면으로 폐기 + 드로우 1장 ---
+        public void AbandonSetCard()
+        {
+            if (SetZoneCard == null) return;
+            Card abandoned = SetZoneCard;
+            ExtractCard(ZoneType.SetZone, SetZoneCard); // 세트존에서 제거
+            InsertCard(ZoneType.Graveyard, abandoned); // 폐기존으로 이동
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 세트 카드('{abandoned.Name}')를 폐기했습니다. 메인덱에서 1장 드로우.");
+            // 드로우는 호출자(GameRunner)에서 처리
+        }
+
+        // --- 오픈 페이즈 - 공개 선택: 세트 카드를 앞면으로 공개 (카드 객체 반환) ---
+        public Card RevealSetCard()
+        {
+            if (SetZoneCard == null) return null;
+            Card revealed = SetZoneCard;
+            EventManager.OnLogMessage?.Invoke($"[{Name}] '{revealed.Name}' 공개! (Speed: {revealed.Speed}, Type: {revealed.Type})");
+            return revealed;
+        }
+
+        // --- 스택존: 스택 카드 추가 ---
+        public void AddToStackZone(Card card)
+        {
+            InsertCard(ZoneType.StackZone, card);
+            EventManager.OnLogMessage?.Invoke($"[{Name}] '{card.Name}'을 스택존에 배치. (스택존: {StackZone.Count}장)");
+        }
+
+        // --- 스택존: 스택 카드 사용 후 폐기 ---
+        public void UseAndDiscardStack(Card card)
+        {
+            if (!StackZone.Contains(card)) return;
+            ExtractCard(ZoneType.StackZone, card); // 스택존에서 제거
+            InsertCard(ZoneType.Graveyard, card); // 폐기존으로 이동
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 스택 카드 '{card.Name}' 효과 사용 → 폐기존.");
+        }
+
+        // --- 전장존: 전장 카드 배치 ---
+        public bool PlaceBattlefield(Card card)
+        {
+            if (BattlefieldCard != null)
+            {
+                EventManager.OnLogMessage?.Invoke($"[{Name}] 전장존에 이미 카드가 있습니다. 기존 카드를 폐기합니다.");
+                ExtractCard(ZoneType.BattlefieldZone, BattlefieldCard); // 기존 카드 제거
+            }
+            InsertCard(ZoneType.BattlefieldZone, card); // 새 카드 배치
+            EventManager.OnLogMessage?.Invoke($"[{Name}] '{card.Name}'을 전장존에 배치.");
+            return true;
+        }
+
+        // --- 전장존: 전장 카드 파괴 ---
+        public void DestroyBattlefield()
+        {
+            if (BattlefieldCard == null) return;
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 전장 카드 '{BattlefieldCard.Name}' 파괴 → 폐기존.");
+            InsertCard(ZoneType.Graveyard, BattlefieldCard); // 폐기존으로 이동
+            ExtractCard(ZoneType.BattlefieldZone, BattlefieldCard); // 전장존에서 제거
+        }
+
+        // --- 라이프 토큰 감소 (메인 승리 조건) ---
+        public void LoseLife(int amount, GameContext context)
+        {
+            if (context.IsGameOver) return;
+            LifeTokens = Math.Max(0, LifeTokens - amount);
+            EventManager.OnLogMessage?.Invoke($"💔 [{Name}] 라이프 -{amount} (남은 라이프: {LifeTokens}/{GameRules.LifeTokens})");
+            EventManager.OnLifeChange?.Invoke(this, LifeTokens);
+            
+            /* 승패 판정 로직을 시스템에게 이관
+            if (LifeTokens <= 0)
+            {
+                context.IsGameOver = true;
+                Player winner = context.GetOpponent(this);
+                EventManager.OnGameSet?.Invoke(winner);
+            }*/
+        }
+
+        // --- 폐기존 총 장수 (타이브레이커용) ---
+        public int GetTotalDiscardCount() => Graveyard.Count;
+
+        // --- 덱 초기화 및 카드 소유권 설정 ---
         public void SetDeck(List<Card> newDeck)
         {
             Deck = new List<Card>(newDeck);
@@ -111,151 +371,6 @@ namespace TCG_Project.Scripts.Core
             Deck = Deck.OrderBy(x => rng.Next()).ToList();
         }
 
-        /// <summary>
-        /// 카드를 플레이(소환/발동)합니다. 
-        /// 카드의 모든 효과(타겟팅 대기 등)가 끝나면 onCardPlayed 콜백이 호출됩니다.
-        /// </summary>
-        // 카드 사용 로직 (비동기 콜백 지원)
-        public void PlayCard(Card card, GameContext context, Action onCardPlayed = null)
-        {
-            if (!Hand.Contains(card))
-            {
-                // [안전장치] 패에 없는 카드면 무시하되, 대기 중인 엔진이 멈추지 않도록 콜백은 쏴줍니다.
-                onCardPlayed?.Invoke();
-                return;
-            }
-
-            // 1. 자원 소모
-            Mana -= card.Cost;
-            EventManager.OnManaChange?.Invoke(this, Mana); // 마나 썼으니 갱신
-
-            // 카드 사용 알림 (UI: 패에서 카드가 날아가는 연출)
-            EventManager.OnPlayCard?.Invoke(this, card);
-
-            if (card.Type == CardType.Unit)
-            {
-                EventManager.OnLogMessage?.Invoke($"\n>>> [{Name}] 이 '{card.Name}' 소환 (Cost: {card.Cost})");
-            }
-            else
-            {
-                EventManager.OnLogMessage?.Invoke($"\n>>> [{Name}] 이 '{card.Name}' 사용 (Cost: {card.Cost}) / 남은 마나: {Mana}");
-            }
-
-            // 2. 패에서 PlayingCard 존으로 이동
-            Hand.Remove(card);
-            PlayingCard = card;
-
-            // 3. 카드 타입별 비동기 효과 발동
-            if (card.Type == CardType.Skill)
-            {
-                // [스펠] 효과를 실행하고, 유저의 타겟팅이나 처리가 모두 끝나면 람다식 안쪽이 실행됩니다.
-                card.Play(context, () =>
-                {
-                    // 효과가 끝난 후 PlayingCard를 비우고 묘지로 보냄
-                    PlayingCard = null;
-
-                    Player owner = card.OriginalOwner ?? this; // 안전장치
-                    owner.Graveyard.Add(card);
-                    card.ResetState(); // 상태 초기화
-
-                    EventManager.OnCardMove?.Invoke(card, this, ZoneType.Hand, owner, ZoneType.Graveyard);
-                    EventManager.OnLogMessage?.Invoke($"  ({owner.Name}의 묘지에 '{card.Name}' 카드가 쌓였습니다. / {owner.Name} 묘지 {owner.Graveyard.Count}장)");
-
-                    // ★ 모든 물리적 처리가 끝났음을 엔진에 보고
-                    onCardPlayed?.Invoke();
-                });
-            }
-            else if (card.Type == CardType.Unit)
-            {
-                // [유닛] PlayingCard를 비우고 필드로 이동 시도
-                PlayingCard = null;
-
-                if (InsertCard(ZoneType.Field, card))
-                {
-                    // 소환 성공
-                    card.IsExhausted = false;
-                    EventManager.OnUnitSummoned?.Invoke(card);
-                    EventManager.OnLogMessage?.Invoke($"   ⚔️ [소환] {card.Name} (Power:{card.Power})가 필드에 배치되었습니다.");
-
-                    // 소환 시 효과 비동기 실행
-                    card.Play(context, () =>
-                    {
-                        // 유저가 효과 대상을 다 고르거나, 자동으로 처리가 끝나면 엔진에 보고
-                        onCardPlayed?.Invoke();
-                    });
-                }
-                else
-                {
-                    // 필드가 꽉 차서 소환 실패 시
-                    EventManager.OnLogMessage?.Invoke($"   🚫 [소환 실패] 필드가 꽉 찼습니다! {card.Name} 패로 돌아감.");
-                    Hand.Add(card);
-
-                    // ★ 실패했어도 턴 진행이 멈추지 않도록 엔진에 보고
-                    onCardPlayed?.Invoke();
-                }
-            }
-        }
-
-        // 프라이즈(승점) 획득 및 종료 판별 함수(기존의 TakeDamage 대체)
-        public void GetPrize(int amount, GameContext context)
-        {
-            // ★ [상태 가드] 이미 게임이 끝났다면 추가 점수 획득 무시
-            if (context.IsGameOver) return;
-
-            // 1. 점수 증가 (이때 setter가 호출되어 OnPrizeChange UI 갱신이 일어남)
-            PrizePoints += amount; 
-            
-            // 2. 점수 획득 로그를 "먼저" 출력!
-            EventManager.OnLogMessage?.Invoke($"🏆 [{Name}] 승점 {amount} 획득! (현재 승점: {PrizePoints}/{GameRules.WinPrizePoints})");
-
-            // 3. 점수가 다 찼다면 게임 종료 선언을 "마지막"에 출력! / GameRules.WinPrizePoints 사용
-            if (PrizePoints >= GameRules.WinPrizePoints)
-            {
-                context.IsGameOver = true; // 문을 잠가서 추가 연쇄 작용 차단
-                EventManager.OnGameSet?.Invoke(this); // "내가 이겼다!" 방송 송출
-            }
-        }
-
-        // ManaGainEffect에서 호출할 메서드
-        public void ManaGain(int amount)
-        {
-            Mana += amount;
-            EventManager.OnLogMessage?.Invoke($"+ [{Name}] 가 {amount}의 마나를 회복했습니다. (현재 마나: {Mana})");
-            EventManager.OnManaChange?.Invoke(this, Mana);
-        }
-
-        /// <summary>
-        /// 내 패(Hand)에 있는 카드 중, 당장 소환이 가능하며 "소환 시 효과"의 발동 조건까지 만족하는 
-        /// 유닛 카드의 인덱스(Index) 리스트를 반환합니다.
-        /// (UI 하이라이팅 또는 AI 판단용)
-        /// </summary>
-        public List<int> GetUsableEffectCardIndices(GameContext context)
-        {
-            List<int> validIndices = new List<int>();
-
-            for (int i = 0; i < Hand.Count; i++)
-            {
-                Card card = Hand[i];
-
-                // 1차 필터: 유닛 카드이며, 효과가 하나 이상 있고, 당장 소환(코스트/자리/소환조건)이 가능한가?
-                if (card.Type == CardType.Unit && card.Effects.Count > 0 && card.IsPlayable(context))
-                {
-                    // 2차 필터: 소환 시 효과 발동 조건(EffectCondition)을 만족하는가?
-                    bool conditionMet = true;
-                    if (!string.IsNullOrEmpty(card.EffectCondition) && card.EffectCondition.Trim().ToLower() != "none")
-                    {
-                        conditionMet = Systems.ConditionEvaluator.Evaluate(card.EffectCondition, context);
-                    }
-
-                    if (conditionMet)
-                    {
-                        validIndices.Add(i); // 조건을 모두 만족하면 인덱스 저장
-                    }
-                }
-            }
-            return validIndices;
-        }
-
         // 카드 이동 로직
         // ---------------------------------------------------------
         // 1. 공간 확인 (이동 전 필수 체크)
@@ -265,8 +380,9 @@ namespace TCG_Project.Scripts.Core
             switch (zone)
             {
                 case ZoneType.Hand: return Hand.Count < GameRules.MaxHandSize;
-                case ZoneType.Field: return GetEmptyFieldSlot() != -1;
-                default: return true; // 덱/묘지는 무제한
+                case ZoneType.SetZone: return SetZoneCard == null;
+                case ZoneType.BattlefieldZone: return true; // 기존 전장 카드는 덮어씀
+                default: return true;
             }
         }
 
@@ -280,20 +396,31 @@ namespace TCG_Project.Scripts.Core
             switch (zone)
             {
                 case ZoneType.Deck:
-                    Deck.Add(card); // 맨 뒤에 추가 (필요 시 Shuffle 별도 호출)
+                    Deck.Add(card);
                     break;
-
                 case ZoneType.Hand:
                     Hand.Add(card);
                     break;
-
-                case ZoneType.Field:
-                    int slot = GetEmptyFieldSlot();
-                    if (slot != -1) Field[slot] = card;
-                    break;
-
                 case ZoneType.Graveyard:
                     Graveyard.Add(card);
+                    break;
+                case ZoneType.ResourceDeck:
+                    ResourceDeck.Add(card);
+                    break;
+                case ZoneType.ResourceZone:
+                    ResourceZone.Add(card);
+                    break;
+                case ZoneType.StackZone:
+                    StackZone.Add(card);
+                    break;
+                case ZoneType.SetZone:
+                    SetZoneCard = card;
+                    break;
+                case ZoneType.BattlefieldZone:
+                    PlaceBattlefield(card);
+                    break;
+                case ZoneType.PlayBuffer:
+                    PlayBuffer.Add(card);
                     break;
             }
             return true;
@@ -312,22 +439,22 @@ namespace TCG_Project.Scripts.Core
                 case ZoneType.Deck: return Deck.Remove(card);
                 case ZoneType.Hand: return Hand.Remove(card);
                 case ZoneType.Graveyard: return Graveyard.Remove(card);
-                case ZoneType.Field:
-                    // 배열에서 해당 카드를 찾아 비움
-                    for (int i = 0; i < Field.Length; i++)
-                    {
-                        if (Field[i] == card)
-                        {
-                            Field[i] = null;
-                            return true;
-                        }
-                    }
+                case ZoneType.ResourceDeck: return ResourceDeck.Remove(card);
+                case ZoneType.ResourceZone: return ResourceZone.Remove(card);
+                case ZoneType.StackZone: return StackZone.Remove(card);
+                case ZoneType.SetZone:
+                    if (SetZoneCard == card) { SetZoneCard = null; return true; }
                     return false;
+                case ZoneType.BattlefieldZone:
+                    if (BattlefieldCard == card) { BattlefieldCard = null; return true; }
+                    return false;
+                case ZoneType.PlayBuffer:
+                    return PlayBuffer.Remove(card);
             }
             return false;
         }
 
-        // (오버로딩) 특정 위치/조건으로 뺄 때 (Top, Random 등)
+        // (오버로딩) 특정 위치/조건으로 뺄 때 (Top, Bottom, Random 등)
         public Card ExtractCard(ZoneType zone, string strategy = "Top")
         {
             Card target = null;
@@ -335,30 +462,58 @@ namespace TCG_Project.Scripts.Core
             switch (zone)
             {
                 case ZoneType.Deck:
-                    if (Deck.Count > 0) target = Deck[0]; // 덱은 무조건 맨 위(Top)
+                    // 메인덱은 항상 맨 위(인덱스 0)에서 드로우
+                    if (Deck.Count > 0) target = Deck[0];
+                    break;
+
+                case ZoneType.ResourceDeck:
+                    // 자원덱도 맨 위에서 1장씩 가져옴
+                    if (ResourceDeck.Count > 0) target = ResourceDeck[0];
                     break;
 
                 case ZoneType.Hand:
                     if (Hand.Count > 0)
                     {
-                        // 전략에 따라 선택 (여기선 임시로 Random)
-                        // 추후 "Choice"(유저 선택) 등이 들어갈 자리
-                        int idx = new Random().Next(Hand.Count);
-                        target = Hand[idx];
+                        if (strategy == "Random")
+                        {
+                            int idx = new Random().Next(Hand.Count);
+                            target = Hand[idx];
+                        }
+                        else // "Top" = 맨 앞
+                        {
+                            target = Hand[0];
+                        }
                     }
                     break;
 
-                case ZoneType.Field:
-                    // 필드는 앞에서부터 있는 거 가져옴 (임시)
-                    target = Field.FirstOrDefault(c => c != null);
+                case ZoneType.ResourceZone:
+                    // 자원존은 가장 나중에 쌓인 것(맨 뒤)에서 소비
+                    if (ResourceZone.Count > 0) target = ResourceZone[ResourceZone.Count - 1];
+                    break;
+
+                case ZoneType.StackZone:
+                    // 스택존은 맨 앞(가장 먼저 세팅된 것)부터 꺼냄
+                    if (StackZone.Count > 0) target = StackZone[0];
                     break;
 
                 case ZoneType.Graveyard:
-                    if (Graveyard.Count > 0) target = Graveyard[Graveyard.Count - 1]; // 가장 최근 것
+                    // 묘지는 가장 최근에 들어간 것(맨 뒤)
+                    if (Graveyard.Count > 0) target = Graveyard[Graveyard.Count - 1];
+                    break;
+
+                case ZoneType.SetZone:
+                    target = SetZoneCard;
+                    break;
+
+                case ZoneType.BattlefieldZone:
+                    target = BattlefieldCard;
+                    break;
+
+                case ZoneType.PlayBuffer:
+                    if (PlayBuffer.Count > 0) target = PlayBuffer[0];
                     break;
             }
 
-            // 찾았으면 추출 실행
             if (target != null)
             {
                 ExtractCard(zone, target);
@@ -367,51 +522,26 @@ namespace TCG_Project.Scripts.Core
             return target;
         }
 
-        public void OnTurnStart()
-        {
-            // 필드에 있는 내 유닛들 상태 초기화
-            foreach (var card in Field)
-            {
-                if (card != null)
-                {
-                    // 1. 행동력 회복 (공격 기회 리필)
-                    card.RefreshUnitState();
-
-                    // 2. Power 완전 회복 (줄어든 Power 초기화)
-                    if (card.Power < card.OriginalPower)
-                    {
-                        int healAmount = card.OriginalPower - card.Power;
-
-                        // 연산자로 직접 조작하지 않고, 전담 파이프라인을 통해 안전하게 회복 (아직은 미사용)
-                        // card.ModifyPower(healAmount, "턴 시작 회복");
-                    }
-                }
-            }
-        }
-
         // ZoneType에 따라 해당 영역의 카드 리스트를 반환하는 메서드
         public List<Card> GetZone(ZoneType zone)
         {
             switch (zone)
             {
-                case ZoneType.Hand:
-                    return Hand;
-
-                case ZoneType.Deck:
-                    return Deck;
-
-                case ZoneType.Graveyard:
-                    return Graveyard;
-
-                case ZoneType.Field:
-                    // Field는 배열(Card[])이므로, 비어있지 않은(null이 아닌) 유닛만 리스트로 변환하여 반환
-                    // (TargetSelector가 null 체크를 하긴 하지만, 여기서 걸러주는 게 안전함)
-                    return Field.Where(c => c != null).ToList();
-
+                case ZoneType.Hand:       return Hand;
+                case ZoneType.Deck:       return Deck;
+                case ZoneType.Graveyard:  return Graveyard;
+                case ZoneType.ResourceDeck: return ResourceDeck;
+                case ZoneType.ResourceZone: return ResourceZone;
+                case ZoneType.StackZone:  return StackZone;
+                case ZoneType.SetZone:
+                    return SetZoneCard != null ? new List<Card> { SetZoneCard } : new List<Card>();
+                case ZoneType.BattlefieldZone:
+                    return BattlefieldCard != null ? new List<Card> { BattlefieldCard } : new List<Card>();
+                case ZoneType.PlayBuffer:
+                    return PlayBuffer;
                 default:
-                    return new List<Card>(); // 빈 리스트 반환
+                    return new List<Card>();
             }
         }
-
     }
 }

@@ -18,9 +18,21 @@
 		<Reference Include="UnityEngine.CoreModule">
 			<HintPath>C:\Program Files\Unity\Hub\Editor\6000.3.0f1\Editor\Data\Managed\UnityEngine\UnityEngine.CoreModule.dll</HintPath>
 		</Reference>
+		<Reference Include="UnityEngine.UI">
+			<HintPath>C:\Program Files\Unity\Hub\Editor\6000.3.0f1\Editor\Data\Resources\PackageManager\ProjectTemplates\libcache\com.unity.template.2d-cross-platform-2d-6.1.2\ScriptAssemblies\UnityEngine.UI.dll</HintPath>
+		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Update="Data\Character.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Data\ResourceCards.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Data\RulebookCards.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Data\Rules.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

@@ -1,6 +1,6 @@
 using System;
 using System.Data;
-using System.Linq; // Any() ªÁøÎ¿ª ¿ß«ÿ « ø‰
+using System.Linq; // Any() ????? ???? ???
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Systems
@@ -12,31 +12,24 @@ namespace TCG_Project.Scripts.Systems
             if (string.IsNullOrWhiteSpace(conditionFormula) || conditionFormula.Trim().ToLower() == "true")
                 return true;
 
-            // ≈∞øˆµÂ ±‚π› ¡∂∞« √≥∏Æ (GameDataManagerø°º≠ ∫Ø»Øµ» ≈∞øˆµÂ ¥Î¿¿)
-            // ºˆΩƒ ∆ƒΩÃ ¿¸ø° ∫¸∏£∞‘ √º≈©«œø© √≥∏Æ«’¥œ¥Ÿ.
+            // [Í∑úÏπô] ConditionEvaluator?? ÏàòÏãùÏù¥ ÏïÑÎãå Î¨∏ÏûêÏó¥Ïù¥ Îì§Ïñ¥Ïò§Îäî Í≤ΩÏö∞ÎèÑ ÏûàÏäµÎãàÎã§. (Ïòà: "DeckNotEmpty", "HandFull" Îì±)
             switch (conditionFormula)
             {
                 case "DeckNotEmpty":
                     return context.ActivePlayer.Deck.Count > 0;
 
-                case "EnemyUnitExist":
-                    // ªÛ¥ÎπÊ(TargetPlayer) « µÂø° ¿Ø¥÷¿Ã «œ≥™∂Ûµµ ¿÷¥¬¡ˆ »Æ¿Œ
-                    return context.TargetPlayer != null && context.TargetPlayer.Field.Any(c => c != null);
-
                 case "HandFull":
                     return context.ActivePlayer.Hand.Count >= GameRules.MaxHandSize;
             }
 
-            // 1. ∫Øºˆ ƒ°»Ø (±‚¡∏ ∑Œ¡˜ ¿Ø¡ˆ)
-            string parsedFormula = FormulaEvaluator.ReplaceVariables(conditionFormula, context); // ∑Œƒ√ ∏ﬁº≠µÂ ¥ÎΩ≈ FormulaEvaluator ªÁøÎ ±«¿Â
-            // * ƒ⁄µÂø£ ReplaceVariables∞° private static¿∏∑Œ ±∏«ˆµ«æÓ ¿÷¿∏π«∑Œ ±◊∞… »£√‚«’¥œ¥Ÿ.
-            parsedFormula = ReplaceVariables(conditionFormula, context);
+            // 1. 
+            string parsedFormula = ReplaceVariables(conditionFormula, context);
 
-            // 2. C# Ω∫≈∏¿œ ø¨ªÍ¿⁄∏¶ DataTable πÆπ˝¿∏∑Œ ∫Ø»Ø
+            // 2. C# Ïó∞ÏÇ∞ÏûêÎ•º DataTable Î°ú Î≥ÄÍ≤Ω
             parsedFormula = parsedFormula.Replace("&&", " AND ");
             parsedFormula = parsedFormula.Replace("||", " OR ");
-            parsedFormula = parsedFormula.Replace("==", "="); // DataTable¿∫ ∞∞¿Ω¿ª '='∑Œ æπ¥œ¥Ÿ
-            parsedFormula = parsedFormula.Replace("!=", "<>"); // ¥Ÿ∏ß¿∫ '<>'
+            parsedFormula = parsedFormula.Replace("==", "="); // DataTable?? ?????? '='?? ?????
+            parsedFormula = parsedFormula.Replace("!=", "<>"); // ÌëúÌòÑÏãù Î≥ÄÍ≤Ω '<>'
 
             try
             {
@@ -48,8 +41,8 @@ namespace TCG_Project.Scripts.Systems
             }
             catch (Exception e)
             {
-                // µπˆ±Î¿ª ¿ß«ÿ ∆ƒΩÃµ» √÷¡æ ºˆΩƒ¿ª ∞∞¿Ã √‚∑¬
-                Console.WriteLine($"[Error] ¡∂∞«Ωƒ ø¿∑˘: \"{conditionFormula}\" -> \"{parsedFormula}\"\nø¯¿Œ: {e.Message}");
+                // ??????? ???? ???? ???? ?????? ???? ???
+                Console.WriteLine($"[Error] ????? ????: \"{conditionFormula}\" -> \"{parsedFormula}\"\n????: {e.Message}");
                 return false;
             }
         }
@@ -59,28 +52,25 @@ namespace TCG_Project.Scripts.Systems
             Player p = context.ActivePlayer;
             Player opp = context.GetOpponent(p);
 
-            // [¡ﬂø‰] FormulaEvaluatorøÕ µø¿œ«œ∞‘ "±‰ ∫Øºˆ∏Ì"¿Œ Inclusive∏¶ ∏’¿˙ ƒ°»Ø«ÿæﬂ «’¥œ¥Ÿ.
+            // [???] FormulaEvaluator?? ??????? "?? ??????"?? Inclusive?? ???? ????? ????.
 
-            // 1. Inclusive (≥ª∞Ì ¿÷¥¬ ƒ´µÂ ∆˜«‘) ∫Øºˆ ∞ËªÍ π◊ ƒ°»Ø
+            // 1. Inclusive (???? ??? ??? ????) ???? ??? ?? ??
             int myHandInc = p.Hand.Count + (p.PlayingCard != null ? 1 : 0);
             formula = formula.Replace("activePlayer.Hand.CountInclusive", myHandInc.ToString());
 
-            if (opp != null) // opp null √º≈© √ﬂ∞°
+            if (opp != null) // opp null ?? ???
             {
                 int oppHandInc = opp.Hand.Count + (opp.PlayingCard != null ? 1 : 0);
                 formula = formula.Replace("opponent.Hand.CountInclusive", oppHandInc.ToString());
             }
 
-            // [Turn] (Program.turnCount ¡¢±Ÿ¿Ã ∫“∞°¥…«œ¥Ÿ∏È context≥™ GameRulesø°º≠ ∞°¡Æø¿µµ∑œ ºˆ¡§ « ø‰)
+            // [Turn] (Program.turnCount ?????? ????????? context?? GameRules???? ?????????? ???? ???)
             formula = formula.Replace("turnCount", ConsoleRunner.globalTurn.ToString()); 
 
             // [Active Player]
-            formula = formula.Replace("activePlayer.Mana", p.Mana.ToString());
             formula = formula.Replace("activePlayer.Hand.Count", p.Hand.Count.ToString());
             formula = formula.Replace("activePlayer.Graveyard.Count", p.Graveyard.Count.ToString());
             formula = formula.Replace("activePlayer.Deck.Count", p.Deck.Count.ToString());
-            formula = formula.Replace("activePlayer.PrizePoints", p.PrizePoints.ToString());
-            formula = formula.Replace("activePlayer.Field.Count", p.Field.Count(c => c != null).ToString());
 
             // [Opponent]
             if (opp != null)
@@ -88,8 +78,6 @@ namespace TCG_Project.Scripts.Systems
                 formula = formula.Replace("opponent.Hand.Count", opp.Hand.Count.ToString());
                 formula = formula.Replace("opponent.Graveyard.Count", opp.Graveyard.Count.ToString());
                 formula = formula.Replace("opponent.Deck.Count", opp.Deck.Count.ToString());
-                formula = formula.Replace("opponent.Mana", opp.Mana.ToString());
-                formula = formula.Replace("opponent.PrizePoints", opp.PrizePoints.ToString());
             }
 
             // [Rules]
@@ -104,7 +92,7 @@ namespace TCG_Project.Scripts.Systems
             return formula;
         }
 
-        // ∆Ø¡§ ≈∏∞Ÿ(Target)¿ª ±‚¡ÿ¿∏∑Œ ¡∂∞« ∞ÀªÁ
+        // ??? ???(Target)?? ???????? ???? ???
         public static bool EvaluateTarget(Target target, string condition, GameContext context)
         {
             if (string.IsNullOrWhiteSpace(condition) || condition.Trim().ToLower() == "true")
@@ -112,14 +100,14 @@ namespace TCG_Project.Scripts.Systems
 
             string parsed = condition;
 
-            // 1. ≈∏∞Ÿ ≥ª∫Œ ∫Øºˆ ƒ°»Ø
+            // 1. ??? ???? ???? ??
             if (target.Type == TargetType.Card)
             {
                 Card c = target.CardVal;
                 parsed = parsed.Replace("target.Cost", c.Cost.ToString());
                 parsed = parsed.Replace("target.Name", $"'{c.Name}'");
 
-                // [ø‰√ª ±‚¥…] »ø∞˙ ≈∏¿‘ ∞ÀªÁ (øπ: target.HasEffect('Damage'))
+                // [??? ???] ??? ??? ??? (??: target.HasEffect('Damage'))
                 if (parsed.Contains("target.HasEffect"))
                 {
                     bool hasDamage = c.HasEffectType("Damage");
@@ -132,18 +120,16 @@ namespace TCG_Project.Scripts.Systems
             else if (target.Type == TargetType.Player)
             {
                 Player p = target.PlayerVal;
-                // parsed = parsed.Replace("target.Health", p.Health.ToString());
-                parsed = parsed.Replace("target.Mana", p.Mana.ToString());
                 parsed = parsed.Replace("target.Hand.Count", p.Hand.Count.ToString());
             }
 
-            // 2. ¿¸ø™ ∫Øºˆ ƒ°»Ø (±‚¡∏ ∑Œ¡˜ ¿ÁªÁøÎ)
+            // 2. ???? ???? ?? (???? ???? ????)
             parsed = ReplaceVariables(parsed, context);
 
-            // 3. ø¨ªÍ¿⁄ ∫Ø»Ø
+            // 3. ?????? ???
             parsed = parsed.Replace("&&", " AND ").Replace("||", " OR ").Replace("==", "=").Replace("!=", "<>");
 
-            // 4. ∞ËªÍ
+            // 4. ???
             try
             {
                 System.Data.DataTable table = new System.Data.DataTable();
