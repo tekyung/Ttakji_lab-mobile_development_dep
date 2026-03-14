@@ -40,7 +40,7 @@
       "description": "[스택] 자신은 [슈퍼아머 1]을 획득한다. 자신의 패에서 1장을 고르고, 앞면으로 자신의 폐기존에 보낸다. 이 카드를 자신의 스택존에 놓는다.",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true },
-        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "isStackAction": true }
+        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "isStackAction": false }
       ]
     },
     {
@@ -164,7 +164,7 @@
     {
       "id": "VERO-11", "characterId": "VERONICA", "name": "체크메이트",
       "type": "Support", "speed": 1, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
-      "description": "[전장] 매 턴 자신은 [+아머 1]을 획득한다. (이 아머은 첫 공격에만 적용된다.)",
+      "description": "[전장] 매 턴 자신은 [+아머 1]을 획득한다. (이 아머는 첫 공격에만 적용된다.)",
       "effects": [
         { "type": "ArmorBattlefieldEffect", "amount": 1 }
       ]
@@ -231,9 +231,9 @@
     {
       "id": "DAIN-09", "characterId": "DAINA", "name": "리벤지",
       "type": "Support", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
-      "description": "[이번 턴] 자신은 [반격]을 획득한다.",
+      "description": "[이번 턴] 자신은 [반격]을 획득한다. 반격 성공 시 이 카드를 자원카드로서 자원존에 놓는다.",
       "effects": [
-        { "type": "CounterAttackEffect", "duration": "ThisTurn" }
+        { "type": "CounterAttackEffect", "duration": "ThisTurn", "rewardOnSuccess": "SelfToResource" }
       ]
     },
     {
@@ -323,8 +323,8 @@
     },
     {
       "id": "SONI-10", "characterId": "SONIA", "name": "신재생에너지",
-      "type": "Support", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
-      "description": "자신의 폐기존의 자원카드 1장을 자신의 자원존에 놓는다. 그 후, 자신의 폐기존의 이 카드와 이름이 다른 효과 카드 1장을 자신의 덱으로 되돌린다.",
+      "type": "Support", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false, "cannotBePlayedByEffect": true,
+      "description": "자신의 폐기존의 자원카드 1장을 자신의 자원존에 놓는다. 그 후, 자신의 폐기존의 이 카드와 이름이 다른 효과 카드 1장을 자신의 덱으로 되돌린다. 이 카드는 다른 카드의 효과로 사용될 수 없다.",
       "effects": [
         { "type": "ResourceFromDiscardEffect", "count": 1 },
         { "type": "ReturnFromDiscardEffect", "count": 1, "filter": "type:Effect", "requirePreviousSuccess": true }

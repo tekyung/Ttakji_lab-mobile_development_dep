@@ -1,4 +1,5 @@
-// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI)
+// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
+// [팀원 공유용] ConsoleRunner의 최신 아키텍처(Phase 18+)를 100% 반영한 유니티 매니저입니다.
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -33,17 +34,17 @@ public class BattleManager : MonoBehaviour
     private GameContext context;
 
     // 게임 상태
-    private int _globalTurn = 1;
+    // private int _globalTurn = 1; 게임의 턴 카운트는 context.CurrentTurn 에서 담당
     private Player _currentGameWinner = null;
 
     // 오픈 페이즈에서 공개된 카드 (→ 메인 페이즈로 전달)
     private Card _p1RevealedCard = null;
     private Card _p2RevealedCard = null;
 
-    // 듀얼 캐릭터: P1(ELLI+VERO 5:5), P2(DAIN+SONI 5:5)
+    // 듀얼 캐릭터: P1(엘리 + 다이나), P2(베로니카 + 소니아)
     private const string P1_CHAR1 = "ELLI-01";
-    private const string P1_CHAR2 = "VERO-01";
-    private const string P2_CHAR1 = "DAIN-01";
+    private const string P1_CHAR2 = "DAIN-01";
+    private const string P2_CHAR1 = "VERO-01";
     private const string P2_CHAR2 = "SONI-01";
 
     // ─── Unity 라이프사이클 ───────────────────────────────────────────
@@ -83,6 +84,7 @@ public class BattleManager : MonoBehaviour
         InitializeSystem();
 
         // Player 객체 생성 (매치 전체 재사용)
+        // 만약 아직 플레이어 선택 및 콜백 로직이 없다면 User.Type을 전부 Bot으로 통일해주세요.
         p1 = new Player { Name = "Player1", Type = UserType.Human, CharacterCardId = P1_CHAR1, SecondaryCharacterId = P1_CHAR2 };
         p2 = new Player { Name = "Bot_AI", Type = UserType.Bot, CharacterCardId = P2_CHAR1, SecondaryCharacterId = P2_CHAR2 };
         p1.InitializeBrain();
@@ -105,7 +107,6 @@ public class BattleManager : MonoBehaviour
         }
 
         _dataManager = new GameDataManager();
-        _dataManager.LoadAllData(dataPath);
         _dataManager.LoadRulebookCards(dataPath);
         _dataManager.LoadCharacterCards(dataPath);
         _dataManager.LoadResourceCards(dataPath);
@@ -153,7 +154,7 @@ public class BattleManager : MonoBehaviour
         {
             context.IsGameOver = true;
             EventManager.OnLogMessage?.Invoke("\n⚔️ 양측 플레이어의 라이프가 동시에 0이 되었습니다! (무승부)");
-            EventManager.OnGameDraw?.Invoke(p1, p2, _globalTurn);
+            EventManager.OnGameDraw?.Invoke(p1, p2, context.CurrentTurn);
             return true;
         }
         else if (p1Dead)
@@ -175,11 +176,11 @@ public class BattleManager : MonoBehaviour
     private IEnumerator RunSingleGame()
     {
         InitializeSingleGame();
-        _globalTurn = 1;
+        context.CurrentTurn = 1;
 
-        while (!context.IsGameOver && _globalTurn <= 20)
+        while (!context.IsGameOver && context.CurrentTurn <= 20)
         {
-            EventManager.OnTurnStart?.Invoke(_globalTurn, "양측");
+            EventManager.OnTurnStart?.Invoke(context.CurrentTurn, "양측");
             _p1RevealedCard = null;
             _p2RevealedCard = null;
 
@@ -202,10 +203,10 @@ public class BattleManager : MonoBehaviour
             if (CheckAndHandleGameOver()) break;
 
             EventManager.OnTurnEnd?.Invoke("양측");
-            _globalTurn++;
+            context.CurrentTurn++;
         }
 
-        if (!context.IsGameOver && _globalTurn > 20)
+        if (!context.IsGameOver && context.CurrentTurn > 20)
         {
             context.IsGameOver = true;
             EventManager.OnGameDraw?.Invoke(p1, p2, 20);
@@ -214,28 +215,54 @@ public class BattleManager : MonoBehaviour
 
     private void InitializeSingleGame()
     {
-        var deck1 = CreateDualCharacterDeck(P1_CHAR1, P1_CHAR2, 5, 5);
+        // ==============================================================
+        // [팀원 공유용] ★ 임시 테스트 덱 하드코딩 (ConsoleRunner 동기화)
+        // 무작위 덱이 아닌 특정 카드들의 충돌을 테스트하기 위해 ID를 고정합니다.
+        // 배열에 적어둔 ID 1개당 자동으로 2장씩 덱에 들어갑니다.
+        // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
+        // ==============================================================
+        string[] p1TestIds = // BotRed : 엘리 + 다이나
+            [
+                "ELLI-02", // 퀵 드로우
+                "ELLI-03", // 수류탄 투척
+                "ELLI-04", // 미니건 난사
+                "ELLI-05", // 준비된 방어선
+                "ELLI-06", // 격추 시스템
+                "ELLI-07", // 카모플라쥬
+
+                "DAIN-02", // 함포 준비, 발사
+                "DAIN-03", // 미사일 발사
+                "DAIN-07", // 강도 테스트
+                "DAIN-09", // 리벤지
+                "DAIN-11", // 조선소
+                        // 필요시 여기에 ID를 더 추가하세요.
+            ];
+
+            string[] p2TestIds = // BorBlue : 베로니카 + 소니아
+            {
+                "VERO-02", // 숙청
+                "VERO-03", // 계획대로
+                "VERO-05", // 요새화
+                "VERO-07", // 시위 해산
+                "VERO-11", // 체크메이트
+
+                "SONI-02", // 빵야!
+                "SONI-03", // 내 선물이야 ♬
+                "SONI-05", // 곡예 비행
+                "SONI-06", // 엔진 예열
+                "SONI-07", // 마하 10
+                "SONI-11", // 노을지는 활주로
+                        // 필요시 여기에 ID를 더 추가하세요.
+            };
+
+        var deck1 = CreateDeckFromIds(p1TestIds);
         var resDeck1 = CreateResourceDeck();
-        var deck2 = CreateDualCharacterDeck(P2_CHAR1, P2_CHAR2, 5, 5);
+        var deck2 = CreateDeckFromIds(p2TestIds);
         var resDeck2 = CreateResourceDeck();
 
-        var result1 = DeckValidator.ValidateFullDeckSet(deck1, resDeck1, p1.CharacterCardId, p1.SecondaryCharacterId);
-        if (!result1.IsValid)
-        {
-            EventManager.OnLogMessage?.Invoke($"<color=red>[덱 오류] {p1.Name}: {result1.ErrorMessage}</color>");
-            context = new GameContext { IsGameOver = true };
-            return;
-        }
-
-        var result2 = DeckValidator.ValidateFullDeckSet(deck2, resDeck2, p2.CharacterCardId, p2.SecondaryCharacterId);
-        if (!result2.IsValid)
-        {
-            EventManager.OnLogMessage?.Invoke($"<color=red>[덱 오류] {p2.Name}: {result2.ErrorMessage}</color>");
-            context = new GameContext { IsGameOver = true };
-            return;
-        }
-
         context = new GameContext();
+        context.CurrentTurn = 1;
+        
         context.Players.Add(p1);
         context.Players.Add(p2);
 
@@ -255,8 +282,15 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteResourcePhaseRoutine()
     {
         context.CurrentPhase = GamePhase.ResourcePhase;
-        EventManager.OnResourcePhase?.Invoke("양측", _globalTurn);
+        EventManager.OnResourcePhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 자원 페이즈 ]");
+
+        if (p1.BattlefieldCard != null || p2.BattlefieldCard != null)
+        {
+            EventManager.OnLogMessage?.Invoke("[ 적용 중인 전장 카드 ]");
+            EventManager.OnLogMessage?.Invoke($"  {p1.Name} 전장: {(p1.BattlefieldCard != null ? p1.BattlefieldCard.Name : "없음")}");
+            EventManager.OnLogMessage?.Invoke($"  {p2.Name} 전장: {(p2.BattlefieldCard != null ? p2.BattlefieldCard.Name : "없음")}");
+        }
 
         p1.ApplyNextTurnBuffs();
         p2.ApplyNextTurnBuffs();
@@ -277,7 +311,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteDrawPhaseRoutine()
     {
         context.CurrentPhase = GamePhase.DrawPhase;
-        EventManager.OnDrawPhase?.Invoke("양측", _globalTurn);
+        EventManager.OnDrawPhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 드로우 페이즈 ]");
 
         context.ActivePlayer = p1; context.TargetPlayer = p2;
@@ -324,7 +358,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteSetPhaseRoutine()
     {
         context.CurrentPhase = GamePhase.SetPhase;
-        EventManager.OnSetPhase?.Invoke("양측", _globalTurn);
+        EventManager.OnSetPhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 세트 페이즈 ]");
 
         yield return StartCoroutine(CheckPreSetAbilities(p1));
@@ -356,22 +390,30 @@ public class BattleManager : MonoBehaviour
     {
         if (player.Hand.Count == 0) yield break;
 
-        Card cardToSet;
+        Card cardToSet = null;
+
+        // [팀원 공유용] 봇일 경우 ConsoleRunner의 '카오스 QA 봇' 로직을 강제 적용합니다.
         if (player.Type == UserType.Bot)
         {
-            cardToSet = player.Brain.ChooseSetCard(player, context);
+            // 1. 코스트 지불 가능한 카드만 추리기 (효과 취소 방지)
+            var affordableCards = player.Hand
+                .Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count)
+                .ToList();
+
+            var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
+
+            // 2. 완전히 무작위로 하나를 던집니다 (다양한 엣지 케이스 유도)
+            cardToSet = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
         }
         else
         {
             bool done = false;
-            Card chosen = null;
             EventManager.OnRequireSetPhaseAction?.Invoke(player, context, card =>
             {
-                chosen = card;
+                cardToSet = card;
                 done = true;
             });
             yield return new WaitUntil(() => done);
-            cardToSet = chosen;
         }
 
         if (cardToSet != null)
@@ -383,7 +425,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteOpenPhaseRoutine()
     {
         context.CurrentPhase = GamePhase.OpenPhase;
-        EventManager.OnOpenPhase?.Invoke("양측", _globalTurn);
+        EventManager.OnOpenPhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 오픈 페이즈 ]");
 
         context.ClearOpenPhaseStates();
@@ -408,26 +450,27 @@ public class BattleManager : MonoBehaviour
         Card setCard = player.SetZoneCard;
         int effectiveCost = GameLogicHelpers.GetEffectiveCost(setCard, player);
 
-        OpenPhaseChoice choice;
+        OpenPhaseChoice choice = OpenPhaseChoice.Abandon;
+
+        // [팀원 공유용] 봇 로직 동기화: 코스트를 낼 수 있으면 무조건 오픈, 아니면 폐기
         if (player.Type == UserType.Bot)
         {
-            choice = player.Brain.ChooseOpenOrAbandon(player, setCard, effectiveCost, context);
+            choice = (effectiveCost == 0 || player.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
         }
         else
         {
             bool done = false;
-            OpenPhaseChoice chosen = OpenPhaseChoice.Abandon;
             EventManager.OnRequireOpenPhaseAction?.Invoke(player, setCard, effectiveCost, context, c =>
             {
-                chosen = c;
+                choice = c;
                 done = true;
             });
             yield return new WaitUntil(() => done);
-            choice = chosen;
         }
 
         if (choice == OpenPhaseChoice.Abandon)
         {
+            EventManager.OnLogMessage?.Invoke($"{player.Name}: 코스트 부족 (필요: {effectiveCost} / 자원존: {player.GetResourceCount()}) → 폐기 선택");
             player.AbandonSetCard();
             GameLogicHelpers.DrawCards(player, 1, context);
 
@@ -453,7 +496,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteMainPhaseRoutine()
     {
         context.CurrentPhase = GamePhase.MainPhase;
-        EventManager.OnMainPhase?.Invoke("양측", _globalTurn);
+        EventManager.OnMainPhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 메인 페이즈 ]");
 
         var pendingQueue = new List<(Player player, Player enemy, Card card)>();
@@ -479,33 +522,41 @@ public class BattleManager : MonoBehaviour
                 context.ActivePlayer = player;
                 context.TargetPlayer = enemy;
 
-                if (card.Cost > 0 && !player.PayCost(GameLogicHelpers.GetEffectiveCost(card, player)))
+                // [팀원 공유용] 2중 코스트 할인 연산 동기화 (GetEffectiveCost 사용)
+                if (card.Cost > 0)
                 {
-                    EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 코스트 지불 실패 → 효과 취소");
-                    player.ExtractCard(ZoneType.SetZone, card);
-                    player.InsertCard(ZoneType.Graveyard, card);
-                    EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
-                    continue;
+                    int effectiveCost = GameLogicHelpers.GetEffectiveCost(card, player);
+                    if (effectiveCost > 0 && !player.PayCost(effectiveCost))
+                    {
+                        EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 코스트 지불 실패 → 효과 취소");
+                        player.ExtractCard(ZoneType.SetZone, card);
+                        player.InsertCard(ZoneType.Graveyard, card);
+                        EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
+                        continue;
+                    }
+                    else if (effectiveCost == 0 && card.Cost > 0)
+                    {
+                        EventManager.OnLogMessage?.Invoke($"  ✨ [{card.Name}] 전장 효과로 코스트 무료 발동!");
+                    }
                 }
 
-                // 스택 반응 (AI 최적화 로직 적용)
+                // 스택 반응 (최신 AI 최적화 로직 적용)
                 yield return StartCoroutine(HandleStackActivation(enemy, player, card));
 
-                // 카드 사용 방송 (UI 연출)
+                // ★ UI 팀 참고: 이 이벤트가 터지면 카드가 전장 중앙으로 팝업되는 연출을 재생하세요!
                 EventManager.OnPlayCard?.Invoke(player, card);
-                EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 발동 (Speed: {card.Speed}, Type: {card.Type})");
-
+                
                 player.PlayingCard = card;
                 context.LastEffectSucceeded = true;
                 bool effectDone = false;
-                
-                // 오픈 즉발 효과만 실행 (IsStackAction = false)
+
+                // 오픈 즉발 효과만 실행
                 card.Play(context, () => effectDone = true, isStackTrigger: false);
                 yield return new WaitUntil(() => effectDone);
-                
+
                 player.PlayingCard = null;
 
-                // 카드 이동 처리
+                // [팀원 공유용] 완벽한 카드 라우팅 및 이동 이벤트 방송 동기화
                 if (card.IsStack)
                 {
                     player.AddToStackZone(card);
@@ -513,16 +564,19 @@ public class BattleManager : MonoBehaviour
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.StackZone);
                     EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 스택존에 대기 상태로 전환.");
                 }
-                else if (player.BattlefieldCard == card)
+                else if (card.IsBattlefield)
                 {
-                    player.InsertCard(ZoneType.BattlefieldZone, card);
+                    EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 전장 카드 발동!");
                     player.ExtractCard(ZoneType.SetZone, card);
+                    player.PlaceBattlefield(card); 
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.BattlefieldZone);
-                    EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 전장존에 배치됨.");
+
+                    // 메인 페이즈 발동 즉시 전장 효과 1회 장전 (On-Play Wake)
+                    GameLogicHelpers.ApplyBattlefieldTurnEffects(player, context); 
                 }
                 else if (player.ResourceZone.Contains(card))
                 {
-                    player.InsertCard(ZoneType.ResourceZone, card);
+                    // SelfAsResource 효과로 처리된 경우 이동 이벤트만 쏴줌
                     player.ExtractCard(ZoneType.SetZone, card);
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.ResourceZone);
                     EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 자원존에 배치됨.");
@@ -533,7 +587,6 @@ public class BattleManager : MonoBehaviour
                     player.InsertCard(ZoneType.Graveyard, card);
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
 
-                    // 캐릭터 후속 능력 검사 (일반 공격 카드 사용 시 패에서 다음 공격 카드 탐색 등)
                     foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
                     {
                         Card followUpCard = ability.OnMainPhaseAfterAttack(player, card, enemy, context);
@@ -543,11 +596,10 @@ public class BattleManager : MonoBehaviour
                         }
                     }
                 }
-                
-                yield return new WaitForSeconds(ActionDelay);
-            } // 동시 그룹 1회 완료
 
-            // 그룹 단위로 처리 후 글로벌 심판 (SBA)
+                yield return new WaitForSeconds(ActionDelay);
+            } 
+
             if (CheckAndHandleGameOver())
             {
                 EventManager.OnLogMessage?.Invoke("최후의 일격으로 교전이 중단되었습니다!");
@@ -557,7 +609,7 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 스마트 스택 AI 및 발동 코루틴
+    /// 스마트 스택 AI 및 발동 코루틴 (다단히트 및 관통 완벽 대응)
     /// </summary>
     private IEnumerator HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
     {
@@ -566,15 +618,12 @@ public class BattleManager : MonoBehaviour
         int incomingHits = 0;
         bool isPiercingAttack = false;
 
-        if (playedCard.Type == CardType.Attack)
+        foreach (var effect in playedCard.Effects)
         {
-            foreach (var effect in playedCard.Effects)
+            if (effect is DamageEffect dmgEffect)
             {
-                if (effect is DamageEffect dmgEffect)
-                {
-                    incomingHits += dmgEffect.Times;
-                    if (dmgEffect.isPiercing) isPiercingAttack = true;
-                }
+                incomingHits += dmgEffect.Times;
+                if (dmgEffect.isPiercing) isPiercingAttack = true;
             }
         }
 
@@ -589,7 +638,7 @@ public class BattleManager : MonoBehaviour
             if (activatedCount >= incomingHits) break;
 
             bool canBlock = false;
-            if (stackCard.Type == CardType.Defense)
+            if (stackCard.Type == CardType.Defense || stackCard.Type == CardType.Support) // 봇이 서포트 방어카드도 인식하도록 수정
             {
                 foreach (var effect in stackCard.Effects)
                 {
@@ -613,11 +662,10 @@ public class BattleManager : MonoBehaviour
 
             if (stackOwner.Type == UserType.Bot)
             {
-                if (canBlock) activate = true; 
+                if (canBlock) activate = true;
             }
             else if (canBlock)
             {
-                // 플레이어가 방어할 수 있다면 의사를 물어봄 (UI 구현 시 사용)
                 bool done = false;
                 bool chosen = false;
                 EventManager.OnRequireStackResponse?.Invoke(stackOwner, stackCard, playedCard, result =>
@@ -638,8 +686,7 @@ public class BattleManager : MonoBehaviour
 
                 bool done = false;
                 context.LastEffectSucceeded = true;
-                
-                // 스택 반응이므로 isStackTrigger = true 로 실행
+
                 stackCard.Play(context, () => done = true, isStackTrigger: true);
                 yield return new WaitUntil(() => done);
 
@@ -658,7 +705,7 @@ public class BattleManager : MonoBehaviour
     private IEnumerator ExecuteEndPhaseRoutine()
     {
         context.CurrentPhase = GamePhase.EndPhase;
-        EventManager.OnEndPhase?.Invoke("양측", _globalTurn);
+        EventManager.OnEndPhase?.Invoke("양측", context.CurrentTurn);
         EventManager.OnLogMessage?.Invoke("[ 엔드 페이즈 ]");
 
         EventManager.OnLogMessage?.Invoke($"{p1.Name} — 라이프:{p1.LifeTokens} / 자원:{p1.ResourceZone.Count} / 패:{p1.Hand.Count} / 덱:{p1.Deck.Count}");

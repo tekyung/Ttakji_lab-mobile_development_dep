@@ -30,7 +30,7 @@ namespace TCG_Project.Scripts.Abilities
                 if (chosenCard != null && validCards.Contains(chosenCard))
                 {
                     me.Graveyard.Remove(chosenCard);
-                    me.Hand.Add(chosenCard);
+                    me.InsertCard(ZoneType.Hand, chosenCard);
                     EventManager.OnLogMessage?.Invoke($"  ▶ [{me.Name}] 소니아 능력 발동! 폐기존 '{chosenCard.Name}' → 패");
 
                     me.MarkCharacterAbilityUsed(CharacterCardId); // 1회 사용 마킹

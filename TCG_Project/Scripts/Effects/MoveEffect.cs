@@ -32,6 +32,7 @@ namespace TCG_Project.Scripts.Effects
         private bool _excludeSelf = false;
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
+        private bool _isStrict = true; // 엄격 모드 or 최선 진행 모드 선택 (기본값은 가능한 실행)
 
         private Dictionary<string, object> _cachedParams;
 
@@ -82,6 +83,19 @@ namespace TCG_Project.Scripts.Effects
             {
                 IsStackAction = Convert.ToBoolean(isStackObj.ToString());
             }
+
+            // 엄격하게 지켜져야 하는가? 여부 ("그 후," 등)
+            if (parameters.ContainsKey("isStrict"))
+                _isStrict = Convert.ToBoolean(parameters["isStrict"]);
+            else
+            {
+                // JSON에 명시되지 않았을 때의 스마트 기본값:
+                // 드로우(Deck->Hand)이거나 전체 버리기(All)면 유연하게(false), 그 외(조건 지불 등)는 엄격하게(true)
+                if ((_from == ZoneType.Deck && _to == ZoneType.Hand) || _mode == SelectMode.All)
+                    _isStrict = false;
+                else
+                    _isStrict = true; 
+            }
         }
 
         public void Execute(GameContext context, Action onComplete)
@@ -102,7 +116,57 @@ namespace TCG_Project.Scripts.Effects
             };
 
             List<Card> selected = selector.SelectCards(self, opponent, exclude);
+            bool isAllMode = _mode == SelectMode.All;
 
+            // ─── ★ 핵심 로직: 엄격성(Strictness) 검사 ───
+            if (!isAllMode) // "모두(All)" 모드는 0장이어도 논리적으로 성공임
+            {
+                if (_isStrict && selected.Count < _count)
+                {
+                    // 엄격 모드: 단 1장이라도 모자라면 전체 취소 (All or Nothing)
+                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에 카드가 부족합니다. (요구: {_count}, 현재: {selected.Count})");
+                    context.LastEffectSucceeded = false;
+                    onComplete?.Invoke();
+                    return;
+                }
+                else if (selected.Count == 0 && _count > 0)
+                {
+                    // 유연 모드라도 1장도 옮기지 못했다면 실패로 간주 ("그 후" 조건 불충족)
+                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에서 이동할 카드가 없습니다.");
+                    context.LastEffectSucceeded = false;
+                    onComplete?.Invoke();
+                    return;
+                }
+            }
+
+            // ─── 실제 카드 이동 처리 ───
+            foreach (var card in selected)
+            {
+                RemoveFromZone(self, _from, card);
+                AddToZone(self, _to, card);
+                
+                // ★ 누락되었던 시각적 연출(UI) 이벤트 발행 보강
+                EventManager.OnLogMessage?.Invoke($"  [카드 이동] {self.Name}: '{card.Name}' {_from}→{_to}");
+                EventManager.OnCardMove?.Invoke(card, self, _from, self, _to);
+
+                // Deck -> Hand 이동은 드로우로 취급하여 이벤트 발행
+                if (_from == ZoneType.Deck && _to == ZoneType.Hand)
+                {
+                    EventManager.OnCardDraw?.Invoke(card, self, ZoneType.Deck);
+                }
+            }
+
+            if (_shuffleAfter)
+            {
+                self.ShuffleDeck();
+                EventManager.OnLogMessage?.Invoke($"  [덱 섞기] {self.Name} 이동 후 메인덱 섞음 (덱: {self.Deck.Count}장)");
+            }
+
+            // 여기까지 도달했다면 효과 처리에 성공한 것임
+            context.LastEffectSucceeded = true;
+            onComplete?.Invoke();
+
+            /*
             if (selected.Count == 0 || selected.Count < _count)
             {
                 string filterHint = string.IsNullOrEmpty(_filter) ? "" : $" (필터: {_filter})";
@@ -129,6 +193,7 @@ namespace TCG_Project.Scripts.Effects
             }
 
             onComplete?.Invoke();
+            */
         }
 
         private void RemoveFromZone(Player p, ZoneType zone, Card card)

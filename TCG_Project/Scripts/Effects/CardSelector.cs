@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using TCG_Project.Scripts.Core;
+using TCG_Project.Scripts.Managers;
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -22,19 +23,19 @@ namespace TCG_Project.Scripts.Effects
     /// </summary>
     public class CardSelector
     {
-        public ZoneType  From   { get; set; } = ZoneType.Deck;
-        public string    Owner  { get; set; } = "Self";    // "Self" | "Opponent"
-        public string    Filter { get; set; } = "";
-        public int       Count  { get; set; } = 1;
-        public SelectMode Mode  { get; set; } = SelectMode.Top;
+        public ZoneType From { get; set; } = ZoneType.Deck;
+        public string Owner { get; set; } = "Self";    // "Self" | "Opponent"
+        public string Filter { get; set; } = "";
+        public int Count { get; set; } = 1;
+        public SelectMode Mode { get; set; } = SelectMode.Top;
 
         private static readonly Random _rng = new Random();
 
         public List<Card> SelectCards(Player self, Player opponent, Card excludeByName = null)
         {
-            Player owner       = (Owner == "Opponent") ? opponent : self;
-            List<Card> source  = GetZoneCards(owner);
-            List<Card> pool    = ApplyFilter(source, Filter);
+            Player owner = (Owner == "Opponent") ? opponent : self;
+            List<Card> source = GetZoneCards(owner);
+            List<Card> pool = ApplyFilter(source, Filter);
 
             if (excludeByName != null)
                 pool = pool.Where(c => c.Name != excludeByName.Name).ToList();
@@ -60,7 +61,8 @@ namespace TCG_Project.Scripts.Effects
             if (string.IsNullOrEmpty(filter)) return cards.ToList();
 
             var result = cards.ToList();
-            foreach (var cond in filter.Split(','))
+            // ★ 안전장치: 모든 필터 문자열을 소문자로 변환하여 대소문자 오타로 인한 버그 예방
+            foreach (var cond in filter.ToLower().Split(','))
             {
                 var parts = cond.Trim().Split(':');
                 if (parts.Length != 2) continue;
@@ -70,18 +72,39 @@ namespace TCG_Project.Scripts.Effects
                 switch (key)
                 {
                     case "character":
-                        result = result.Where(c => c.CharacterId == val).ToList();
+                        // 1. CharacterId 직접 매칭 (sonia == sonia)
+                        // 2. ID 접두사 매칭 (soni-02 -> soni 추출 후 포함 여부 검사)
+                        result = result.Where(c =>
+                        {
+                            string cardPrefix = c.Id.Contains("-") ? c.Id.Split('-')[0].ToLower() : c.Id.ToLower();
+                            return (c.CharacterId != null && c.CharacterId.ToLower() == val) || val.StartsWith(cardPrefix);
+                        }).ToList();
                         break;
+
                     case "type":
-                        if (val == "Effect")
+                        if (val == "effect")
                         {
                             result = result.Where(c =>
-                                c.Type == CardType.Attack  ||
+                                c.Type == CardType.Attack ||
                                 c.Type == CardType.Defense ||
                                 c.Type == CardType.Support).ToList();
                         }
-                        else if (Enum.TryParse<CardType>(val, out CardType t))
+                        // Enum.TryParse의 두 번째 인자 'true'는 대소문자를 무시하라는 뜻입니다.
+                        else if (Enum.TryParse<CardType>(val, true, out CardType t))
                             result = result.Where(c => c.Type == t).ToList();
+                        break;
+
+                    case "replayable": // ★ 신규 추가: 신재생에너지 제약 조건
+                        bool isReplayable = (val == "true");
+
+                        /*EventManager.OnLogMessage?.Invoke($"간접 발동 불가 카드는 제외합니다.");
+                        ★ 진실의 방: 검사소에 도착한 카드의 실제 메모리 상태를 강제로 까봅니다.
+                        foreach(var c in result) {
+                            EventManager.OnLogMessage?.Invoke($"  [디버그] '{c.Name}' 카드의 제약 상태는? -> {c.CannotBePlayedByEffect}");
+                        }*/
+
+                        // replayable:true 이면 CannotBePlayedByEffect가 false인 것만 남김
+                        result = result.Where(c => isReplayable ? !c.CannotBePlayedByEffect : c.CannotBePlayedByEffect).ToList();
                         break;
                 }
             }
@@ -94,13 +117,13 @@ namespace TCG_Project.Scripts.Effects
         {
             return From switch
             {
-                ZoneType.Deck         => owner.Deck.ToList(),
-                ZoneType.Hand         => owner.Hand.ToList(),
-                ZoneType.Graveyard    => owner.Graveyard.ToList(),
+                ZoneType.Deck => owner.Deck.ToList(),
+                ZoneType.Hand => owner.Hand.ToList(),
+                ZoneType.Graveyard => owner.Graveyard.ToList(),
                 ZoneType.ResourceDeck => owner.ResourceDeck.ToList(),
                 ZoneType.ResourceZone => owner.ResourceZone.ToList(),
-                ZoneType.StackZone   => owner.StackZone.ToList(),
-                _                     => new List<Card>()
+                ZoneType.StackZone => owner.StackZone.ToList(),
+                _ => new List<Card>()
             };
         }
 
@@ -110,22 +133,22 @@ namespace TCG_Project.Scripts.Effects
 
             return Mode switch
             {
-                SelectMode.All    => pool,
-                SelectMode.Top    => pool.Take(Count).ToList(),
-                SelectMode.First  => pool.Take(Count).ToList(),
+                SelectMode.All => pool,
+                SelectMode.Top => pool.Take(Count).ToList(),
+                SelectMode.First => pool.Take(Count).ToList(),
                 SelectMode.Bottom => pool.Skip(Math.Max(0, pool.Count - Count)).ToList(),
-                SelectMode.Last   => pool.Skip(Math.Max(0, pool.Count - Count)).ToList(),
+                SelectMode.Last => pool.Skip(Math.Max(0, pool.Count - Count)).ToList(),
                 SelectMode.Random or SelectMode.Choose
                                     => SelectRandom(pool, Count),
-                _                 => pool.Take(Count).ToList()
+                _ => pool.Take(Count).ToList()
             };
         }
 
         private static List<Card> SelectRandom(List<Card> pool, int count)
         {
-            var copy     = pool.ToList();
+            var copy = pool.ToList();
             var selected = new List<Card>();
-            int n        = Math.Min(count, copy.Count);
+            int n = Math.Min(count, copy.Count);
             for (int i = 0; i < n; i++)
             {
                 int idx = _rng.Next(copy.Count);

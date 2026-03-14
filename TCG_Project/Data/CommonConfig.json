@@ -1,26 +1,6 @@
 {
   "CommonConfig": [
     {
-      "Name": "first_player_first_turn_having_energy",
-      "Value": "0"
-    },
-    {
-      "Name": "second_player_first_turn_having_energy",
-      "Value": "1"
-    },
-    {
-      "Name": "basic_having_energy",
-      "Value": "3"
-    },
-    {
-      "Name": "prize_count_to_win",
-      "Value": "7"
-    },
-    {
-      "Name": "max_field_unit_count",
-      "Value": "3"
-    },
-    {
       "Name": "min_deck_card_count",
       "Value": "20"
     },

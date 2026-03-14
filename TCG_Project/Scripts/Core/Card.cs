@@ -20,7 +20,9 @@ namespace TCG_Project.Scripts.Core
 
         // ★ 카드의 "효과 발동" 조건 (CardEffect.json의 effect_function_type 참조)
         public string EffectCondition { get; set; }
-
+        
+        // 간접 사용 가능 여부 (다이나: "기뢰" 등의 대상이 되는지)
+        public bool CannotBePlayedByEffect { get; set; } = false;
         //  덱 최대 포함 가능 매수 (리미트 레귤레이션)
         public int MaxDeckCount { get; set; }
 
@@ -168,7 +170,8 @@ namespace TCG_Project.Scripts.Core
                 SkinResource = this.SkinResource,
                 CharacterId = this.CharacterId,
                 IsStack = this.IsStack,
-                IsBattlefield = this.IsBattlefield
+                IsBattlefield = this.IsBattlefield,
+                CannotBePlayedByEffect = this.CannotBePlayedByEffect
             };
 
             // ★ 효과 리스트 깊은 복사(Deep Copy) 적용

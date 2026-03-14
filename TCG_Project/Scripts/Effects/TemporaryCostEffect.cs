@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
 using TCG_Project.Scripts.Managers;
+using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -51,10 +52,12 @@ namespace TCG_Project.Scripts.Effects
             }
 
             Card card = owner.PlayBuffer[0];
-            card.Cost = Math.Max(0, card.Cost - _reduction);
+            int OriginalCost = card.Cost;
+            int CurrentCost = GameLogicHelpers.GetEffectiveCost(card, owner);
+            card.Cost = Math.Max(0, CurrentCost - _reduction);
 
             EventManager.OnLogMessage?.Invoke(
-                $"  [임시코스트] '{card.Name}' 코스트 -{_reduction} → {card.Cost}");
+                $"  [임시코스트] '{card.Name}' 코스트 {CurrentCost}({OriginalCost}) -{_reduction} → {card.Cost}");
 
             onComplete?.Invoke();
         }

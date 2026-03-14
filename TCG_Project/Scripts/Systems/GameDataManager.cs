@@ -13,11 +13,6 @@ namespace TCG_Project.Scripts.Systems
     {
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
 
-        public void LoadAllData(string basePath)
-        {
-            // Card.json, CardUnit.json 등 구 파일 제거됨.
-        }
-
         // ─── 룰북 카드 로더 ───────────────────────────────────────────────────
 
         private class RawRulebookEffect
@@ -32,12 +27,9 @@ namespace TCG_Project.Scripts.Systems
             public string buffType;
             public int costReduction;
             public int reduction;
-            // ★ 신규 추가: JSON의 "isStackAction": true/false 를 받아올 변수
-            // (JSON에 없을 경우를 대비해 기본값을 널러블(bool?)로 하거나, 기본값을 false로 둡니다.)
             public bool isStackAction;
-
-            // (이전 패치에서 말씀하신 "그 후" 시맨틱 플래그도 여기서 받아야 합니다!)
             public bool requirePreviousSuccess;
+            public string rewardOnSuccess; // ★ 반격 성공 시 실행할 보상 (예: "DAIN-09"의 리벤지 효과)
         }
 
         private class RawRulebookCard
@@ -52,6 +44,7 @@ namespace TCG_Project.Scripts.Systems
             public bool isStack;
             public bool isBattlefield;
             public string description;
+            public bool cannotBePlayedByEffect; // 다른 카드를 통한 간접 사용이 가능한가?
             public List<RawRulebookEffect> effects;
         }
 
@@ -187,6 +180,7 @@ namespace TCG_Project.Scripts.Systems
                     CharacterId = raw.characterId,
                     IsStack = raw.isStack,
                     IsBattlefield = raw.isBattlefield,
+                    CannotBePlayedByEffect = raw.cannotBePlayedByEffect
                 };
 
                 foreach (var eff in raw.effects ?? new List<RawRulebookEffect>())
@@ -257,6 +251,10 @@ namespace TCG_Project.Scripts.Systems
                 else if (raw.type == "NextTurnBuffEffect")
                     p["duration"] = "NextTurn";
 
+                // ★ 반격 성공 시 실행할 보상 전달
+                if (!string.IsNullOrEmpty(raw.rewardOnSuccess))
+                    p["rewardOnSuccess"] = raw.rewardOnSuccess;
+
                 // ★ 공통 플래그 전달
                 p["isStackAction"] = raw.isStackAction;
                 p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
@@ -306,11 +304,12 @@ namespace TCG_Project.Scripts.Systems
                 return BuildBattlefieldEffect(raw);
             }
 
-            // ── 복합 효과: 폐기존 카드 선택 → 임시 코스트 감소 → PlayBuffer에서 발동 ─────
+            // ── 복합 효과: 폐기존 카드 선택 → 임시 코스트 감소 → PlayBuffer에서 발동 ───── (다이나: "기뢰")
             if (raw.type == "ReplayCardEffect")
             {
                 int reduction = raw.costReduction != 0 ? raw.costReduction : 1;
                 string filter = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
+                filter += ",replayable:true"; // 간접 사용 불가능인 카드는 제외합니다(소니아: "신재생에너지")
 
                 // Step 1: 폐기존에서 효과 카드 1장 → PlayBuffer
                 var moveParams = new Dictionary<string, object>
@@ -320,7 +319,7 @@ namespace TCG_Project.Scripts.Systems
                     ["mode"] = "Random",
                     ["count"] = 1,
                     ["filter"] = filter,
-                    ["excludeSelf"] = true
+                    ["excludeSelf"] = true // 자기 자신 제외
                 };
                 var moveEff = new MoveEffect();
                 moveEff.Initialize(moveParams);
@@ -441,7 +440,7 @@ namespace TCG_Project.Scripts.Systems
 
             switch (raw.type)
             {
-                case "ArmorBattlefieldEffect":
+                case "ArmorBattlefieldEffect": // 베로니카: 체크메이트
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
@@ -452,7 +451,7 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "FirepowerBattlefieldEffect":
+                case "FirepowerBattlefieldEffect": // 다이나: 조선소
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
@@ -463,7 +462,7 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "PeriodicRecoveryBattlefieldEffect":
+                case "PeriodicRecoveryBattlefieldEffect": // 엘리: 무작위 노획
                     {
                         string filter = string.IsNullOrEmpty(raw.filter) ? "type:Attack" : raw.filter;
                         var moveParams = new Dictionary<string, object>
@@ -480,7 +479,7 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "CostReductionBattlefieldEffect":
+                case "CostReductionBattlefieldEffect": // 소니아: 노을지는 활주로
                     bf.CostReductionFilter = raw.filter ?? "";
                     bf.CostReduction = raw.reduction != 0 ? raw.reduction : 1;
                     break;

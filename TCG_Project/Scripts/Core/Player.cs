@@ -64,24 +64,33 @@ namespace TCG_Project.Scripts.Core
 
         // --- 전투 버프 (라운드 단위, EndPhase에서 ClearCombatBuffs로 초기화) ---
         // --- 이번 턴 오픈 카드 버프 (턴 종료 시 초기화) ---
-        public int ArmorBonus     { get; set; } = 0;  // 일반 데미지만 N 감소
-        public int SuperArmorBonus{ get; set; } = 0;  // 관통 포함 모든 데미지 N 감소
-        public bool IsInvincible  { get; set; } = false; // 키워드 데미지 전체 차단
+        public int ArmorBonus { get; set; } = 0;  // 일반 데미지만 N 감소
+        public int SuperArmorBonus { get; set; } = 0;  // 관통 포함 모든 데미지 N 감소
+        public bool IsInvincible { get; set; } = false; // 키워드 데미지 전체 차단
         public int FirepowerBonus { get; set; } = 0;  // 자신의 데미지/관통 수치 +N
         public bool HasCounterAttack { get; set; } = false; // 받은 원본 데미지 반환
+
+        // 반격 성공 시 1회성으로 실행될 보상 대기열 (Action 델리게이트 사용 / ex: "리벤지" 효과)
+        public Queue<Action> PendingCounterRewards { get; private set; } = new Queue<Action>();
 
         // --- 스택형 버프 (1회성, 개별 방어구로 관리) ---
         public List<int> StackArmors { get; set; } = new List<int>();   // 1회용 일반 방어
         public List<int> StackSuperArmors { get; set; } = new List<int>();  // 1회용 관통 방어
         public List<Card> StackCounterAttacks { get; set; } = new List<Card>(); // 1회용 반격 카드
+        //public Queue<Card> StackCounterAttacks { get; set; } = new Queue<Card>();
         public List<Card> StackInvincibilities { get; set; } = new List<Card>(); // 1회용 무적 카드
         public List<int> StackFirepowers { get; set; } = new List<int>(); // 1회용 화력 카드
 
         // --- 다음 턴 예약 버프 (NextTurnBuffEffect에서 설정, 다음 드로우 페이즈에서 적용) ---
         public int NextTurnFirepowerBonus { get; set; } = 0;
-        public int NextTurnArmorBonus     { get; set; } = 0;
-        public int NextTurnSuperArmorBonus{ get; set; } = 0;
-        public bool NextTurnIsInvincible  { get; set; } = false;
+        public int NextTurnArmorBonus { get; set; } = 0;
+        public int NextTurnSuperArmorBonus { get; set; } = 0;
+        public bool NextTurnIsInvincible { get; set; } = false;
+        public bool NextTurnCounterAttack {get; set;} = false;
+
+        // [전장 전용 버프] 매 턴 드로우 페이즈에 리필되며, 첫 타격 발생 시 즉시 소진됨
+        public int BattlefieldArmor { get; set; } = 0;
+        public int BattlefieldFirepower { get; set; } = 0;
 
         /// <summary>
         /// 라운드 종료 시 전투 버프를 초기화한다 (ThisTurn 효과 만료).
@@ -89,11 +98,14 @@ namespace TCG_Project.Scripts.Core
         /// </summary>
         public void ClearCombatBuffs()
         {
-            ArmorBonus      = 0;
+            ArmorBonus = 0;
             SuperArmorBonus = 0;
-            IsInvincible    = false;
-            FirepowerBonus  = 0;
-            HasCounterAttack= false;
+            IsInvincible = false;
+            FirepowerBonus = 0;
+            HasCounterAttack = false;
+            BattlefieldArmor = 0;
+            BattlefieldFirepower = 0;
+            PendingCounterRewards.Clear(); // 턴 종료 시 대기열도 초기화
         }
 
         // 다음 턴 예약 버프를 이번 턴 버프로 적용하고 예약을 소비한다 (드로우 페이즈 시작 시 호출).
@@ -129,7 +141,7 @@ namespace TCG_Project.Scripts.Core
             }
         }
 
-        
+
         // 라이프 토큰을 회복한다 (캐릭터 능력 등에서 사용).
         public void GainLife(int amount)
         {
@@ -153,15 +165,15 @@ namespace TCG_Project.Scripts.Core
             Hand.Clear();
             Graveyard.Clear();
             ResourceZone.Clear();
-            SetZoneCard      = null;
+            SetZoneCard = null;
             StackZone.Clear();
-            BattlefieldCard  = null;
+            BattlefieldCard = null;
             PlayBuffer.Clear();
-            PlayingCard      = null;
+            PlayingCard = null;
             EnableCardList.Clear();
-            
+
             NextTurnFirepowerBonus = 0;
-            NextTurnArmorBonus     = 0;
+            NextTurnArmorBonus = 0;
             NextTurnIsInvincible = false;
             NextTurnSuperArmorBonus = 0;
 
@@ -170,6 +182,8 @@ namespace TCG_Project.Scripts.Core
             StackCounterAttacks.Clear();
             StackInvincibilities.Clear();
             StackFirepowers.Clear();
+            BattlefieldArmor = 0;
+            BattlefieldFirepower = 0;
         }
 
         // 현재 사용 가능한 카드 목록
@@ -299,10 +313,20 @@ namespace TCG_Project.Scripts.Core
         {
             if (BattlefieldCard != null)
             {
-                EventManager.OnLogMessage?.Invoke($"[{Name}] 전장존에 이미 카드가 있습니다. 기존 카드를 폐기합니다.");
-                ExtractCard(ZoneType.BattlefieldZone, BattlefieldCard); // 기존 카드 제거
+                EventManager.OnLogMessage?.Invoke($"[{Name}] 기존 전장 '{BattlefieldCard.Name}' 폐기.");
+
+                // 1. 기존 전장 카드를 묘지(폐기존)로 이동
+                Card oldCard = BattlefieldCard;
+                BattlefieldCard = null; // 안전을 위해 일단 비움
+                InsertCard(ZoneType.Graveyard, oldCard);
+
+                // 2. ★ 중요: 기존 전장이 부여했던 1회성 전장 버프를 완전히 날려버립니다.
+                BattlefieldArmor = 0;
+                BattlefieldFirepower = 0;
             }
-            InsertCard(ZoneType.BattlefieldZone, card); // 새 카드 배치
+
+            BattlefieldCard = card; // 새 카드 배치
+            // InsertCard(ZoneType.BattlefieldZone, card); 
             EventManager.OnLogMessage?.Invoke($"[{Name}] '{card.Name}'을 전장존에 배치.");
             return true;
         }
@@ -312,8 +336,15 @@ namespace TCG_Project.Scripts.Core
         {
             if (BattlefieldCard == null) return;
             EventManager.OnLogMessage?.Invoke($"[{Name}] 전장 카드 '{BattlefieldCard.Name}' 파괴 → 폐기존.");
-            InsertCard(ZoneType.Graveyard, BattlefieldCard); // 폐기존으로 이동
-            ExtractCard(ZoneType.BattlefieldZone, BattlefieldCard); // 전장존에서 제거
+
+            // 1. 기존 전장 카드를 묘지(폐기존)로 이동
+            Card oldCard = BattlefieldCard;
+            BattlefieldCard = null; // 안전을 위해 일단 비움
+            InsertCard(ZoneType.Graveyard, oldCard);
+
+            // 2. ★ 중요: 기존 전장이 부여했던 1회성 전장 버프를 완전히 날려버립니다.
+            BattlefieldArmor = 0;
+            BattlefieldFirepower = 0;
         }
 
         // --- 라이프 토큰 감소 (메인 승리 조건) ---
@@ -323,7 +354,7 @@ namespace TCG_Project.Scripts.Core
             LifeTokens = Math.Max(0, LifeTokens - amount);
             EventManager.OnLogMessage?.Invoke($"💔 [{Name}] 라이프 -{amount} (남은 라이프: {LifeTokens}/{GameRules.LifeTokens})");
             EventManager.OnLifeChange?.Invoke(this, LifeTokens);
-            
+
             /* 승패 판정 로직을 시스템에게 이관
             if (LifeTokens <= 0)
             {
@@ -527,12 +558,12 @@ namespace TCG_Project.Scripts.Core
         {
             switch (zone)
             {
-                case ZoneType.Hand:       return Hand;
-                case ZoneType.Deck:       return Deck;
-                case ZoneType.Graveyard:  return Graveyard;
+                case ZoneType.Hand: return Hand;
+                case ZoneType.Deck: return Deck;
+                case ZoneType.Graveyard: return Graveyard;
                 case ZoneType.ResourceDeck: return ResourceDeck;
                 case ZoneType.ResourceZone: return ResourceZone;
-                case ZoneType.StackZone:  return StackZone;
+                case ZoneType.StackZone: return StackZone;
                 case ZoneType.SetZone:
                     return SetZoneCard != null ? new List<Card> { SetZoneCard } : new List<Card>();
                 case ZoneType.BattlefieldZone:

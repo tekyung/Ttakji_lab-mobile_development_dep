@@ -35,13 +35,14 @@ namespace TCG_Project.Scripts.Effects
     public class BuffEffect : ICardEffect
     {
         public BuffType TypeOfBuff { get; private set; }
-        private int _amount = 0;
+        public int Amount { get; private set; } = 0;
+        //private int _amount = 0;
         private EffectDuration _duration = EffectDuration.ThisTurn;
 
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
         private Dictionary<string, object> _cachedParams;
-
+        private string _rewardOnSuccess = ""; // 반격 성공 시 실행할 보상
         public void Initialize(Dictionary<string, object> parameters)
         {
             _cachedParams = parameters ?? new Dictionary<string, object>();
@@ -54,7 +55,7 @@ namespace TCG_Project.Scripts.Effects
             }
 
             if (parameters.ContainsKey("amount"))
-                _amount = Convert.ToInt32(parameters["amount"]);
+                Amount = Convert.ToInt32(parameters["amount"]);
 
             if (parameters.ContainsKey("duration"))
             {
@@ -77,6 +78,9 @@ namespace TCG_Project.Scripts.Effects
             {
                 //Console.WriteLine($"[DEBUG] {TypeOfBuff} 이펙트 초기화! isStackAction 파라미터가 JSON에 없음. 기본값 false 적용.");
             }
+
+            if (parameters.ContainsKey("rewardOnSuccess"))
+                _rewardOnSuccess = parameters["rewardOnSuccess"].ToString();
         }
 
         // 스택형 버프를 지원하는 경우, 효과 실행 시점이 아니라 발동 조건이 충족되어 실제로 효과가 적용되는 시점에 버프를 부여.
@@ -90,45 +94,45 @@ namespace TCG_Project.Scripts.Effects
                 case BuffType.Armor:
                     if (_duration == EffectDuration.Stack)
                     {
-                        owner.StackArmors.Add(_amount); // 리스트에 개별 방어구로 장전
+                        owner.StackArmors.Add(Amount); // 리스트에 개별 방어구로 장전
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [스택 아머] {owner.Name} 스택 아머({_amount}) 장전 (현재 대기: {owner.StackArmors.Count}개)");
+                            $"  [스택 아머] {owner.Name} 스택 아머({Amount}) 장전 (현재 대기: {owner.StackArmors.Count}개)");
                     }
                     else if (_duration == EffectDuration.NextTurn)
                     {
-                        owner.NextTurnArmorBonus += _amount;
+                        owner.NextTurnArmorBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [다음 턴 예약] {owner.Name}: 다음 턴 아머 +{_amount} 예약됨");
+                            $"  [다음 턴 예약] {owner.Name}: 다음 턴 아머 +{Amount} 예약됨");
                     }
                     else // ThisTurn
                     {
-                        owner.ArmorBonus += _amount;
+                        owner.ArmorBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [아머] {owner.Name} 아머 +{_amount} (이번 라운드 합계: {owner.ArmorBonus})");
+                            $"  [아머] {owner.Name} 아머 +{Amount} (이번 라운드 합계: {owner.ArmorBonus})");
                     }
                     break;
 
                 case BuffType.SuperArmor:
                     if (_duration == EffectDuration.Stack) // 스택형 슈퍼아머(1회성) 지원
                     {
-                        owner.StackSuperArmors.Add(_amount); // 리스트에 개별 방어구로 장전
+                        owner.StackSuperArmors.Add(Amount); // 리스트에 개별 방어구로 장전
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [스택 슈퍼아머] {owner.Name} 스택 슈퍼아머({_amount}) 장전 (현재 대기: {owner.StackSuperArmors.Count}개)");
+                            $"  [스택 슈퍼아머] {owner.Name} 스택 슈퍼아머({Amount}) 장전 (현재 대기: {owner.StackSuperArmors.Count}개)");
                     }
                     else if (_duration == EffectDuration.NextTurn)
                     {
-                        owner.NextTurnSuperArmorBonus += _amount;
+                        owner.NextTurnSuperArmorBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [다음 턴 예약] {owner.Name}: 다음 턴 슈퍼아머 +{_amount} 예약됨");
+                            $"  [다음 턴 예약] {owner.Name}: 다음 턴 슈퍼아머 +{Amount} 예약됨");
                     }
                     else // ThisTurn
                     {
-                        owner.SuperArmorBonus += _amount;
+                        owner.SuperArmorBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [슈퍼아머] {owner.Name} 슈퍼아머 +{_amount} (이번 라운드 합계: {owner.SuperArmorBonus})");
+                            $"  [슈퍼아머] {owner.Name} 슈퍼아머 +{Amount} (이번 라운드 합계: {owner.SuperArmorBonus})");
                     }
                     break;
-
+                /*
                 case BuffType.Invincible:
                     if (_duration == EffectDuration.Stack) // 스택형 무적(1회성) 지원
                     {
@@ -148,34 +152,130 @@ namespace TCG_Project.Scripts.Effects
                         EventManager.OnLogMessage?.Invoke(
                             $"  [무적] {owner.Name} 이번 라운드 무적 상태");
                     }
-                    break;
+                    break;*/
 
                 case BuffType.Firepower:
                     if (_duration == EffectDuration.Stack) // 스택형 화력 지원 (1회성)
                     {
-                        owner.StackFirepowers.Add(_amount); // 리스트에 개별 화력으로 장전
+                        owner.StackFirepowers.Add(Amount); // 리스트에 개별 화력으로 장전
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [스택 화력] {owner.Name} 스택 화력({_amount}) 장전 (현재 대기: {owner.StackFirepowers.Count}개)");
+                            $"  [스택 화력] {owner.Name} 스택 화력({Amount}) 장전 (현재 대기: {owner.StackFirepowers.Count}개)");
                     }
                     else if (_duration == EffectDuration.NextTurn)
                     {
-                        owner.NextTurnFirepowerBonus += _amount;
+                        owner.NextTurnFirepowerBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [다음 턴 예약] {owner.Name}: 다음 라운드 화력 +{_amount} 예약됨");
+                            $"  [다음 턴 예약] {owner.Name}: 다음 라운드 화력 +{Amount} 예약됨");
                     }
                     else // ThisTurn
                     {
-                        owner.FirepowerBonus += _amount;
+                        owner.FirepowerBonus += Amount;
                         EventManager.OnLogMessage?.Invoke(
-                            $"  [화력] {owner.Name} 화력 +{_amount} (이번 라운드 합계: {owner.FirepowerBonus})");
+                            $"  [화력] {owner.Name} 화력 +{Amount} (이번 라운드 합계: {owner.FirepowerBonus})");
+                    }
+                    break;
+
+                case BuffType.Invincible:
+                    if (_duration == EffectDuration.Stack)
+                    {
+                        // ★ 개선: 스택형 무적은 카드의 '발동 원천(Source)'을 기록하여 저장합니다.
+                        // 나중에 DamageResolver에서 이 리스트(Queue)의 카드를 소모하며 데미지를 무효화합니다.
+                        Card sourceCard = context.ActivePlayer.PlayingCard;
+                        owner.StackInvincibilities.Add(sourceCard ?? new Card { Name = "알 수 없는 스택 무적" });
+
+                        EventManager.OnLogMessage?.Invoke(
+                            $"  [스택 무적] {owner.Name} 1회성 스택 무적 장전 (현재 대기: {owner.StackInvincibilities.Count}개)");
+                    }
+                    else if (_duration == EffectDuration.NextTurn)
+                    {
+                        owner.NextTurnIsInvincible = true;
+                        EventManager.OnLogMessage?.Invoke($"  [다음 턴 예약] {owner.Name}: 다음 라운드 무적 예약됨");
+                    }
+                    else // ThisTurn
+                    {
+                        owner.IsInvincible = true;
+                        EventManager.OnLogMessage?.Invoke($"  [무적] {owner.Name} 이번 라운드 무적 상태");
                     }
                     break;
 
                 case BuffType.CounterAttack:
+                    if (_duration == EffectDuration.Stack)
+                    {
+                        // 스택으로 발동하는 반격은 '상태(HasCounterAttack)'를 영구적으로 켜는 것이 아니라,
+                        // 지금 들어오는 1회의 공격에 대해 즉발성으로 반격을 '예약'하는 것입니다.
+                        Card sourceCard = context.ActivePlayer.PlayingCard;
+                        owner.StackCounterAttacks.Add(sourceCard);
+
+                        EventManager.OnLogMessage?.Invoke(
+                            $"  [스택 반격] {owner.Name} 즉발 스택 반격 장전 (현재 대기: {owner.StackCounterAttacks.Count}개)");
+
+                        // 보상 처리 (마하 10 등에 보상이 있다면)
+                        if (_rewardOnSuccess == "SelfToResource" && sourceCard != null)
+                        {
+                            owner.PendingCounterRewards.Enqueue(() =>
+                            {
+                                if (owner.Graveyard.Contains(sourceCard))
+                                {
+                                    owner.ExtractCard(ZoneType.Graveyard, sourceCard);
+                                    owner.InsertCard(ZoneType.ResourceZone, sourceCard);
+                                    EventManager.OnCardMove?.Invoke(sourceCard, owner, ZoneType.Graveyard, owner, ZoneType.ResourceZone);
+                                    EventManager.OnLogMessage?.Invoke($"  ✨ [반격 성공 보상] '{sourceCard.Name}'이(가) 자원존으로 이동했습니다!");
+                                }
+                            });
+                        }
+                    }
+                    else if (_duration == EffectDuration.NextTurn)
+                    {
+                        owner.NextTurnCounterAttack = true;
+                        EventManager.OnLogMessage?.Invoke($"  [다음 턴 예약] {owner.Name}: 다음 라운드 반격 예약됨");
+                    }
+                    else // ThisTurn
+                    {
+                        owner.HasCounterAttack = true;
+                        EventManager.OnLogMessage?.Invoke($"  [반격] {owner.Name} 이번 라운드 반격 상태!");
+
+                        Card sourceCard = context.ActivePlayer.PlayingCard;
+                        if (_rewardOnSuccess == "SelfToResource" && sourceCard != null)
+                        {
+                            owner.PendingCounterRewards.Enqueue(() =>
+                            {
+                                if (owner.Graveyard.Contains(sourceCard))
+                                {
+                                    owner.ExtractCard(ZoneType.Graveyard, sourceCard);
+                                    owner.InsertCard(ZoneType.ResourceZone, sourceCard);
+                                    EventManager.OnCardMove?.Invoke(sourceCard, owner, ZoneType.Graveyard, owner, ZoneType.ResourceZone);
+                                    EventManager.OnLogMessage?.Invoke($"  ✨ [반격 성공 보상] '{sourceCard.Name}'이(가) 자원존으로 이동했습니다!");
+                                }
+                            });
+                        }
+                    }
+                    break;
+                /*
+                case BuffType.CounterAttack:
                     owner.HasCounterAttack = true;
                     EventManager.OnLogMessage?.Invoke(
-                        $"  [반격] {owner.Name} 이번 라운드 반격 상태");
-                    break;
+                        $"  [반격] {owner.Name} 이번 라운드 반격 상태!");
+
+                    // 반격을 부여한 카드 정보 저장
+                    Card sourceCard = context.ActivePlayer.PlayingCard;
+
+                    // JSON에 보상이 명시되어 있다면, 큐에 행동(Action)을 장전합니다.
+                    if (_rewardOnSuccess == "SelfToResource" && sourceCard != null)
+                    {
+                        owner.PendingCounterRewards.Enqueue(() =>
+                        {
+                            // 이 람다식은 미래에 반격이 성공했을 때 실행됩니다.
+                            // 이미 카드가 폐기존에 가 있으므로, 폐기존에서 찾아옵니다.
+                            if (owner.Graveyard.Contains(sourceCard))
+                            {
+                                owner.ExtractCard(ZoneType.Graveyard, sourceCard);
+                                owner.InsertCard(ZoneType.ResourceZone, sourceCard);
+                                EventManager.OnCardMove?.Invoke(sourceCard, owner, ZoneType.Graveyard, owner, ZoneType.ResourceZone);
+                                EventManager.OnLogMessage?.Invoke($"  ✨ [반격 성공 보상] '{sourceCard.Name}'이(가) 자원존으로 이동했습니다!");
+                            }
+                        });
+                    }
+                    break;*/
             }
 
             onComplete?.Invoke();

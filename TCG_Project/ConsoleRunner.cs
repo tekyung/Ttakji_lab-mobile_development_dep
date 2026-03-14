@@ -16,7 +16,6 @@ namespace TCG_Project
     {
         private static GameDataManager _dataManager;
         private static GameContext context;
-        public static int globalTurn = 1;
 
         // 오픈 페이즈에서 공개한 카드를 메인 페이즈까지 전달
         private static Card _p1RevealedCard = null;
@@ -25,7 +24,7 @@ namespace TCG_Project
         // 현재 게임 승자 (MatchManager에서 참조)
         private static Player _currentGameWinner = null;
 
-        // 듀얼 캐릭터: Bot_Red(ELLI+VERO 5:5), Bot_Blue(DAIN+SONI 5:5)
+        // 듀얼 캐릭터: Bot_Red(ELLI + DAINA), Bot_Blue(VERONICA + SONIA)
         private const string P1_CHAR1 = "ELLI-01";
         private const string P2_CHAR1 = "VERO-01";
         private const string P1_CHAR2 = "DAIN-01";
@@ -51,7 +50,6 @@ namespace TCG_Project
             // 2. 데이터 로드 (매치 전체에서 1회)
             GameRules.LoadRules("./Data/CommonConfig.json");
             _dataManager = new GameDataManager();
-            //_dataManager.LoadAllData("./Data");
             _dataManager.LoadRulebookCards("./Data");
             _dataManager.LoadCharacterCards("./Data");
             _dataManager.LoadResourceCards("./Data");
@@ -108,7 +106,6 @@ namespace TCG_Project
         // ─────────────────────────────────────────────────────────
         private static void InitializeSingleGame(Player p1, Player p2)
         {
-            globalTurn = 1;
             _p1RevealedCard = null;
             _p2RevealedCard = null;
 
@@ -118,16 +115,66 @@ namespace TCG_Project
             p2.CharacterCardId = P2_CHAR1;
             p2.SecondaryCharacterId = P2_CHAR2;
 
-            // 덱 재구성 (듀얼 5:5 비율) 후 플레이어 상태 완전 초기화
-            p1.ResetForNewGame(CreateDualCharacterDeck(P1_CHAR1, P1_CHAR2, 5, 5), CreateResourceDeck());
-            p2.ResetForNewGame(CreateDualCharacterDeck(P2_CHAR1, P2_CHAR2, 5, 5), CreateResourceDeck());
+            // ==============================================================
+            // ★ [임시 테스트용] 원하는 타겟 카드 ID 하드코딩
+            // 배열에 적어둔 ID 1개당 자동으로 2장씩 덱에 들어갑니다.
+            // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
+            // ==============================================================
+            string[] p1TestIds = // BotRed : 엘리 + 다이나
+            [
+                "ELLI-02", // 퀵 드로우
+                "ELLI-03", // 수류탄 투척
+                "ELLI-04", // 미니건 난사
+                "ELLI-05", // 준비된 방어선
+                "ELLI-06", // 격추 시스템
+                "ELLI-07", // 카모플라쥬
+
+                "DAIN-02", // 함포 준비, 발사
+                "DAIN-03", // 미사일 발사
+                "DAIN-07", // 강도 테스트
+                "DAIN-09", // 리벤지
+                "DAIN-11", // 조선소
+                        // 필요시 여기에 ID를 더 추가하세요.
+            ];
+
+            string[] p2TestIds = // BorBlue : 베로니카 + 소니아
+            {
+                "VERO-02", // 숙청
+                "VERO-03", // 계획대로
+                "VERO-05", // 요새화
+                "VERO-07", // 시위 해산
+                "VERO-11", // 체크메이트
+
+                "SONI-02", // 빵야!
+                "SONI-03", // 내 선물이야 ♬
+                "SONI-05", // 곡예 비행
+                "SONI-06", // 엔진 예열
+                "SONI-07", // 마하 10
+                "SONI-11", // 노을지는 활주로
+                        // 필요시 여기에 ID를 더 추가하세요.
+            };
+
+            // 하드코딩된 배열을 기반으로 덱을 생성합니다.
+            var deck1 = CreateDeckFromIds(p1TestIds);
+            var deck2 = CreateDeckFromIds(p2TestIds);
+
+            // 덱 셔플 및 플레이어 초기화
+            p1.ResetForNewGame(deck1, CreateResourceDeck());
+            p2.ResetForNewGame(deck2, CreateResourceDeck());
+            // ==============================================================
+
+            // 덱 재구성 (듀얼 5:5 비율) 후 플레이어 상태 완전 초기화 - 원본 코드
+            // p1.ResetForNewGame(CreateDualCharacterDeck(P1_CHAR1, P1_CHAR2, 5, 5), CreateResourceDeck());
+            // p2.ResetForNewGame(CreateDualCharacterDeck(P2_CHAR1, P2_CHAR2, 5, 5), CreateResourceDeck());
+
+            // GameContext 새로 생성
+            context = new GameContext();
+            context.CurrentTurn = 1;
 
             // 시작 패 드로우
             GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
             GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
-
-            // GameContext 새로 생성
-            context = new GameContext();
+            
             context.Players.Add(p1);
             context.Players.Add(p2);
 
@@ -146,44 +193,44 @@ namespace TCG_Project
         // ─────────────────────────────────────────────────────────
         private static void RunGameLoop(Player p1, Player p2)
         {
-            while (!context.IsGameOver && globalTurn <= 20)
+            while (!context.IsGameOver && context.CurrentTurn <= 20)
             {
-                EventManager.OnTurnStart?.Invoke(globalTurn, "양측");
+                EventManager.OnTurnStart?.Invoke(context.CurrentTurn, "양측");
                 _p1RevealedCard = null;
                 _p2RevealedCard = null;
 
                 context.CurrentPhase = GamePhase.ResourcePhase;
-                ExecuteResourcePhase(p1, p2, globalTurn);
+                ExecuteResourcePhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break; // ★ 체크포인트
 
                 context.CurrentPhase = GamePhase.DrawPhase;
-                ExecuteDrawPhase(p1, p2, globalTurn);
+                ExecuteDrawPhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break;
 
                 context.CurrentPhase = GamePhase.SetPhase;
-                ExecuteSetPhase(p1, p2, globalTurn);
+                ExecuteSetPhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break;
 
                 context.CurrentPhase = GamePhase.OpenPhase;
-                ExecuteOpenPhase(p1, p2, globalTurn);
+                ExecuteOpenPhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break;
 
                 context.CurrentPhase = GamePhase.MainPhase;
-                ExecuteMainPhase(p1, p2, globalTurn);
+                ExecuteMainPhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break;
 
                 context.CurrentPhase = GamePhase.EndPhase;
-                ExecuteEndPhase(p1, p2, globalTurn);
+                ExecuteEndPhase(p1, p2, context.CurrentTurn);
                 if (CheckAndHandleGameOver(p1, p2)) break;
 
                 // ★ 턴 종료 이벤트 방송! (UI에서 턴 정리 연출에 사용)
                 EventManager.OnTurnEnd?.Invoke("양측");
 
-                globalTurn++;
+                context.CurrentTurn++;
             }
 
             // 라운드 한도 초과 → 무승부
-            if (!context.IsGameOver && globalTurn > 20)
+            if (!context.IsGameOver && context.CurrentTurn > 20)
             {
                 context.IsGameOver = true;
                 EventManager.OnGameDraw?.Invoke(p1, p2, 20);
@@ -197,22 +244,24 @@ namespace TCG_Project
         {
             EventManager.OnResourcePhase?.Invoke("양측", turn);
             EventManager.OnLogMessage?.Invoke("[ 자원 페이즈 ]");
+            if (p1.BattlefieldCard != null || p2.BattlefieldCard != null)
+            {
+                EventManager.OnLogMessage?.Invoke("[ 적용 중인 전장 카드 ]");
+                EventManager.OnLogMessage?.Invoke($"  {p1.Name} 전장: {(p1.BattlefieldCard != null ? p1.BattlefieldCard.Name : "없음")}");
+                EventManager.OnLogMessage?.Invoke($"  {p2.Name} 전장: {(p2.BattlefieldCard != null ? p2.BattlefieldCard.Name : "없음")}");
+            }
 
             // 이전 턴에 발동한 다음턴 버프 적용
             p1.ApplyNextTurnBuffs();
             p2.ApplyNextTurnBuffs();
 
-            context.ActivePlayer = p1;
-            context.TargetPlayer = p2;
+            context.ActivePlayer = p1; context.TargetPlayer = p2;
             p1.TakeResourceCard();
             // 전장 주기 효과 적용 — 자원 페이즈 (ELLI-11 무작위 노획)
-            GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context);
             if (GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context)) return; // 헬퍼가 true를 주면 즉시 페이즈 컷
 
-            context.ActivePlayer = p2;
-            context.TargetPlayer = p1;
+            context.ActivePlayer = p2; context.TargetPlayer = p1;
             p2.TakeResourceCard();
-            GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context);
             if (GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context)) return;
         }
 
@@ -224,11 +273,9 @@ namespace TCG_Project
 
             // 전장 주기 효과 적용 — 매 드로우 페이즈 (VERO-11 체크메이트, DAIN-11 조선소, SONI-11 노을지는 활주로)
             context.ActivePlayer = p1; context.TargetPlayer = p2;
-            GameLogicHelpers.ApplyBattlefieldTurnEffects(p1, context);
             if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p1, context)) return;
-            
+
             context.ActivePlayer = p2; context.TargetPlayer = p1;
-            GameLogicHelpers.ApplyBattlefieldTurnEffects(p2, context);
             if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p2, context)) return;
 
             // 캐릭터 능력: VERONICA(VERO-01) — 드로우 대신 덱 탑 3장 보기 → 1장 패로
@@ -284,10 +331,48 @@ namespace TCG_Project
             EventManager.OnLogMessage?.Invoke($"{p2.Name} 세트존: {(p2.SetZoneCard != null ? "세트됨" : "없음")}");
         }
 
-        // 봇 세트 전략: Speed가 가장 낮은(빠른) 카드 우선 → 같으면 Defense > Attack > Support
+        // 봇 세트 전략 (QA 테스트용): 지불 가능한 카드 중 완전히 무작위로 선택하여 다양한 효과 충돌 유도
         private static void BotChooseSetCard(Player p)
         {
             if (p.Hand.Count == 0) return;
+
+            // 1. 코스트 지불이 가능하여 '실제로 발동될 수 있는' 카드들만 먼저 추립니다.
+            // (효과가 취소되고 버려지는 상황을 최소화하여 실제 이펙트 테스트 횟수를 극대화)
+            var affordableCards = p.Hand
+                .Where(c => GameLogicHelpers.GetEffectiveCost(c, p) <= p.ResourceZone.Count)
+                .ToList();
+
+            // 2. 만약 낼 수 있는 카드가 하나도 없다면, 어차피 버려질 테니 패 전체를 후보로 둡니다.
+            var candidates = affordableCards.Count > 0 ? affordableCards : p.Hand;
+
+            // 3. 기존의 획일화된 기준(Speed, Type)을 버리고, Guid를 이용한 무작위 정렬(Shuffle)을 수행합니다.
+            // 시간 복잡도: O(N log N). 패의 최대 장수가 적으므로(약 5~10장) 성능 오버헤드는 0에 수렴합니다.
+            var candidate = candidates
+                .OrderBy(c => System.Guid.NewGuid())
+                .FirstOrDefault();
+
+            if (candidate != null)
+                p.SetCard(candidate);
+        }
+
+        /* 기존 코드: 봇 세트 전략: Speed가 가장 낮은(빠른) 카드 우선 → 같으면 Defense > Attack > Support
+        private static void BotChooseSetCard(Player p)
+        {
+            if (p.Hand.Count == 0) return;
+
+            if (p.ResourceZone.Count >= 2 && p.BattlefieldCard == null) // 전장 카드가 없고 자원존이 2장 이상이면 전장 우선 고려
+            {
+                // 전장 카드가 있으면 우선 세트
+                var battlefieldCandidate = p.Hand
+                    .Where(c => c.IsBattlefield)
+                    .OrderBy(c => c.Speed == CardSpeed.None ? 999 : (int)c.Speed)
+                    .FirstOrDefault();
+                if (battlefieldCandidate != null)
+                {
+                    p.SetCard(battlefieldCandidate);
+                    return;
+                }
+            }
 
             // 룰북 타입(Attack/Defense/Support) 카드를 우선 탐색
             var candidate = p.Hand
@@ -298,7 +383,7 @@ namespace TCG_Project
 
             if (candidate != null)
                 p.SetCard(candidate);
-        }
+        }*/
 
         // 페이즈 4: 오픈 페이즈 — 양측 동시에 세트 카드를 공개 or 폐기 선택
         private static void ExecuteOpenPhase(Player p1, Player p2, int turn)
@@ -382,12 +467,22 @@ namespace TCG_Project
                     context.ActivePlayer = player;
                     context.TargetPlayer = enemy;
 
-                    if (card.Cost > 0 && !player.PayCost(card.Cost))
+                    if (card.Cost > 0)
                     {
-                        EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 코스트 지불 실패 → 효과 취소");
-                        player.Graveyard.Add(card);
-                        EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
-                        continue;
+                        int effectiveCost = GameLogicHelpers.GetEffectiveCost(card, player);
+                        if (effectiveCost > 0 && !player.PayCost(effectiveCost))
+                        {
+                            EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 코스트 지불 실패 → 효과 취소");
+                            player.ExtractCard(ZoneType.SetZone, card);
+                            player.InsertCard(ZoneType.Graveyard, card);
+                            EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
+                            continue;
+                        }
+                        else if (effectiveCost == 0 && card.Cost > 0)
+                        {
+                            // 원본 코스트가 있었으나 전장 효과로 0이 된 경우의 로그
+                            EventManager.OnLogMessage?.Invoke($"  ✨ [{card.Name}] 전장 효과로 코스트 무료 발동!");
+                        }
                     }
 
                     // 1. 스택 반응 (이 안에서 주체가 바뀌므로 복구 로직이 필수적입니다)
@@ -412,14 +507,15 @@ namespace TCG_Project
                         EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.StackZone);
                         EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 스택존에 대기 상태로 전환.");
                     }
-                    else if (player.BattlefieldCard == card)
+                    else if (card.IsBattlefield)
                     {
-                        player.InsertCard(ZoneType.BattlefieldZone, card);
+                        EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 전장 카드 발동!");
                         player.ExtractCard(ZoneType.SetZone, card);
                         // ★ 이동 방송
+                        player.PlaceBattlefield(card); // 전장 카드는 폐기하지 않음
                         EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.BattlefieldZone);
-                        // 전장 카드는 폐기하지 않음
-                        EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 전장존에 배치됨.");
+
+                        GameLogicHelpers.ApplyBattlefieldTurnEffects(player, context); // 전장 카드가 즉시 효과를 발동하는 경우가 있으므로
                     }
                     else if (player.ResourceZone.Contains(card))
                     {
@@ -521,7 +617,7 @@ namespace TCG_Project
             {
                 context.IsGameOver = true;
                 EventManager.OnLogMessage?.Invoke("\n⚔️ 양측 플레이어의 라이프가 동시에 0이 되었습니다! (무승부)");
-                EventManager.OnGameDraw?.Invoke(p1, p2, globalTurn);
+                EventManager.OnGameDraw?.Invoke(p1, p2, context.CurrentTurn);
                 return true;
             }
             else if (p1Dead)
@@ -583,13 +679,35 @@ namespace TCG_Project
 
         /// <summary>
         /// 듀얼 캐릭터 덱 생성: char1에서 count1종×2장 + char2에서 count2종×2장 = 20장.
+        /// ★ 테스트 모드: CardType.Support (지원 카드)를 최우선으로 덱에 포함시킵니다.
         /// </summary>
         private static List<Card> CreateDualCharacterDeck(string charId1, string charId2, int count1, int count2)
         {
-            var ids1 = _dataManager.GetEffectCardIdsForCharacter(charId1);
-            var ids2 = _dataManager.GetEffectCardIdsForCharacter(charId2);
-            var ids = ids1.Take(count1).Concat(ids2.Take(count2)).ToArray();
+            // Support 카드를 1순위로 긁어오도록 설정
+            var ids1 = GetPrioritizedCardIds(charId1, count1, CardType.Support);
+            var ids2 = GetPrioritizedCardIds(charId2, count2, CardType.Support);
+
+            var ids = ids1.Concat(ids2).ToArray();
             return CreateDeckFromIds(ids);
+        }
+
+        /// <summary>
+        /// 지정한 캐릭터의 카드 풀에서 선호하는 타입(preferredType)의 카드를 우선적으로 추출합니다.
+        /// </summary>
+        private static IEnumerable<string> GetPrioritizedCardIds(string charId, int count, CardType preferredType)
+        {
+            // "ELLI-01" -> "ELLI" 추출
+            string prefix = charId.Contains("-") ? charId.Split('-')[0] : charId;
+
+            return _dataManager.AllCards.Values
+                // 해당 캐릭터의 카드만 필터링 (캐릭터 카드 본체는 제외)
+                .Where(c => c.Id.StartsWith(prefix + "-") && c.Id != charId)
+                // 1순위 정렬: 선호 타입(Support)이면 0, 아니면 1 부여 -> Support 카드가 리스트 맨 위로 올라옴
+                .OrderBy(c => c.Type == preferredType ? 0 : 1)
+                // 2순위 정렬: ID 오름차순 (동일 타입 내에서)
+                .ThenBy(c => c.Id)
+                .Select(c => c.Id)
+                .Take(count); // 필요한 종류(count)만큼만 잘라냄
         }
 
         // 자원 카드 15장 생성 (Data/ResourceCards.json RES-01 기반)
@@ -620,19 +738,17 @@ namespace TCG_Project
             int incomingHits = 0;
             bool isPiercingAttack = false;
 
-            if (playedCard.Type == CardType.Attack)
+            // 공격 카드의 효과를 분석하여 타격 횟수와 관통 여부를 계산합니다.
+            foreach (var effect in playedCard.Effects)
             {
-                foreach (var effect in playedCard.Effects)
+                if (effect is DamageEffect dmgEffect)
                 {
-                    if (effect is DamageEffect dmgEffect)
-                    {
-                        incomingHits += dmgEffect.Times;
-                        if (dmgEffect.isPiercing) isPiercingAttack = true;
-                    }
+                    incomingHits += dmgEffect.Times;
+                    if (dmgEffect.isPiercing) isPiercingAttack = true;
                 }
             }
 
-            // [AI 포인트 1] 데미지가 없는 공격이거나 공격 카드가 아니라면 스택을 아낍니다.
+            // [AI 포인트 1] 데미지가 없는 카드라면 스택을 아낍니다.
             if (incomingHits == 0) return;
 
             // ★ 상태 저장 (State Save)
@@ -644,13 +760,13 @@ namespace TCG_Project
             // 스택존 카드들을 복사해서 순회
             foreach (var stackCard in new List<Card>(stackOwner.StackZone))
             {
-                // [AI 포인트 2] 타격 횟수만큼 방어 카드를 썼다면 추가 발동 중단!
+                // [AI 포인트 2] 타격 횟수만큼 방어 카드를 썼다면 추가 발동 중단
                 if (activatedCount >= incomingHits) break;
 
                 bool canBlock = false;
 
                 // 내 스택 카드가 방어 카드일 경우, 이 공격을 막을 수 있는지 검증
-                if (stackCard.Type == CardType.Defense)
+                if (stackCard.Type == CardType.Defense || stackCard.Type == CardType.Support)
                 {
                     foreach (var effect in stackCard.Effects)
                     {

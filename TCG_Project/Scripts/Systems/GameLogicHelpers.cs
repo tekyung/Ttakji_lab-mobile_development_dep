@@ -23,11 +23,29 @@ namespace TCG_Project.Scripts.Systems
             {
                 foreach (var eff in p.BattlefieldCard.Effects)
                 {
-                    if (eff is BattlefieldEffect bf &&
-                        !string.IsNullOrEmpty(bf.CostReductionFilter) &&
-                        CardSelector.MatchesSingle(card, bf.CostReductionFilter))
+                    if (eff is BattlefieldEffect bf && !string.IsNullOrEmpty(bf.CostReductionFilter))
                     {
-                        cost = Math.Max(0, cost - bf.CostReduction);
+                        bool isMatch = false;
+                        // ★ 추가: character: 필터일 경우 확실하게 하드코딩으로 검증
+                        if (bf.CostReductionFilter.StartsWith("character:"))
+                        {
+                            string targetChar = bf.CostReductionFilter.Split(':')[1]; // 예: "SONIA"
+
+                            // "SONI-02"에서 "SONI"만 추출
+                            string cardPrefix = card.Id.Contains("-") ? card.Id.Split('-')[0] : card.Id;
+
+                            // ★ 수정됨: 카드의 CharacterId가 정확히 일치하거나, 타겟명("SONIA")이 카드접두사("SONI")로 시작하는지 검사
+                            isMatch = (card.CharacterId == targetChar) || targetChar.StartsWith(cardPrefix);
+                        }
+                        else
+                        {
+                            isMatch = CardSelector.MatchesSingle(card, bf.CostReductionFilter);
+                        }
+
+                        if (isMatch)
+                        {
+                            cost = Math.Max(0, cost - bf.CostReduction);
+                        }
                     }
                 }
             }
@@ -35,8 +53,7 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// <summary>
-        /// 드로우 페이즈: 전장 카드의 매 턴 효과 적용 (VERO-11, DAIN-11, SONI-11).
-        /// 반환값: 효과 적용 중 누군가 사망하여 게임이 오버되었는지 여부 (SBA 대응)
+        /// 드로우 페이즈: 전장 카드의 매 턴 효과 적용 (지속 효과 Wake)
         /// </summary>
         public static bool ApplyBattlefieldTurnEffects(Player p, GameContext ctx)
         {
@@ -46,35 +63,29 @@ namespace TCG_Project.Scripts.Systems
             {
                 if (eff is not BattlefieldEffect bf) continue;
 
-                if (bf.PerTurnEffect != null)
+                // ★ 지속 효과: Execute를 부르지 않고 수치만 추출하여 1회성 버프로 장전 (Wake)
+                if (bf.PerTurnEffect is BuffEffect buff)
                 {
-                    EventManager.OnLogMessage?.Invoke($"  [전장 효과 발동] {p.Name}의 '{p.BattlefieldCard.Name}'");
-                    ctx.ActivePlayer = p;
-                    // TargetPlayer는 상황에 따라 달라질 수 있으나, 일반적으로 상대방으로 설정
-                    ctx.TargetPlayer = ctx.GetOpponent(p); 
-                    
-                    // Execute 직접 호출 대신, Card.Play 등을 모방하여 명시적으로 실행
-                    // (전장 효과는 스택 반응이 아니므로 isStackTrigger = false 취급이 맞지만,
-                    // BattlefieldEffect 내부에 감싸진 서브 이펙트이므로 직접 실행을 유지하되 컨텍스트를 보호합니다)
-                    ctx.LastEffectSucceeded = true;
-                    bf.PerTurnEffect.Execute(ctx, () => { });
-
-                    // ★ SBA 대응: 전장 효과(데미지 등)로 인해 즉사했는지 바로 확인
-                    if (ctx.IsGameOver) return true; 
+                    if (buff.TypeOfBuff == BuffType.Armor)
+                    {
+                        p.BattlefieldArmor = buff.Amount;
+                        EventManager.OnLogMessage?.Invoke($"  [전장 효과] {p.Name} '{p.BattlefieldCard.Name}' (1회성 아머 +{buff.Amount})");
+                    }
+                    else if (buff.TypeOfBuff == BuffType.Firepower)
+                    {
+                        p.BattlefieldFirepower = buff.Amount;
+                        EventManager.OnLogMessage?.Invoke($"  [전장 효과] {p.Name} '{p.BattlefieldCard.Name}' (1회성 화력 +{buff.Amount})");
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(bf.CostReductionFilter))
-                {
-                    EventManager.OnLogMessage?.Invoke(
-                        $"  [전장] {p.Name} '{p.BattlefieldCard.Name}': 조건 카드 코스트 감소 효과 유지 중");
-                }
+                    EventManager.OnLogMessage?.Invoke($"  [전장] {p.Name} '{p.BattlefieldCard.Name}': 코스트 감소 상시 적용 중");
             }
             return false;
         }
 
         /// <summary>
-        /// 자원 페이즈: 전장 카드의 자원페이즈 효과 적용 (ELLI-11 무작위 노획).
-        /// 반환값: 효과 적용 중 게임 오버 여부
+        /// 자원 페이즈: 전장 카드의 자원페이즈 기동 효과 적용 (ELLI-11 무작위 노획 등)
         /// </summary>
         public static bool ApplyBattlefieldResourcePhaseEffects(Player p, GameContext ctx)
         {
@@ -84,14 +95,13 @@ namespace TCG_Project.Scripts.Systems
             {
                 if (eff is BattlefieldEffect bf && bf.PerResourcePhaseEffect != null)
                 {
-                    EventManager.OnLogMessage?.Invoke($"  [전장 효과 발동] {p.Name}의 '{p.BattlefieldCard.Name}'");
+                    EventManager.OnLogMessage?.Invoke($"  ▶ [전장 기동] {p.Name} '{p.BattlefieldCard.Name}' 효과 발동!");
                     ctx.ActivePlayer = p;
                     ctx.TargetPlayer = ctx.GetOpponent(p);
-
                     ctx.LastEffectSucceeded = true;
-                    bf.PerResourcePhaseEffect.Execute(ctx, () => { });
 
-                    // ★ SBA 대응
+                    // 기동 효과는 1회성 스탯이 아니라 실제 카드 이동/효과이므로 정상 실행
+                    bf.PerResourcePhaseEffect.Execute(ctx, () => { });
                     if (ctx.IsGameOver) return true;
                 }
             }
@@ -112,7 +122,7 @@ namespace TCG_Project.Scripts.Systems
                 {
                     p.InsertCard(ZoneType.Hand, c);
                     drawn++;
-                    
+
                     // ★ 유니티 연출을 위한 필수 이벤트(이동 및 드로우)를 모두 쏩니다.
                     EventManager.OnCardMove?.Invoke(c, p, ZoneType.Deck, p, ZoneType.Hand);
                     EventManager.OnCardDraw?.Invoke(c, p, ZoneType.Deck);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
 using TCG_Project.Scripts.Managers;
+using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -27,7 +28,7 @@ namespace TCG_Project.Scripts.Effects
             {
                 RequirePreviousSuccess = Convert.ToBoolean(requirePrevObj.ToString());
             }
-            
+
             if (parameters.TryGetValue("isStackAction", out var isStackObj))
             {
                 IsStackAction = Convert.ToBoolean(isStackObj.ToString());
@@ -37,40 +38,56 @@ namespace TCG_Project.Scripts.Effects
         public void Execute(GameContext context, Action onComplete)
         {
             Player owner = context.ActivePlayer;
-            if (owner == null || owner.PlayBuffer.Count == 0)
+            if (owner.PlayBuffer.Count == 0)
             {
-                EventManager.OnLogMessage?.Invoke(
-                    "  [버퍼발동] PlayBuffer가 비어 있어 발동할 카드가 없습니다.");
                 onComplete?.Invoke();
                 return;
             }
 
-            Card card = owner.PlayBuffer[0];
-            owner.PlayBuffer.RemoveAt(0);
+            Card bufferedCard = owner.PlayBuffer[0];
 
-            // 코스트 지불
-            if (card.Cost > 0 && !owner.PayCost(card.Cost))
+            // 1. 자아(Identity) 교체: 이펙트들이 자기 자신을 올바르게 참조하도록 변경
+            Card originalPlayingCard = owner.PlayingCard;
+            owner.PlayingCard = bufferedCard;
+
+            EventManager.OnLogMessage?.Invoke($"  [버퍼발동] '{bufferedCard.Name}' (코스트 {bufferedCard.Cost}) 즉시 발동!");
+
+            // 2. 카드 발동
+            bufferedCard.Play(context, () =>
             {
-                EventManager.OnLogMessage?.Invoke(
-                    $"  [버퍼발동] '{card.Name}' 코스트 부족 → 발동 취소, 폐기존으로 이동");
-                card.Cost = card.OriginalCost;
-                owner.Graveyard.Add(card);
-                onComplete?.Invoke();
-                return;
-            }
+                // 3. 카드 이동 분기 처리 (ConsoleRunner 교통정리와 100% 동일한 라우팅)
+                owner.ExtractCard(ZoneType.PlayBuffer, bufferedCard);
 
-            EventManager.OnLogMessage?.Invoke(
-                $"  [버퍼발동] '{card.Name}' (코스트 {card.Cost}) 즉시 발동!");
+                if (bufferedCard.IsStack)
+                {
+                    owner.AddToStackZone(bufferedCard);
+                    EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.StackZone);
+                }
+                else if (bufferedCard.IsBattlefield)
+                {
+                    owner.PlaceBattlefield(bufferedCard);
+                    EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.BattlefieldZone);
 
-            card.Play(context, () =>
-            {
-                // 코스트 복원 후 폐기존으로
-                card.Cost = card.OriginalCost;
-                owner.Graveyard.Add(card);
-                EventManager.OnLogMessage?.Invoke(
-                    $"  [버퍼발동] '{card.Name}' 발동 완료 → 폐기존");
+                    // ★ 전장 즉시 발동(Wake) 처리
+                    GameLogicHelpers.ApplyBattlefieldTurnEffects(owner, context);
+                }
+                else if (owner.ResourceZone.Contains(bufferedCard))
+                {
+                    // SelfAsResource 효과 (보급 전달 등)
+                    EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.ResourceZone);
+                }
+                else
+                {
+                    owner.InsertCard(ZoneType.Graveyard, bufferedCard);
+                    EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.Graveyard);
+                    EventManager.OnLogMessage?.Invoke($"  [버퍼발동] '{bufferedCard.Name}' 발동 완료 → 폐기존");
+                }
+
+                // 4. 자아(Identity) 복구: 다시 원래대로 돌아옴("기뢰" 등)
+                owner.PlayingCard = originalPlayingCard;
+
                 onComplete?.Invoke();
-            });
+            }, isStackTrigger: false);
         }
 
         public ICardEffect Clone()

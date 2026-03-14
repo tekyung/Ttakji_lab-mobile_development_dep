@@ -52,7 +52,7 @@ namespace TCG_Project.Scripts.Effects
         }
 
         public void Execute(GameContext context, Action onComplete)
-        {
+        {   
             Player owner = context.ActivePlayer;
             Card self    = owner?.PlayingCard;
 
@@ -64,10 +64,10 @@ namespace TCG_Project.Scripts.Effects
                 return;
             }
 
-            owner.PlaceBattlefield(self);
+            // owner.PlaceBattlefield(self);
             EventManager.OnLogMessage?.Invoke(
                 $"  [전장 배치] {owner.Name}: '{self.Name}' 전장존 — {BuildDetailText()}");
-
+            
             onComplete?.Invoke();
         }
 

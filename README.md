@@ -1,3 +1,7 @@
+# C# 환경 테스트 (ConsoleRunner.cs 를 실행할 경우) _ VS code 기준
+
+- 빌드: `dotnet build`, 실행: `dotnet run --project ./TCG_Project.csproj`
+
 ---
 
 # 🎮 TCG 프로젝트: Core 로직 연동 가이드 (UI 개발팀용)
@@ -135,6 +139,10 @@ private void ShowOpenAbandonUI(Player p, Card c, int cost, GameContext ctx, Acti
 3. **이펙트 종류 확인:**
 `OnPlayCard` 가 호출될 때, 해당 카드의 `Type` 이나 이름(`Name`)을 읽어서 공격 카드면 총알 이펙트, 방어 카드면 방패 이펙트 등 어셋을 분기하여 스폰하시면 됩니다.
 
+---
+
+
+---
 
 # 개발 진행 사항 기록
 
@@ -250,3 +258,20 @@ EventManager 설명서 업데이트
 DeckValidator.cs 새 룰에 맞춰 업데이트 (덱 유효성 검사)
 
 Scripts/UI 폴더 안에 유니티 전용 임시 파일들 생성. 덮어써도 무방함.
+
+
+## 26.03.14 진행사항
+
+전체 카드 4 + 40 장 검증 완료
+
+레거시 코드 리팩토링
+
+ConsoleRunner.cs의 118번, BattleManager.cs의 218번 줄에 봇의 덱을 직접 고를 수 있게 업데이트, RileBookCard.json 의 카드 ID로 구성
+
+BattleManager.cs의 86번 줄에서 플레이어/봇 생성. 콜백 로직이 완료되지 않았다면 User.Type을 Bot으로 통일해야 함(자동 진행 모드)
+
+엘리의 "격추 시스템" 카드 기획 의도와 맞게 수정 (표기상 스택 격발 시에 패를 버리지만 발동 즉시 버리게 수정, 설계 상 오타)
+
+세트 존을 단일 카드 변수 대신 리스트로 관리하는 것에 대한 논의 중 (다이나의 "기뢰" 처럼 세트 존 외 카드 효과 발동에 대한 재정)
+
+스택의 종류를 방어뿐 아니라 무적, 반격, 화력 등 추가 구현
