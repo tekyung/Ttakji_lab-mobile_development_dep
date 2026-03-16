@@ -682,6 +682,9 @@ public class BattleManager : MonoBehaviour
                 context.ActivePlayer = stackOwner;
                 context.TargetPlayer = cardPlayer;
 
+                // 스택 카드를 발동하기 전에 시스템에 "현재 사용 중인 카드"를 명시적으로 주입
+                stackOwner.PlayingCard = stackCard;
+
                 EventManager.OnLogMessage?.Invoke($"{stackOwner.Name}: [{stackCard.Name}] 스택 발동! (← 상대: [{playedCard.Name}])");
 
                 bool done = false;
@@ -689,6 +692,9 @@ public class BattleManager : MonoBehaviour
 
                 stackCard.Play(context, () => done = true, isStackTrigger: true);
                 yield return new WaitUntil(() => done);
+
+                // ★ 복구: 발동이 끝났으니 다시 null로 비워줍니다.
+                stackOwner.PlayingCard = null;
 
                 stackOwner.UseAndDiscardStack(stackCard);
                 activatedCount++;

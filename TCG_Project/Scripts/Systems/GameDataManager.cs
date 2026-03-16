@@ -447,7 +447,7 @@ namespace TCG_Project.Scripts.Systems
                         { ["buffType"] = "Armor", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
-                        bf.PerTurnEffect = buffEff;
+                        bf.PerResourcePhaseEffect = buffEff;
                         break;
                     }
 
@@ -458,7 +458,7 @@ namespace TCG_Project.Scripts.Systems
                         { ["buffType"] = "Firepower", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
-                        bf.PerTurnEffect = buffEff;
+                        bf.PerResourcePhaseEffect = buffEff;
                         break;
                     }
 

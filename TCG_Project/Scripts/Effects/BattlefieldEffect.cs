@@ -77,7 +77,6 @@ namespace TCG_Project.Scripts.Effects
 
             if (PerTurnEffect is BuffEffect bf)
             {
-                string buffHint = bf.ToString() ?? "버프";
                 parts.Add("매 턴 버프 지속");
             }
             else if (PerTurnEffect != null)
