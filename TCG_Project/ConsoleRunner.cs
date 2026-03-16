@@ -171,14 +171,13 @@ namespace TCG_Project
             context = new GameContext();
             context.CurrentTurn = 1;
 
-            // 플레이어 추가
-            context.Players.Add(p1);
-            context.Players.Add(p2);
-
             // 시작 패 드로우
             GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
             GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
             
+            context.Players.Add(p1);
+            context.Players.Add(p2);
+
             EventManager.OnLogMessage?.Invoke($"\n[초기 상태]");
             EventManager.OnLogMessage?.Invoke(
                 $"{p1.Name} - 라이프: {p1.LifeTokens} / 덱: {p1.Deck.Count}장 / 자원덱: {p1.ResourceDeck.Count}장 / 패: {p1.Hand.Count}장");
@@ -679,7 +678,8 @@ namespace TCG_Project
         }
 
         /// <summary>
-        /// 듀얼 캐릭터 덱 생성: char1에서 count1종×2장 + char2에서 count2종×2장 = 20장. 당장은 수동 덱 세팅으로 사용하지 않음
+        /// 듀얼 캐릭터 덱 생성: char1에서 count1종×2장 + char2에서 count2종×2장 = 20장.
+        /// ★ 테스트 모드: CardType.Support (지원 카드)를 최우선으로 덱에 포함시킵니다.
         /// </summary>
         private static List<Card> CreateDualCharacterDeck(string charId1, string charId2, int count1, int count2)
         {
@@ -796,17 +796,11 @@ namespace TCG_Project
                     // 컨텍스트 스위칭
                     context.ActivePlayer = stackOwner;
                     context.TargetPlayer = cardPlayer;
-
-                    // ★ 추가: 스택 카드를 발동하기 전에 시스템에 "현재 사용 중인 카드"를 명시적으로 알려줍니다!
-                    stackOwner.PlayingCard = stackCard;
-                    bool done = false;
                     context.LastEffectSucceeded = true;
-                    // stackCard.Play(context, () => { }, isStackTrigger: true);
-                    stackCard.Play(context, () => done = true, isStackTrigger: true);
 
-                    // ★ 복구: 발동이 끝났으니 다시 null로 비워줍니다.
-                    stackOwner.PlayingCard = null;
+                    stackCard.Play(context, () => { }, isStackTrigger: true);
                     stackOwner.UseAndDiscardStack(stackCard);
+
                     activatedCount++; // 유효하게 발동했으므로 카운트 증가
                 }
             }
