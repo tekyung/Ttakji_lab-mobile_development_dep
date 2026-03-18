@@ -6,7 +6,7 @@ public class DataManager : MonoBehaviour
     public static DataManager Instance;
 
     // 메인 화면에서 선택한 덱의 '카드 번호(ID)'들을 담아둘 리스트입니다.
-    public List<int> selectedDeckList = new List<int>();
+    public List<string> selectedDeckList = new List<string>();
 
     private void Awake()
     {

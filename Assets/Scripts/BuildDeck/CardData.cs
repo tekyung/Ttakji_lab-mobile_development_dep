@@ -4,7 +4,7 @@ using UnityEngine;
 [System.Serializable]
 public class CardData
 {
-    public int id;
+    public string id;
     public string characterId;
     public string name;
     public string type;

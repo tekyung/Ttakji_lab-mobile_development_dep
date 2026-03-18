@@ -1,4 +1,4 @@
-using TMPro;
+ï»¿using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,51 +9,56 @@ public class CardUI : MonoBehaviour
     public Image cardImage;
     public TextMeshProUGUI nameText;
     public TextMeshProUGUI descText;
-    public TextMeshProUGUI countText; // 1/2 Ç¥½Ã¿ë
+    public TextMeshProUGUI countText; // 1/2 í‘œì‹œìš©
 
     public Button plusButton;
     public Button minusButton;
 
-    public int myCardID;
-    private DeckBuilderManager deckManager; // ¸Å´ÏÀú ÂüÁ¶ º¯¼ö
+    public string myCardID;
+    private DeckBuilderManager deckManager; // ë§¤ë‹ˆì € ì°¸ì¡° ë³€ìˆ˜
 
     public Button removeAllButton;
 
-    public GameObject deckCount; // Ä«µå °³¼ö, Ä«µå ¿ìÃø ÇÏ´Ü
+    public GameObject deckCount; // ì¹´ë“œ ê°œìˆ˜, ì¹´ë“œ ìš°ì¸¡ í•˜ë‹¨
     public TextMeshProUGUI deckCountText;
 
-    private bool isDeckMode = false; //µ¦ ¸®½ºÆ®ÀÎÁö ¾Æ´ÑÁö
+    private bool isDeckMode = false; //ë± ë¦¬ìŠ¤íŠ¸ì¸ì§€ ì•„ë‹Œì§€
 
     [Header("Card Back")]
     public GameObject cardBackObj;
 
-    // ¸Å´ÏÀú°¡ ÀÌ ÇÔ¼ö¸¦ È£ÃâÇØ¼­ Ä«µå¸¦ ¼³Á¤ÇØÁİ´Ï´Ù.
-    public void Setup(int id, int currentCount, int maxCount, DeckBuilderManager manager, bool isDeck)
+    // ë§¤ë‹ˆì €ê°€ ì´ í•¨ìˆ˜ë¥¼ í˜¸ì¶œí•´ì„œ ì¹´ë“œë¥¼ ì„¤ì •í•´ì¤ë‹ˆë‹¤.
+    public void Setup(string id, int currentCount, int maxCount, DeckBuilderManager manager, bool isDeck)
     {
         myCardID = id;
         deckManager = manager;
 
-        // 1. µ¥ÀÌÅÍ ºÒ·¯¿À±â
+        // 1. ë°ì´í„° ë¶ˆëŸ¬ì˜¤ê¸°
         CardData data = CardDataManager.Instance.GetCard(id);
+        if (data == null)
+        {
+            Debug.LogError($"ğŸš¨ ì‚ìš©ì‚ìš©! ë§¤ë‹ˆì €ê°€ ì¹´ë“œë¥¼ ëª» ì°¾ì•˜ìŠµë‹ˆë‹¤! ì°¾ìœ¼ë ¤ë˜ ID: [{id}]");
+            return;
+        }
 
-        // 2. ÅØ½ºÆ® & ÀÌ¹ÌÁö Àû¿ë
+        // 2. í…ìŠ¤íŠ¸ & ì´ë¯¸ì§€ ì ìš©
         if (nameText) nameText.text = data.name;
         // if (descText) descText.text = data.description;
 
-        // ÀÌ¹ÌÁö ·Îµå (Resources Æú´õ ±âÁØ)
+        // ì´ë¯¸ì§€ ë¡œë“œ (Resources í´ë” ê¸°ì¤€)
         LoadCardImage(data.skin_res);
 
         isDeckMode = isDeck;
 
-        // 3. °³¼ö Ç¥½Ã
+        // 3. ê°œìˆ˜ í‘œì‹œ
         UpdateCount(currentCount, maxCount);
 
-        // ¹öÆ° ¿¬°á
+        // ë²„íŠ¼ ì—°ê²°
         if (plusButton != null)
         {
-            plusButton.onClick.RemoveAllListeners(); // ±âÁ¸ ¿¬°á ÃÊ±âÈ­
+            plusButton.onClick.RemoveAllListeners(); // ê¸°ì¡´ ì—°ê²° ì´ˆê¸°í™”
             plusButton.onClick.AddListener(() => {
-                Debug.Log($"[Å¬¸¯] + ¹öÆ° ´­¸²: {data.name} ({myCardID})"); // ·Î±×·Î È®ÀÎ
+                Debug.Log($"[í´ë¦­] + ë²„íŠ¼ ëˆŒë¦¼: {data.name} ({myCardID})"); // ë¡œê·¸ë¡œ í™•ì¸
                 deckManager.AddCard(myCardID);
             });
         }
@@ -62,17 +67,17 @@ public class CardUI : MonoBehaviour
         {
             minusButton.onClick.RemoveAllListeners();
             minusButton.onClick.AddListener(() => {
-                Debug.Log($"[Å¬¸¯] - ¹öÆ° ´­¸²: {data.name} ({myCardID})");
+                Debug.Log($"[í´ë¦­] - ë²„íŠ¼ ëˆŒë¦¼: {data.name} ({myCardID})");
                 deckManager.RemoveCard(myCardID);
             });
         }
 
         if (removeAllButton != null)
         {
-            // ±âÁ¸ ¿¬°á Á¦°Å (Áßº¹ ¹æÁö)
+            // ê¸°ì¡´ ì—°ê²° ì œê±° (ì¤‘ë³µ ë°©ì§€)
             removeAllButton.onClick.RemoveAllListeners();
 
-            // »õ ±â´É ¿¬°á: ¸Å´ÏÀúÀÇ RemoveAllCards È£Ãâ
+            // ìƒˆ ê¸°ëŠ¥ ì—°ê²°: ë§¤ë‹ˆì €ì˜ RemoveAllCards í˜¸ì¶œ
             removeAllButton.onClick.AddListener(() => {
                 deckManager.RemoveAllCards(myCardID);
             });
@@ -81,34 +86,34 @@ public class CardUI : MonoBehaviour
 
     private void LoadCardImage(string originalPath)
     {
-        // CSV °æ·Î: "asset/m1_tmp/card_img/u_slime.png"
-        // ¸ñÇ¥ °æ·Î: "card_img/u_slime" (Resources Æú´õ ±âÁØ)
+        // CSV ê²½ë¡œ: "asset/m1_tmp/card_img/u_slime.png"
+        // ëª©í‘œ ê²½ë¡œ: "card_img/u_slime" (Resources í´ë” ê¸°ì¤€)
 
         string path = originalPath;
 
-        // 1. ºÒÇÊ¿äÇÑ ¾ÕºÎºĞ °æ·Î »èÁ¦
-        path = path.Replace("Assets/Resources/", ""); // °¡Àå Áß¿äÇÑ ºÎºĞ
-        //path = path.Replace("asset/", "");        // È¤½Ã ¸ô¶ó Ãß°¡
+        // 1. ë¶ˆí•„ìš”í•œ ì•ë¶€ë¶„ ê²½ë¡œ ì‚­ì œ
+        path = path.Replace("Assets/Resources/", ""); // ê°€ì¥ ì¤‘ìš”í•œ ë¶€ë¶„
+        //path = path.Replace("asset/", "");        // í˜¹ì‹œ ëª°ë¼ ì¶”ê°€
 
-        // 2. È®ÀåÀÚ »èÁ¦
+        // 2. í™•ì¥ì ì‚­ì œ
         path = path.Replace(".png", "").Replace(".jpg", "");
 
-        // 3. ·Îµå
+        // 3. ë¡œë“œ
         Sprite sp = Resources.Load<Sprite>(path);
 
-        // 4. Àû¿ë
+        // 4. ì ìš©
         if (sp != null && cardImage != null)
         {
             cardImage.sprite = sp;
         }
         else
         {
-            // µğ¹ö±ë¿ë: ÀÌ¹ÌÁö°¡ ÇÏ¾é°Ô ³ª¿À¸é ÄÜ¼ÖÃ¢À» È®ÀÎÇÏ¼¼¿ä!
-             Debug.LogWarning($"ÀÌ¹ÌÁö ·Îµå ½ÇÆĞ! ÃÖÁ¾ °æ·Î: {path} / ¿øº»: {originalPath}");
+            // ë””ë²„ê¹…ìš©: ì´ë¯¸ì§€ê°€ í•˜ì–—ê²Œ ë‚˜ì˜¤ë©´ ì½˜ì†”ì°½ì„ í™•ì¸í•˜ì„¸ìš”!
+             Debug.LogWarning($"ì´ë¯¸ì§€ ë¡œë“œ ì‹¤íŒ¨! ìµœì¢… ê²½ë¡œ: {path} / ì›ë³¸: {originalPath}");
         }
     }
 
-    // °³¼ö¸¸ µû·Î °»½ÅÇÏ´Â ÇÔ¼ö (±ôºıÀÓ ¹æÁö)
+    // ê°œìˆ˜ë§Œ ë”°ë¡œ ê°±ì‹ í•˜ëŠ” í•¨ìˆ˜ (ê¹œë¹¡ì„ ë°©ì§€)
     public void UpdateCount(int current, int max)
     {
         if (isDeckMode)
@@ -127,7 +132,7 @@ public class CardUI : MonoBehaviour
             {
                 countText.gameObject.SetActive(true);
                 if (current > 0) countText.text = $"{current}/{max}";
-                else countText.text = ""; // 0ÀåÀÌ¸é ¼ıÀÚ ¼û±è
+                else countText.text = ""; // 0ì¥ì´ë©´ ìˆ«ì ìˆ¨ê¹€
             }
         }
 
@@ -144,62 +149,62 @@ public class CardUI : MonoBehaviour
         }
     }
 
-    // + ¹öÆ°¿¡ ¿¬°áµÉ ÇÔ¼ö
+    // + ë²„íŠ¼ì— ì—°ê²°ë  í•¨ìˆ˜
     public void OnClickPlus()
     {
         deckManager.AddCard(myCardID);
     }
 
-    // - ¹öÆ°¿¡ ¿¬°áµÉ ÇÔ¼ö
+    // - ë²„íŠ¼ì— ì—°ê²°ë  í•¨ìˆ˜
     public void OnClickMinus()
     {
         deckManager.RemoveCard(myCardID);
     }
 
-    public void SetupForZoom(int id)
+    public void SetupForZoom(string id)
     {
         myCardID = id;
 
-        // 1. µ¥ÀÌÅÍ ºÒ·¯¿À±â
+        // 1. ë°ì´í„° ë¶ˆëŸ¬ì˜¤ê¸°
         CardData data = CardDataManager.Instance.GetCard(id);
         if (data == null) return;
 
-        // 2. ÅØ½ºÆ® & ÀÌ¹ÌÁö Àû¿ë (±âÁ¸ ·ÎÁ÷°ú µ¿ÀÏ)
+        // 2. í…ìŠ¤íŠ¸ & ì´ë¯¸ì§€ ì ìš© (ê¸°ì¡´ ë¡œì§ê³¼ ë™ì¼)
         if (nameText) nameText.text = data.name;
-        //if (descText) descText.text = data.description; // ¼³¸íµµ ÀÖ´Ù¸é Ç¥½Ã
+        //if (descText) descText.text = data.description; // ì„¤ëª…ë„ ìˆë‹¤ë©´ í‘œì‹œ
 
-        // ÀÌ¹ÌÁö ·Îµå
+        // ì´ë¯¸ì§€ ë¡œë“œ
         string path = data.skin_res.Replace(".png", "").Replace("Assets/Resources/", "");
         path = path.Replace(".png", "").Replace(".jpg", "");
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp && cardImage) cardImage.sprite = sp;
 
-        // 3. [Áß¿ä] È®´ë È­¸é¿¡¼­´Â ÇÊ¿ä ¾ø´Â °Íµé ¼û±â±â
+        // 3. [ì¤‘ìš”] í™•ëŒ€ í™”ë©´ì—ì„œëŠ” í•„ìš” ì—†ëŠ” ê²ƒë“¤ ìˆ¨ê¸°ê¸°
 
-        // °³¼ö ÅØ½ºÆ® ¼û±â±â
+        // ê°œìˆ˜ í…ìŠ¤íŠ¸ ìˆ¨ê¸°ê¸°
         if (countText) countText.text = "";
 
-        // ¹öÆ°µé ºñÈ°¼ºÈ­ (´­·¯µµ ¹İÀÀ ¾È ÇÏ°Ô)
+        // ë²„íŠ¼ë“¤ ë¹„í™œì„±í™” (ëˆŒëŸ¬ë„ ë°˜ì‘ ì•ˆ í•˜ê²Œ)
         if (plusButton) plusButton.gameObject.SetActive(false);
         if (minusButton) minusButton.gameObject.SetActive(false);
     }
 
-    public void SetupForBattle(int id)
+    public void SetupForBattle(string id)
     {
         myCardID = id;
 
-        // 1. µ¥ÀÌÅÍ ºÒ·¯¿À±â
+        // 1. ë°ì´í„° ë¶ˆëŸ¬ì˜¤ê¸°
         CardData data = CardDataManager.Instance.GetCard(id);
         if (data == null) return;
 
-        // 2. ÅØ½ºÆ® ¼³Á¤
+        // 2. í…ìŠ¤íŠ¸ ì„¤ì •
         if (nameText) nameText.text = data.name;
-        //if (descText) descText.text = data.description; // ÁÖ¼® ÇØÁ¦ÇÏ½Ã¸é ¼³¸íµµ ¶å´Ï´Ù!
+        //if (descText) descText.text = data.description; // ì£¼ì„ í•´ì œí•˜ì‹œë©´ ì„¤ëª…ë„ ëœ¹ë‹ˆë‹¤!
 
-        // 3. ÀÌ¹ÌÁö ·Îµå (±âÁ¸¿¡ Àß ¸¸µé¾îµÎ½Å ÇÔ¼ö ÀçÈ°¿ë!)
+        // 3. ì´ë¯¸ì§€ ë¡œë“œ (ê¸°ì¡´ì— ì˜ ë§Œë“¤ì–´ë‘ì‹  í•¨ìˆ˜ ì¬í™œìš©!)
         LoadCardImage(data.skin_res);
 
-        // 4. ÀüÅõ ¾À¿¡¼­´Â ÇÊ¿ä ¾ø´Â 'µ¦ Æí¼º¿ë UI' ÀüºÎ ²ô±â
+        // 4. ì „íˆ¬ ì”¬ì—ì„œëŠ” í•„ìš” ì—†ëŠ” 'ë± í¸ì„±ìš© UI' ì „ë¶€ ë„ê¸°
         if (countText) countText.gameObject.SetActive(false);
         if (deckCount) deckCount.SetActive(false);
         if (plusButton) plusButton.gameObject.SetActive(false);
@@ -207,12 +212,12 @@ public class CardUI : MonoBehaviour
         if (removeAllButton) removeAllButton.gameObject.SetActive(false);
     }
 
-    // Ä«µå µÚÁı´Â ÇÔ¼ö
+    // ì¹´ë“œ ë’¤ì§‘ëŠ” í•¨ìˆ˜
     public void SetFaceDown(bool isFaceDown)
     {
         if (cardBackObj != null)
         {
-            // true¸é µŞ¸é ÀÌºÒÀ» µ¤°í, false¸é ÀÌºÒÀ» Ä¡¿ö¼­ ¾Õ¸éÀ» º¸¿©Áİ´Ï´Ù!
+            // trueë©´ ë’·ë©´ ì´ë¶ˆì„ ë®ê³ , falseë©´ ì´ë¶ˆì„ ì¹˜ì›Œì„œ ì•ë©´ì„ ë³´ì—¬ì¤ë‹ˆë‹¤!
             cardBackObj.SetActive(isFaceDown);
         }
     }

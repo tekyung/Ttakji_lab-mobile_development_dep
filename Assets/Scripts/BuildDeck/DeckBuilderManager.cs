@@ -7,7 +7,7 @@ using System.IO; //파일 관리
 [System.Serializable]
 public class DeckSaveData
 {
-    public List<int> cardIdList;
+    public List<string> cardIdList;
 }
 
 public class DeckBuilderManager : MonoBehaviour
@@ -45,7 +45,7 @@ public class DeckBuilderManager : MonoBehaviour
     public TMP_Dropdown deckListDropdown;
 
     // 실제 데이터 (덱에 들어있는 카드 ID 목록)
-    private List<int> myDeck = new List<int>();
+    private List<string> myDeck = new List<string>();
     private const int MAX_DECK_COUNT = 20;
 
     // 화면에 떠 있는 카드 슬롯들을 관리하는 리스트 (Collection 쪽)
@@ -69,7 +69,7 @@ public class DeckBuilderManager : MonoBehaviour
     {
         myDeck.Clear();
 
-        int slimeID = 11001;
+        string slimeID = "11001";
         int starterCount = 20;
 
         for (int i = 0; i < starterCount; i++)
@@ -192,7 +192,7 @@ public class DeckBuilderManager : MonoBehaviour
     {
         foreach (var kvp in CardDataManager.Instance.cardDic)
         {
-            int id = kvp.Key;
+            string id = kvp.Key;
             CardData data = kvp.Value;
 
             // 프리팹 생성
@@ -217,7 +217,7 @@ public class DeckBuilderManager : MonoBehaviour
     // 카드 추가/제거 로직
     // ---------------------------------------------------
 
-    public void AddCard(int id)
+    public void AddCard(string id)
     {
         // 1. 전체 20장 제한 체크
         if (myDeck.Count >= MAX_DECK_COUNT)
@@ -237,7 +237,7 @@ public class DeckBuilderManager : MonoBehaviour
         }
     }
 
-    public void RemoveCard(int id)
+    public void RemoveCard(string id)
     {
         if (myDeck.Contains(id))
         {
@@ -279,9 +279,9 @@ public class DeckBuilderManager : MonoBehaviour
         // 기존 슬롯 다 삭제
         foreach (Transform child in deckContent) Destroy(child.gameObject);
 
-        List<int> uniqueIDs = myDeck.Distinct().ToList();
+        List<string> uniqueIDs = myDeck.Distinct().ToList();
 
-        foreach (int id in uniqueIDs)
+        foreach (string id in uniqueIDs)
         {
             GameObject go = Instantiate(cardPrefab, deckContent);
             CardUI ui = go.GetComponent<CardUI>();
@@ -321,7 +321,7 @@ public class DeckBuilderManager : MonoBehaviour
     // 덱 저장, 삭제
     // ---------------------------------------------------
     // 다른데서 덱 가져올 때 사용
-    public List<int> GetCurrentDeck()
+    public List<string> GetCurrentDeck()
     {
         return myDeck;
     }
@@ -355,7 +355,7 @@ public class DeckBuilderManager : MonoBehaviour
 
         // 저장할 데이터 객체 만들기
         DeckSaveData data = new DeckSaveData();
-        data.cardIdList = new List<int>(myDeck); // 현재 덱 복사
+        data.cardIdList = new List<string>(myDeck); // 현재 덱 복사
 
         // JSON 문자열로 변환
         string json = JsonUtility.ToJson(data, true);
@@ -455,7 +455,7 @@ public class DeckBuilderManager : MonoBehaviour
         DeckSaveData data = JsonUtility.FromJson<DeckSaveData>(json);
 
         // 5. 내 덱 리스트(myDeck)를 저장된 데이터로 덮어쓰기
-        myDeck = new List<int>(data.cardIdList);
+        myDeck = new List<string>(data.cardIdList);
 
         // 6. 덱 이름 입력칸도 파일 이름으로 맞춰주기 (확장자 .json 제거)
         if (deckNameInput != null)
@@ -522,7 +522,7 @@ public class DeckBuilderManager : MonoBehaviour
     }
 
     // 내 덱에서 해당 카드 전부 제거
-    public void RemoveAllCards(int id)
+    public void RemoveAllCards(string id)
     {
         myDeck.RemoveAll(x => x == id);
 
@@ -626,7 +626,7 @@ public class DeckBuilderManager : MonoBehaviour
     }
 
 
-    public void OpenCardZoom(int cardId)
+    public void OpenCardZoom(string cardId)
     {
         // 1. 팝업 켜기
         if (PopupPanel != null) PopupPanel.SetActive(true);

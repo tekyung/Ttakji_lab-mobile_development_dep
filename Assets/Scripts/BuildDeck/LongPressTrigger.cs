@@ -5,7 +5,7 @@ using UnityEngine.EventSystems; // [필수] 터치/클릭 감지용
 // IPointerUpHandler: 뗐을 때
 public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
-    public int cardId; // 이 카드의 ID (매니저가 넣어줘야 함)
+    public string cardId; // 이 카드의 ID (매니저가 넣어줘야 함)
 
     private bool isPressed = false;
     private float pressTimer = 0f;

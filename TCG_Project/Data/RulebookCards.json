@@ -1,5 +1,5 @@
 {
-  "RulebookCards": [
+  "Card": [
     {
       "id": "ELLI-02", "characterId": "ELLIE", "name": "퀵 드로우",
       "type": "Attack", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
@@ -173,6 +173,7 @@
       "id": "DAIN-02", "characterId": "DAINA", "name": "함포 준비, 발사!",
       "type": "Attack", "speed": 2, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 1]를 2번 준다. 시전자는 체력(코인) 1개를 잃는다.",
+       "skin_res": "Assets/Resources/card_image/다이나/함포 준비, 발사.png",
       "effects": [
         { "type": "MultiHitDamageEffect", "amount": 1, "times": 2 },
         { "type": "SelfDamageEffect", "amount": 1 }
@@ -182,6 +183,7 @@
       "id": "DAIN-03", "characterId": "DAINA", "name": "미사일 발사!",
       "type": "Attack", "speed": 3, "cost": 2, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통 [데미지 2]를 준다.",
+      "skin_res": "Assets/Resources/card_image/다이나/미사일 발사!.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 2 }
       ]
@@ -190,6 +192,7 @@
       "id": "DAIN-04", "characterId": "DAINA", "name": "풀 버스트!",
       "type": "Attack", "speed": 3, "cost": 5, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 2]를 3번 준다. 시전자는 체력(코인) 2개를 잃는다.",
+      "skin_res": "Assets/Resources/card_image/다이나/풀 버스트!.png",
       "effects": [
         { "type": "MultiHitDamageEffect", "amount": 2, "times": 3 },
         { "type": "SelfDamageEffect", "amount": 2 }
@@ -199,6 +202,7 @@
       "id": "DAIN-05", "characterId": "DAINA", "name": "잠수정",
       "type": "Defense", "speed": 2, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [아머 2]을 획득한다.",
+      "skin_res": "Assets/Resources/card_image/다이나/잠수정.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ]
@@ -207,6 +211,7 @@
       "id": "DAIN-06", "characterId": "DAINA", "name": "공습 주의",
       "type": "Defense", "speed": 3, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [슈퍼아머 2]을 획득한다.",
+      "skin_res": "Assets/Resources/card_image/다이나/공습 주의.png",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ]
@@ -215,6 +220,7 @@
       "id": "DAIN-07", "characterId": "DAINA", "name": "강도 테스트",
       "type": "Defense", "speed": 1, "cost": 1, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [아머 2]을 획득한다. 이 카드를 자신의 스택존에 놓는다.",
+      "skin_res": "Assets/Resources/card_image/다이나/강도 테스트.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "Stack", "isStackAction": true }
       ]
@@ -223,6 +229,7 @@
       "id": "DAIN-08", "characterId": "DAINA", "name": "약탈",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 메인덱에서 맨 위의 3장을 드로우한다. 그 후, 자신의 패에서 랜덤으로 1장을 앞면으로 자신의 폐기존에 보낸다.",
+      "skin_res": "Assets/Resources/card_image/다이나/약탈.png",
       "effects": [
         { "type": "DrawEffect", "count": 3 },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "requirePreviousSuccess": true }
@@ -232,6 +239,7 @@
       "id": "DAIN-09", "characterId": "DAINA", "name": "리벤지",
       "type": "Support", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [반격]을 획득한다. 반격 성공 시 이 카드를 자원카드로서 자원존에 놓는다.",
+      "skin_res": "Assets/Resources/card_image/다이나/리벤지.png",
       "effects": [
         { "type": "CounterAttackEffect", "duration": "ThisTurn", "rewardOnSuccess": "SelfToResource" }
       ]
@@ -240,6 +248,7 @@
       "id": "DAIN-10", "characterId": "DAINA", "name": "기뢰",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 폐기존에서 효과 카드 중 원하는 카드 1장을 골라서 코스트1을 줄이고 즉시 사용한다.",
+      "skin_res": "Assets/Resources/card_image/다이나/기뢰.png",
       "effects": [
         { "type": "ReplayCardEffect", "costReduction": 1 }
       ]
@@ -248,6 +257,7 @@
       "id": "DAIN-11", "characterId": "DAINA", "name": "조선소",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
       "description": "[전장] 매 턴 [+화력 1]을 획득한다. (턴의 첫 공격에만 적용)",
+      "skin_res": "Assets/Resources/card_image/다이나/조선소.png",
       "effects": [
         { "type": "FirepowerBattlefieldEffect", "amount": 1 }
       ]
