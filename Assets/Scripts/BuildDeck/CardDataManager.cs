@@ -6,7 +6,7 @@ public class CardDataManager : MonoBehaviour
 {
     public static CardDataManager Instance;
 
-    public Dictionary<int, CardData> cardDic = new Dictionary<int, CardData>();
+    public Dictionary<string, CardData> cardDic = new Dictionary<string, CardData>();
     public List<CardData> allCardList = new List<CardData>();
 
     void Awake()
@@ -18,11 +18,11 @@ public class CardDataManager : MonoBehaviour
     void LoadCardData()
     {
         // 1. Resources 폴더에서 JSON 파일 읽어오기 (확장자 .json 제외)
-        TextAsset jsonFile = Resources.Load<TextAsset>("GameData/Card");
+        TextAsset jsonFile = Resources.Load<TextAsset>("GameData/RulebookCards");
 
         if (jsonFile == null)
         {
-            Debug.LogError("JSON 파일을 찾을 수 없습니다! Assets/Resources/GameData/card_data.json 확인 필요");
+            Debug.LogError("JSON 파일을 찾을 수 없습니다! Assets/Resources/GameData/RulebookCards.json 확인 필요");
             return;
         }
 
@@ -51,7 +51,7 @@ public class CardDataManager : MonoBehaviour
     }
 
     // ID로 카드 정보 가져오는 함수 (기존과 동일)
-    public CardData GetCard(int id)
+    public CardData GetCard(string id)
     {
         if (cardDic.ContainsKey(id))
             return cardDic[id];

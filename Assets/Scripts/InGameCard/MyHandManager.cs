@@ -16,7 +16,7 @@ public class MyHandManager : MonoBehaviour
     public int maxHandSize = 10;   // 패의 최대 개수
     public float cardWidth = 200f;
 
-    private List<int> currentDrawPile = new List<int>();
+    private List<string> currentDrawPile = new List<string>();
 
     [Header("UI Elements")]
     public Button readyButton;
@@ -51,7 +51,7 @@ public class MyHandManager : MonoBehaviour
             if (loadedData != null && loadedData.cardIdList != null)
             {
                 // 해독한 데이터의 cardIdList를 현재 뽑을 덱으로 복사합니다.
-                currentDrawPile = new List<int>(loadedData.cardIdList);
+                currentDrawPile = new List<string>(loadedData.cardIdList);
                 Debug.Log($"✨ [{deckName}] 덱을 성공적으로 불러왔습니다! 남은 카드: {currentDrawPile.Count}장");
             }
             else
@@ -71,7 +71,7 @@ public class MyHandManager : MonoBehaviour
         if (currentDrawPile.Count <= 0) return;
 
         int randomIndex = Random.Range(0, currentDrawPile.Count);
-        int drawnCardID = currentDrawPile[randomIndex];
+        string drawnCardID = currentDrawPile[randomIndex];        
         currentDrawPile.RemoveAt(randomIndex);
 
         GameObject newCard = Instantiate(cardPrefab);
