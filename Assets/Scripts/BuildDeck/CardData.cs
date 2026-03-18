@@ -5,8 +5,11 @@ using UnityEngine;
 public class CardData
 {
     public int id;
+    public string characterId;
     public string name;
     public string type;
+    public int speed;
+    public int cost;
     public int max_deck_count;
     public string skin_res;
     //public string description;

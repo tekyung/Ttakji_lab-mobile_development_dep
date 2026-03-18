@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using System.Linq; // ¸®½ºÆ® °Ë»ö¿ë ±â´É
+using System.Linq; // ë¦¬ìŠ¤íŠ¸ ê²€ìƒ‰ìš© ê¸°ëŠ¥
 using UnityEngine;
-using TMPro; // ÅØ½ºÆ® »ç¿ë
-using System.IO; //ÆÄÀÏ °ü¸®
+using TMPro; // í…ìŠ¤íŠ¸ ì‚¬ìš©
+using System.IO; //íŒŒì¼ ê´€ë¦¬
 
 [System.Serializable]
 public class DeckSaveData
@@ -12,59 +12,59 @@ public class DeckSaveData
 
 public class DeckBuilderManager : MonoBehaviour
 {
-    [Header("UI ¿¬°á")]
-    public Transform deckContent;       // MyDeckPanelÀÇ Content
-    public Transform collectionContent; // CollectionPanelÀÇ Content
-    public GameObject cardPrefab;       // CardSlot ÇÁ¸®ÆÕ
-    public TextMeshProUGUI deckCountText; // 20/20 ÅØ½ºÆ® (¾øÀ¸¸é ¿¬°á ¾È ÇØµµ µÊ)
+    [Header("UI ì—°ê²°")]
+    public Transform deckContent;       // MyDeckPanelì˜ Content
+    public Transform collectionContent; // CollectionPanelì˜ Content
+    public GameObject cardPrefab;       // CardSlot í”„ë¦¬íŒ¹
+    public TextMeshProUGUI deckCountText; // 20/20 í…ìŠ¤íŠ¸ (ì—†ìœ¼ë©´ ì—°ê²° ì•ˆ í•´ë„ ë¨)
 
-    [Header("ÆË¾÷ ¿¬°á")]
+    [Header("íŒì—… ì—°ê²°")]
     public GameObject PopupPanel;
 
-    public GameObject warningPopup; // 20Àå ¾ÈµÉ ¶§ ÆË¾÷
-    public GameObject okPopup; //µ¦ ÀúÀå ¿Ï·á½Ã ÆË¾÷
+    public GameObject warningPopup; // 20ì¥ ì•ˆë  ë•Œ íŒì—…
+    public GameObject okPopup; //ë± ì €ì¥ ì™„ë£Œì‹œ íŒì—…
 
-    public GameObject savePopup; // µ¦ ºÒ·¯¿À±â
-    public TextMeshProUGUI saveText; // ºÒ·¯¿Â µ¦ ÀÌ¸§
+    public GameObject savePopup; // ë± ë¶ˆëŸ¬ì˜¤ê¸°
+    public TextMeshProUGUI saveText; // ë¶ˆëŸ¬ì˜¨ ë± ì´ë¦„
 
-    public GameObject deleteConfirmPopup; // »èÁ¦ È®ÀÎ ÆË¾÷
-    public TextMeshProUGUI deleteConfirmText; // »èÁ¦ µ¦ ÀÌ¸§
+    public GameObject deleteConfirmPopup; // ì‚­ì œ í™•ì¸ íŒì—…
+    public TextMeshProUGUI deleteConfirmText; // ì‚­ì œ ë± ì´ë¦„
 
-    public GameObject newDeckPopup; // »õ µ¦ ¸¸µé±â ÆË¾÷
+    public GameObject newDeckPopup; // ìƒˆ ë± ë§Œë“¤ê¸° íŒì—…
 
     private string deckToDelete = "";
 
-    [Header("Ä«µå È®´ë ÆË¾÷")]
-    public GameObject cardZoomPopup; // ÆË¾÷Ã¢
+    [Header("ì¹´ë“œ í™•ëŒ€ íŒì—…")]
+    public GameObject cardZoomPopup; // íŒì—…ì°½
     public CardUI zoomedCardUI;
 
-    [Header("µ¦ ÀÌ¸§")]
-    public TMP_InputField deckNameInput; // µ¦ ÀÌ¸§
+    [Header("ë± ì´ë¦„")]
+    public TMP_InputField deckNameInput; // ë± ì´ë¦„
 
-    [Header("µ¦ ¸ñ·Ï UI")]
+    [Header("ë± ëª©ë¡ UI")]
     public TMP_Dropdown deckListDropdown;
 
-    // ½ÇÁ¦ µ¥ÀÌÅÍ (µ¦¿¡ µé¾îÀÖ´Â Ä«µå ID ¸ñ·Ï)
+    // ì‹¤ì œ ë°ì´í„° (ë±ì— ë“¤ì–´ìˆëŠ” ì¹´ë“œ ID ëª©ë¡)
     private List<int> myDeck = new List<int>();
     private const int MAX_DECK_COUNT = 20;
 
-    // È­¸é¿¡ ¶° ÀÖ´Â Ä«µå ½½·ÔµéÀ» °ü¸®ÇÏ´Â ¸®½ºÆ® (Collection ÂÊ)
+    // í™”ë©´ì— ë–  ìˆëŠ” ì¹´ë“œ ìŠ¬ë¡¯ë“¤ì„ ê´€ë¦¬í•˜ëŠ” ë¦¬ìŠ¤íŠ¸ (Collection ìª½)
     private List<CardUI> collectionSlots = new List<CardUI>();
 
     void Start()
     {
-        // 1. °ÔÀÓ ½ÃÀÛ ½Ã ÀüÃ¼ Ä«µå ¸ñ·Ï(Collection)À» ¸ÕÀú ¸¸µì´Ï´Ù.
+        // 1. ê²Œì„ ì‹œì‘ ì‹œ ì „ì²´ ì¹´ë“œ ëª©ë¡(Collection)ì„ ë¨¼ì € ë§Œë“­ë‹ˆë‹¤.
         InitCollection();
 
-        // 2. µ¦ È­¸é ÃÊ±âÈ­
+        // 2. ë± í™”ë©´ ì´ˆê¸°í™”
         RefreshDeckList();
     }
 
     // ---------------------------------------------------
-    // µ¦ / µ¦¸®½ºÆ® °ü·Ã
+    // ë± / ë±ë¦¬ìŠ¤íŠ¸ ê´€ë ¨
     // ---------------------------------------------------
 
-    //ÀÓ½Ã ½½¶óÀÓ20Àå ½ÃÀÛ µ¦
+    //ì„ì‹œ ìŠ¬ë¼ì„20ì¥ ì‹œì‘ ë±
     void CreateStarterDeck()
     {
         myDeck.Clear();
@@ -77,34 +77,34 @@ public class DeckBuilderManager : MonoBehaviour
             myDeck.Add(slimeID);
         }
 
-        // µ¦ ÀÌ¸§ ÀÔ·ÂÄ­µµ "DefaultDeck" µîÀ¸·Î Ã¤¿öÁÖ¸é ´õ ÁÁ½À´Ï´Ù.
+        // ë± ì´ë¦„ ì…ë ¥ì¹¸ë„ "DefaultDeck" ë“±ìœ¼ë¡œ ì±„ì›Œì£¼ë©´ ë” ì¢‹ìŠµë‹ˆë‹¤.
         if (deckNameInput != null)
         {
             deckNameInput.text = "StarterDeck";
         }
 
-        // µ¥ÀÌÅÍ°¡ º¯°æµÇ¾úÀ¸´Ï È­¸éÀ» °»½ÅÇÕ´Ï´Ù. (Áß¿ä!)
+        // ë°ì´í„°ê°€ ë³€ê²½ë˜ì—ˆìœ¼ë‹ˆ í™”ë©´ì„ ê°±ì‹ í•©ë‹ˆë‹¤. (ì¤‘ìš”!)
         RefreshAllUI();
 
-        Debug.Log("±âº» ½½¶óÀÓ µ¦ »ı¼º ¿Ï·á!");
+        Debug.Log("ê¸°ë³¸ ìŠ¬ë¼ì„ ë± ìƒì„± ì™„ë£Œ!");
     }
 
-    // µ¦ ¸®½ºÆ® Á¤¸®
+    // ë± ë¦¬ìŠ¤íŠ¸ ì •ë¦¬
     public void RefreshDeckList(string focusDeckName = null)
     {
-        // 1. µå·Ó´Ù¿î ÃÊ±âÈ­ (±âÁ¸ ¸ñ·Ï Áö¿ì±â)
+        // 1. ë“œë¡­ë‹¤ìš´ ì´ˆê¸°í™” (ê¸°ì¡´ ëª©ë¡ ì§€ìš°ê¸°)
         deckListDropdown.ClearOptions();
 
-        // 2. ÇØ´ç Æú´õÀÇ ¸ğµç .json ÆÄÀÏ °æ·Î¸¦ °¡Á®¿È
+        // 2. í•´ë‹¹ í´ë”ì˜ ëª¨ë“  .json íŒŒì¼ ê²½ë¡œë¥¼ ê°€ì ¸ì˜´
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
         string[] filePaths = Directory.GetFiles(folderPath, "*.json");
 
-        Debug.Log("°Ë»ö ÁßÀÎ Æú´õ À§Ä¡: " + folderPath);
-        Debug.Log("¹ß°ßµÈ JSON ÆÄÀÏ °³¼ö: " + filePaths.Length + "°³");
+        Debug.Log("ê²€ìƒ‰ ì¤‘ì¸ í´ë” ìœ„ì¹˜: " + folderPath);
+        Debug.Log("ë°œê²¬ëœ JSON íŒŒì¼ ê°œìˆ˜: " + filePaths.Length + "ê°œ");
 
         List<string> options = new List<string>();
 
-        // 3. ÆÄÀÏ °æ·Î¿¡¼­ "ÆÄÀÏ ÀÌ¸§"¸¸ ½ï »©¼­ ¸ñ·Ï¿¡ Ãß°¡
+        // 3. íŒŒì¼ ê²½ë¡œì—ì„œ "íŒŒì¼ ì´ë¦„"ë§Œ ì™ ë¹¼ì„œ ëª©ë¡ì— ì¶”ê°€
         foreach (string path in filePaths)
         {
             string fileName = Path.GetFileNameWithoutExtension(path);
@@ -113,14 +113,14 @@ public class DeckBuilderManager : MonoBehaviour
 
         if (options.Count == 0)
         {
-            options.Add("µ¦ÀÌ ¾ø½À´Ï´Ù.");
+            options.Add("ë±ì´ ì—†ìŠµë‹ˆë‹¤.");
             deckListDropdown.interactable = false;
             deckListDropdown.AddOptions(options);
-            CreateStarterDeck(); // ÆÄÀÏÀÌ ¾øÀ¸¸é ½ºÅ¸ÅÍ µ¦ »ı¼º ¹× ÀúÀå
+            CreateStarterDeck(); // íŒŒì¼ì´ ì—†ìœ¼ë©´ ìŠ¤íƒ€í„° ë± ìƒì„± ë° ì €ì¥
             return;
         }
 
-        // 3. µå·Ó´Ù¿î ¸ñ·Ï Ã¤¿ì±â
+        // 3. ë“œë¡­ë‹¤ìš´ ëª©ë¡ ì±„ìš°ê¸°
         deckListDropdown.interactable = true;
         deckListDropdown.AddOptions(options);
 
@@ -128,7 +128,7 @@ public class DeckBuilderManager : MonoBehaviour
 
         if (string.IsNullOrEmpty(focusDeckName) == false)
         {
-            // ¹æ±İ ÀúÀåÇÑ ÀÌ¸§ÀÌ ¸ñ·ÏÀÇ ¸î ¹øÂ°¿¡ ÀÖ´ÂÁö Ã£½À´Ï´Ù.
+            // ë°©ê¸ˆ ì €ì¥í•œ ì´ë¦„ì´ ëª©ë¡ì˜ ëª‡ ë²ˆì§¸ì— ìˆëŠ”ì§€ ì°¾ìŠµë‹ˆë‹¤.
             int findIndex = options.IndexOf(focusDeckName);
             if (findIndex >= 0)
             {
@@ -136,41 +136,41 @@ public class DeckBuilderManager : MonoBehaviour
             }
         }
 
-        // 4. µå·Ó´Ù¿îÀÇ °ªÀ» º¯°æÇÕ´Ï´Ù.
+        // 4. ë“œë¡­ë‹¤ìš´ì˜ ê°’ì„ ë³€ê²½í•©ë‹ˆë‹¤.
         deckListDropdown.value = targetIndex;
 
         if (deckListDropdown.options.Count > targetIndex)
         {
             string deckName = deckListDropdown.options[targetIndex].text;
-            if (deckName != "µ¦ÀÌ ¾ø½À´Ï´Ù.")
+            if (deckName != "ë±ì´ ì—†ìŠµë‹ˆë‹¤.")
             {
                 LoadDeckFromJson(deckName + ".json");
             }
         }
     }
 
-    //µå·Ó´Ù¿î¿¡¼­ µ¦ ¼±ÅÃ ½Ã
+    //ë“œë¡­ë‹¤ìš´ì—ì„œ ë± ì„ íƒ ì‹œ
     public void OnDeckSelected(int index)
     {
-        //// ¼±ÅÃµÈ µ¦ÀÇ ÀÌ¸§ °¡Á®¿À±â
+        //// ì„ íƒëœ ë±ì˜ ì´ë¦„ ê°€ì ¸ì˜¤ê¸°
         //string selectedName = deckListDropdown.options[index].text;
 
-        //// ±× ÀÌ¸§À¸·Î ÆÄÀÏ ·Îµù
+        //// ê·¸ ì´ë¦„ìœ¼ë¡œ íŒŒì¼ ë¡œë”©
         //LoadDeckFromJson(selectedName + ".json");
     }
 
     public void OnClickLoadDeckButton()
     {
-        // 1. ÇöÀç µå·Ó´Ù¿îÀÇ ÀÎµ¦½º °¡Á®¿À±â
+        // 1. í˜„ì¬ ë“œë¡­ë‹¤ìš´ì˜ ì¸ë±ìŠ¤ ê°€ì ¸ì˜¤ê¸°
         int index = deckListDropdown.value;
 
-        // 2. ±× ¹øÈ£¿¡ ÇØ´çÇÏ´Â µ¦ ÀÌ¸§ °¡Á®¿À±â
+        // 2. ê·¸ ë²ˆí˜¸ì— í•´ë‹¹í•˜ëŠ” ë± ì´ë¦„ ê°€ì ¸ì˜¤ê¸°
         string selectedName = deckListDropdown.options[index].text;
 
-        // 3. µ¦ÀÌ ¾øÀ» °æ¿ì
-        if (selectedName == "µ¦ÀÌ ¾ø½À´Ï´Ù.")
+        // 3. ë±ì´ ì—†ì„ ê²½ìš°
+        if (selectedName == "ë±ì´ ì—†ìŠµë‹ˆë‹¤.")
         {
-            Debug.Log("ºÒ·¯¿Ã µ¦ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.Log("ë¶ˆëŸ¬ì˜¬ ë±ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -178,16 +178,16 @@ public class DeckBuilderManager : MonoBehaviour
 
         if (isSuccess)
         {
-            ShowMessagePopup($"{selectedName}À»(¸¦) ºÒ·¯¿Ô½À´Ï´Ù.");
+            ShowMessagePopup($"{selectedName}ì„(ë¥¼) ë¶ˆëŸ¬ì™”ìŠµë‹ˆë‹¤.");
         }
 
-        // 4. ·Îµù
+        // 4. ë¡œë”©
         LoadDeckFromJson(selectedName + ".json");
 
-        Debug.Log($"'{selectedName}' µ¦À» ºÒ·¯¿Ô½À´Ï´Ù.");
+        Debug.Log($"'{selectedName}' ë±ì„ ë¶ˆëŸ¬ì™”ìŠµë‹ˆë‹¤.");
     }
 
-    // ÀüÃ¼ Ä«µå ¸®½ºÆ® »ı¼º (Ã³À½¿¡ ÇÑ ¹ø¸¸ ½ÇÇà)
+    // ì „ì²´ ì¹´ë“œ ë¦¬ìŠ¤íŠ¸ ìƒì„± (ì²˜ìŒì— í•œ ë²ˆë§Œ ì‹¤í–‰)
     void InitCollection()
     {
         foreach (var kvp in CardDataManager.Instance.cardDic)
@@ -195,45 +195,45 @@ public class DeckBuilderManager : MonoBehaviour
             int id = kvp.Key;
             CardData data = kvp.Value;
 
-            // ÇÁ¸®ÆÕ »ı¼º
+            // í”„ë¦¬íŒ¹ ìƒì„±
             GameObject go = Instantiate(cardPrefab, collectionContent);
             CardUI ui = go.GetComponent<CardUI>();
 
-            // Á¤º¸ ÀÔ·Â (Ã³À½¿£ µ¦¿¡ 0Àå ÀÖÀ¸¹Ç·Î °³¼ö´Â 0)
+            // ì •ë³´ ì…ë ¥ (ì²˜ìŒì—” ë±ì— 0ì¥ ìˆìœ¼ë¯€ë¡œ ê°œìˆ˜ëŠ” 0)
             ui.Setup(id, 0, data.max_deck_count, this, false);
 
-            // ¸®½ºÆ®¿¡ µî·ÏÇØµÒ (³ªÁß¿¡ °³¼ö °»½ÅÇÒ ¶§ ¾²·Á°í)
+            // ë¦¬ìŠ¤íŠ¸ì— ë“±ë¡í•´ë‘  (ë‚˜ì¤‘ì— ê°œìˆ˜ ê°±ì‹ í•  ë•Œ ì“°ë ¤ê³ )
             collectionSlots.Add(ui);
 
             LongPressTrigger trigger = go.GetComponent<LongPressTrigger>();
             if (trigger != null)
             {
-                trigger.cardId = id; // "³Ê´Â 11001¹øÀÌ¾ß!" ¸íÂû ´Ş±â
+                trigger.cardId = id; // "ë„ˆëŠ” 11001ë²ˆì´ì•¼!" ëª…ì°° ë‹¬ê¸°
             }
         }
     }
 
     // ---------------------------------------------------
-    // Ä«µå Ãß°¡/Á¦°Å ·ÎÁ÷
+    // ì¹´ë“œ ì¶”ê°€/ì œê±° ë¡œì§
     // ---------------------------------------------------
 
     public void AddCard(int id)
     {
-        // 1. ÀüÃ¼ 20Àå Á¦ÇÑ Ã¼Å©
+        // 1. ì „ì²´ 20ì¥ ì œí•œ ì²´í¬
         if (myDeck.Count >= MAX_DECK_COUNT)
         {
-            Debug.Log("µ¦ÀÌ °¡µæ Ã¡½À´Ï´Ù!");
+            Debug.Log("ë±ì´ ê°€ë“ ì°¼ìŠµë‹ˆë‹¤!");
             return;
         }
 
-        // 2. Ä«µåº° 2Àå Á¦ÇÑ Ã¼Å©
+        // 2. ì¹´ë“œë³„ 2ì¥ ì œí•œ ì²´í¬
         int currentCount = myDeck.Count(x => x == id);
         CardData data = CardDataManager.Instance.GetCard(id);
 
         if (currentCount < data.max_deck_count)
         {
             myDeck.Add(id);
-            RefreshAllUI(); // È­¸é °»½Å
+            RefreshAllUI(); // í™”ë©´ ê°±ì‹ 
         }
     }
 
@@ -242,11 +242,11 @@ public class DeckBuilderManager : MonoBehaviour
         if (myDeck.Contains(id))
         {
             myDeck.Remove(id);
-            RefreshAllUI(); // È­¸é °»½Å
+            RefreshAllUI(); // í™”ë©´ ê°±ì‹ 
         }
     }
     // ---------------------------------------------------
-    //  ÅØ½ºÆ® °»½Å
+    //  í…ìŠ¤íŠ¸ ê°±ì‹ 
     // ---------------------------------------------------
     void UpdateDeckCountText()
     {
@@ -259,24 +259,24 @@ public class DeckBuilderManager : MonoBehaviour
     }
 
     // ---------------------------------------------------
-    // È­¸é °»½Å ·ÎÁ÷
+    // í™”ë©´ ê°±ì‹  ë¡œì§
     // ---------------------------------------------------
 
     void RefreshAllUI()
     {
-        RefreshDeckUI();       // À§ÂÊ È­¸é ´Ù½Ã ±×¸®±â
-        RefreshCollectionUI(); // ¾Æ·¡ÂÊ È­¸é ¼ıÀÚ ¹Ù²Ù±â
+        RefreshDeckUI();       // ìœ„ìª½ í™”ë©´ ë‹¤ì‹œ ê·¸ë¦¬ê¸°
+        RefreshCollectionUI(); // ì•„ë˜ìª½ í™”ë©´ ìˆ«ì ë°”ê¾¸ê¸°
 
         UpdateDeckCountText();
 
-        // µ¦ Àå¼ö ÅØ½ºÆ® °»½Å (¿¹: 12/20)
+        // ë± ì¥ìˆ˜ í…ìŠ¤íŠ¸ ê°±ì‹  (ì˜ˆ: 12/20)
         if (deckCountText) deckCountText.text = $"{myDeck.Count}/20";
     }
 
-    // À§ÂÊ: ³» µ¦ ¸®½ºÆ®´Â ¸Å¹ø Áö¿ì°í ´Ù½Ã ±×¸³´Ï´Ù (¼ø¼­ Á¤·Ä µîÀ» À§ÇØ)
+    // ìœ„ìª½: ë‚´ ë± ë¦¬ìŠ¤íŠ¸ëŠ” ë§¤ë²ˆ ì§€ìš°ê³  ë‹¤ì‹œ ê·¸ë¦½ë‹ˆë‹¤ (ìˆœì„œ ì •ë ¬ ë“±ì„ ìœ„í•´)
     void RefreshDeckUI()
     {
-        // ±âÁ¸ ½½·Ô ´Ù »èÁ¦
+        // ê¸°ì¡´ ìŠ¬ë¡¯ ë‹¤ ì‚­ì œ
         foreach (Transform child in deckContent) Destroy(child.gameObject);
 
         List<int> uniqueIDs = myDeck.Distinct().ToList();
@@ -299,91 +299,91 @@ public class DeckBuilderManager : MonoBehaviour
             LongPressTrigger trigger = go.GetComponent<LongPressTrigger>();
             if (trigger != null)
             {
-                trigger.cardId = id; // "³Ê´Â 11001¹øÀÌ¾ß!" ¸íÂû ´Ş±â
+                trigger.cardId = id; // "ë„ˆëŠ” 11001ë²ˆì´ì•¼!" ëª…ì°° ë‹¬ê¸°
             }
         }
     }
 
-    // ¾Æ·¡ÂÊ: ÀüÃ¼ ¸ñ·ÏÀº Áö¿ìÁö ¾Ê°í '¼ıÀÚ'¸¸ ¹Ù²ß´Ï´Ù. (½ºÅ©·Ñ À§Ä¡ À¯Áö À§ÇÔ)
+    // ì•„ë˜ìª½: ì „ì²´ ëª©ë¡ì€ ì§€ìš°ì§€ ì•Šê³  'ìˆ«ì'ë§Œ ë°”ê¿‰ë‹ˆë‹¤. (ìŠ¤í¬ë¡¤ ìœ„ì¹˜ ìœ ì§€ ìœ„í•¨)
     void RefreshCollectionUI()
     {
         foreach (CardUI slot in collectionSlots)
         {
-            // µ¦¿¡ ÀÌ Ä«µå°¡ ¸î Àå ÀÖ´ÂÁö ¼Á´Ï´Ù.
+            // ë±ì— ì´ ì¹´ë“œê°€ ëª‡ ì¥ ìˆëŠ”ì§€ ì…‰ë‹ˆë‹¤.
             int count = myDeck.Count(x => x == slot.myCardID);
             CardData data = CardDataManager.Instance.GetCard(slot.myCardID);
 
-            // ¼ıÀÚ¸¸ °»½Å (±ôºıÀÓ ¾øÀ½)
+            // ìˆ«ìë§Œ ê°±ì‹  (ê¹œë¹¡ì„ ì—†ìŒ)
             slot.UpdateCount(count, data.max_deck_count);
         }
     }
     // ---------------------------------------------------
-    // µ¦ ÀúÀå, »èÁ¦
+    // ë± ì €ì¥, ì‚­ì œ
     // ---------------------------------------------------
-    // ´Ù¸¥µ¥¼­ µ¦ °¡Á®¿Ã ¶§ »ç¿ë
+    // ë‹¤ë¥¸ë°ì„œ ë± ê°€ì ¸ì˜¬ ë•Œ ì‚¬ìš©
     public List<int> GetCurrentDeck()
     {
         return myDeck;
     }
 
-    //ÀúÀå ¹öÆ° Å¬¸¯
+    //ì €ì¥ ë²„íŠ¼ í´ë¦­
     public void OnClickSaveDeck()
     {
-        // 1. Àå¼ö Ã¼Å© (20ÀåÀÎÁö È®ÀÎ)
+        // 1. ì¥ìˆ˜ ì²´í¬ (20ì¥ì¸ì§€ í™•ì¸)
         if (myDeck.Count != MAX_DECK_COUNT)
         {
-            // 20ÀåÀÌ ¾Æ´Ï¸é °æ°í ÆË¾÷ ¶ç¿ì±â
+            // 20ì¥ì´ ì•„ë‹ˆë©´ ê²½ê³  íŒì—… ë„ìš°ê¸°
             if (PopupPanel != null) PopupPanel.SetActive(true);
             if (warningPopup != null) warningPopup.SetActive(true);
 
-            Debug.Log("ÀúÀå ½ÇÆĞ: µ¦ÀÌ ¿Ï¼ºµÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+            Debug.Log("ì €ì¥ ì‹¤íŒ¨: ë±ì´ ì™„ì„±ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
             return;
         }
 
-        // 2. 20ÀåÀÌ¸é ÀúÀå ÁøÇà
+        // 2. 20ì¥ì´ë©´ ì €ì¥ ì§„í–‰
         SaveDeckToJson();
     }
 
-    // JSON ÀúÀå
+    // JSON ì €ì¥
     void SaveDeckToJson()
     {
         if (deckNameInput.text == "")
         {
-            Debug.Log("µ¦ ÀÌ¸§ ÀÔ·ÂÇÏ½Ã¿À");
+            Debug.Log("ë± ì´ë¦„ ì…ë ¥í•˜ì‹œì˜¤");
             return;
         }
 
-        // ÀúÀåÇÒ µ¥ÀÌÅÍ °´Ã¼ ¸¸µé±â
+        // ì €ì¥í•  ë°ì´í„° ê°ì²´ ë§Œë“¤ê¸°
         DeckSaveData data = new DeckSaveData();
-        data.cardIdList = new List<int>(myDeck); // ÇöÀç µ¦ º¹»ç
+        data.cardIdList = new List<int>(myDeck); // í˜„ì¬ ë± ë³µì‚¬
 
-        // JSON ¹®ÀÚ¿­·Î º¯È¯
+        // JSON ë¬¸ìì—´ë¡œ ë³€í™˜
         string json = JsonUtility.ToJson(data, true);
 
-        // ÀúÀåÇÒ °æ·Î, ÀÌ¸§ ¼³Á¤ (PC, ¸ğ¹ÙÀÏ ¸ğµÎ ÀÛµ¿ÇÏ´Â °æ·Î)
+        // ì €ì¥í•  ê²½ë¡œ, ì´ë¦„ ì„¤ì • (PC, ëª¨ë°”ì¼ ëª¨ë‘ ì‘ë™í•˜ëŠ” ê²½ë¡œ)
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
-        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath); // Æú´õ ¾øÀ¸¸é »ı¼º
+        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath); // í´ë” ì—†ìœ¼ë©´ ìƒì„±
 
         string originalName = deckNameInput.text;
         string finalName = originalName;
         string fileName = finalName + ".json";
         string path = Path.Combine(folderPath, fileName);
 
-if (File.Exists(path))
+        if (File.Exists(path))
         {
             string baseName = originalName;
-            // 3-1. ÀÌ¸§ µÚ¿¡ ÀÌ¹Ì "_¼ıÀÚ"°¡ ºÙ¾îÀÖ´ÂÁö ºĞ¼® (¿¹: "Deck_1")
+            // 3-1. ì´ë¦„ ë’¤ì— ì´ë¯¸ "_ìˆ«ì"ê°€ ë¶™ì–´ìˆëŠ”ì§€ ë¶„ì„ (ì˜ˆ: "Deck_1")
             int lastUnderscore = originalName.LastIndexOf('_');
-            
-            // '_'°¡ ÀÖ°í, ±× µÚ¿¡ ¼ıÀÚ°¡ ÀÖ´Ù¸é?
+
+            // '_'ê°€ ìˆê³ , ê·¸ ë’¤ì— ìˆ«ìê°€ ìˆë‹¤ë©´?
             if (lastUnderscore > 0 && lastUnderscore < originalName.Length - 1)
             {
                 string numberPart = originalName.Substring(lastUnderscore + 1);
-                
-                // ÁøÂ¥ ¼ıÀÚ°¡ ¸Â´ÂÁö È®ÀÎ (TryParse)
+
+                // ì§„ì§œ ìˆ«ìê°€ ë§ëŠ”ì§€ í™•ì¸ (TryParse)
                 if (int.TryParse(numberPart, out int currentNumber))
                 {
-                    // "Deck_1" ÀÌ¶ó¸é -> baseNameÀº "Deck", ´ÙÀ½ ¹øÈ£´Â 2ºÎÅÍ ½ÃÀÛ
+                    // "Deck_1" ì´ë¼ë©´ -> baseNameì€ "Deck", ë‹¤ìŒ ë²ˆí˜¸ëŠ” 2ë¶€í„° ì‹œì‘
                     baseName = originalName.Substring(0, lastUnderscore);
                 }
             }
@@ -394,9 +394,9 @@ if (File.Exists(path))
 
             foreach (string filePath in files)
             {
-                string fName = Path.GetFileNameWithoutExtension(filePath); // ÆÄÀÏ¸í¸¸ °¡Á®¿È
+                string fName = Path.GetFileNameWithoutExtension(filePath); // íŒŒì¼ëª…ë§Œ ê°€ì ¸ì˜´
 
-                // Á¤È®È÷ Æ÷¸ËÀÌ ¸Â´ÂÁö È®ÀÎ ("Slime_¼ıÀÚ")
+                // ì •í™•íˆ í¬ë§·ì´ ë§ëŠ”ì§€ í™•ì¸ ("Slime_ìˆ«ì")
                 string prefix = baseName + "_";
                 if (fName.StartsWith(prefix))
                 {
@@ -405,7 +405,7 @@ if (File.Exists(path))
                     {
                         if (num > maxNumber)
                         {
-                            maxNumber = num; // ´õ Å« ¼ıÀÚ¸¦ ¹ß°ßÇÏ¸é °»½Å
+                            maxNumber = num; // ë” í° ìˆ«ìë¥¼ ë°œê²¬í•˜ë©´ ê°±ì‹ 
                         }
                     }
                 }
@@ -417,10 +417,10 @@ if (File.Exists(path))
             path = Path.Combine(folderPath, finalName + ".json");
         }
 
-        // ÆÄÀÏ ¾²±â
+        // íŒŒì¼ ì“°ê¸°
         File.WriteAllText(path, json);
 
-        Debug.Log("ÀúÀå ¿Ï·á! ÀÌ¸§: " + fileName);
+        Debug.Log("ì €ì¥ ì™„ë£Œ! ì´ë¦„: " + fileName);
 
         if (deckNameInput != null)
         {
@@ -433,106 +433,106 @@ if (File.Exists(path))
         RefreshDeckList(finalName);
     }
 
-    //JSON ÆÄÀÏ ÀÌ¸§ ¹Ş±â
+    //JSON íŒŒì¼ ì´ë¦„ ë°›ê¸°
     bool LoadDeckFromJson(string fileName)
     {
-        // 1. °æ·Î ¼³Á¤ (Assets Æú´õ ±âÁØ)
+        // 1. ê²½ë¡œ ì„¤ì • (Assets í´ë” ê¸°ì¤€)
         string path = Path.Combine(Application.dataPath, "MyDeck", fileName);
 
-        Debug.Log("ÆÄÀÏ Ã£´Â Áß: " + path);
+        Debug.Log("íŒŒì¼ ì°¾ëŠ” ì¤‘: " + path);
 
-        // 2. ÆÄÀÏÀÌ ÁøÂ¥ ÀÖ´ÂÁö °Ë»ç
+        // 2. íŒŒì¼ì´ ì§„ì§œ ìˆëŠ”ì§€ ê²€ì‚¬
         if (File.Exists(path) == false)
         {
-            Debug.LogWarning("ÆÄÀÏÀÌ ¾ø½À´Ï´Ù: " + path);
-            return false; // ÆÄÀÏ ¾øÀ¸¸é ½ÇÆĞ(false) ¹İÈ¯
+            Debug.LogWarning("íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤: " + path);
+            return false; // íŒŒì¼ ì—†ìœ¼ë©´ ì‹¤íŒ¨(false) ë°˜í™˜
         }
 
-        // 3. ÆÄÀÏ ÀĞ¾î¿À±â
+        // 3. íŒŒì¼ ì½ì–´ì˜¤ê¸°
         string json = File.ReadAllText(path);
 
-        // 4. JSONÀ» ´Ù½Ã µ¥ÀÌÅÍ °´Ã¼·Î º¯È¯
+        // 4. JSONì„ ë‹¤ì‹œ ë°ì´í„° ê°ì²´ë¡œ ë³€í™˜
         DeckSaveData data = JsonUtility.FromJson<DeckSaveData>(json);
 
-        // 5. ³» µ¦ ¸®½ºÆ®(myDeck)¸¦ ÀúÀåµÈ µ¥ÀÌÅÍ·Î µ¤¾î¾²±â
+        // 5. ë‚´ ë± ë¦¬ìŠ¤íŠ¸(myDeck)ë¥¼ ì €ì¥ëœ ë°ì´í„°ë¡œ ë®ì–´ì“°ê¸°
         myDeck = new List<int>(data.cardIdList);
 
-        // 6. µ¦ ÀÌ¸§ ÀÔ·ÂÄ­µµ ÆÄÀÏ ÀÌ¸§À¸·Î ¸ÂÃçÁÖ±â (È®ÀåÀÚ .json Á¦°Å)
+        // 6. ë± ì´ë¦„ ì…ë ¥ì¹¸ë„ íŒŒì¼ ì´ë¦„ìœ¼ë¡œ ë§ì¶°ì£¼ê¸° (í™•ì¥ì .json ì œê±°)
         if (deckNameInput != null)
         {
             deckNameInput.text = fileName.Replace(".json", "");
         }
 
-        // 7. È­¸é °»½Å (Áß¿ä!)
+        // 7. í™”ë©´ ê°±ì‹  (ì¤‘ìš”!)
         RefreshAllUI();
 
-        Debug.Log("ºÒ·¯¿À±â ¼º°ø: " + fileName);
-        return true; // ¼º°ø(true) ¹İÈ¯
+        Debug.Log("ë¶ˆëŸ¬ì˜¤ê¸° ì„±ê³µ: " + fileName);
+        return true; // ì„±ê³µ(true) ë°˜í™˜
     }
 
-    // µ¦ »èÁ¦
+    // ë± ì‚­ì œ
     public void OnClickDeleteDeckButton()
     {
-        // 1. µå·Ó´Ù¿î¿¡¼­ ÇöÀç µ¦ °¡Á®¿À±â
+        // 1. ë“œë¡­ë‹¤ìš´ì—ì„œ í˜„ì¬ ë± ê°€ì ¸ì˜¤ê¸°
         int index = deckListDropdown.value;
         string selectedName = deckListDropdown.options[index].text;
 
-        // 2. ¿¹¿ÜÃ³¸®
-        if (selectedName == "µ¦ÀÌ ¾ø½À´Ï´Ù.")
+        // 2. ì˜ˆì™¸ì²˜ë¦¬
+        if (selectedName == "ë±ì´ ì—†ìŠµë‹ˆë‹¤.")
         {
-            Debug.Log("»èÁ¦ÇÒ µ¦ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.Log("ì‚­ì œí•  ë±ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
-        // 3. »èÁ¦ÇÒ ÀÌ¸§À» ±â¾ï
+        // 3. ì‚­ì œí•  ì´ë¦„ì„ ê¸°ì–µ
         deckToDelete = selectedName;
 
-        // 4. È®ÀÎ ÆË¾÷ ÅØ½ºÆ® º¯°æ ÈÄ ¶ç¿ì±â
+        // 4. í™•ì¸ íŒì—… í…ìŠ¤íŠ¸ ë³€ê²½ í›„ ë„ìš°ê¸°
         if (deleteConfirmText != null)
         {
-            deleteConfirmText.text = $"{selectedName}À»(¸¦) »èÁ¦ÇÏ½Ã°Ú½À´Ï±î?";
+            deleteConfirmText.text = $"{selectedName}ì„(ë¥¼) ì‚­ì œí•˜ì‹œê² ìŠµë‹ˆê¹Œ?";
         }
 
         if (PopupPanel != null) PopupPanel.SetActive(true);
         if (deleteConfirmPopup != null) deleteConfirmPopup.SetActive(true);
     }
 
-    // ÆË¾÷¿¡¼­ È®ÀÎ ´­·¶À» ¶§ µ¦ »èÁ¦
+    // íŒì—…ì—ì„œ í™•ì¸ ëˆŒë €ì„ ë•Œ ë± ì‚­ì œ
     public void OnConfirmDelete()
     {
-        // ¾Æ±î ±â¾ïÇØµĞ ÀÌ¸§À¸·Î ÆÄÀÏ °æ·Î Ã£±â
+        // ì•„ê¹Œ ê¸°ì–µí•´ë‘” ì´ë¦„ìœ¼ë¡œ íŒŒì¼ ê²½ë¡œ ì°¾ê¸°
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
         string fileName = deckToDelete + ".json";
         string path = Path.Combine(folderPath, fileName);
 
-        // ÆÄÀÏ »èÁ¦
+        // íŒŒì¼ ì‚­ì œ
         if (File.Exists(path))
         {
             File.Delete(path);
         }
 
-        // È®ÀÎ ÆË¾÷ ´İ±â
+        // í™•ì¸ íŒì—… ë‹«ê¸°
         ClosePopup();
 
-        // ¼º°ø ÆË¾÷ ¶ç¿ì±â
-        ShowMessagePopup($"{deckToDelete}À»(¸¦)\n»èÁ¦ÇÏ¿´½À´Ï´Ù.");
+        // ì„±ê³µ íŒì—… ë„ìš°ê¸°
+        ShowMessagePopup($"{deckToDelete}ì„(ë¥¼)\nì‚­ì œí•˜ì˜€ìŠµë‹ˆë‹¤.");
 
-        // ¸ñ·Ï °»½Å (Ã¹ ¹øÂ° µ¦À¸·Î ÃÊ±âÈ­)
+        // ëª©ë¡ ê°±ì‹  (ì²« ë²ˆì§¸ ë±ìœ¼ë¡œ ì´ˆê¸°í™”)
         RefreshDeckList(null);
     }
 
-    // ³» µ¦¿¡¼­ ÇØ´ç Ä«µå ÀüºÎ Á¦°Å
+    // ë‚´ ë±ì—ì„œ í•´ë‹¹ ì¹´ë“œ ì „ë¶€ ì œê±°
     public void RemoveAllCards(int id)
     {
         myDeck.RemoveAll(x => x == id);
 
-        // 2. È­¸é °»½Å
+        // 2. í™”ë©´ ê°±ì‹ 
         RefreshAllUI();
 
-        Debug.Log($"Ä«µå ID {id}¹øÀ» µ¦¿¡¼­ ¸ğµÎ Á¦°ÅÇß½À´Ï´Ù.");
+        Debug.Log($"ì¹´ë“œ ID {id}ë²ˆì„ ë±ì—ì„œ ëª¨ë‘ ì œê±°í–ˆìŠµë‹ˆë‹¤.");
     }
 
-    // »õ·Î¿î µ¦ ¸¸µé±â
+    // ìƒˆë¡œìš´ ë± ë§Œë“¤ê¸°
     public void OnClickNewDeckButton()
     {
         if (newDeckPopup != null)
@@ -544,29 +544,29 @@ if (File.Exists(path))
 
     public void OnConfirmNewDeck()
     {
-        // 1. µ¦ ÃÊ±âÈ­ ·ÎÁ÷ (¾Æ±î ¸¸µé¾ú´ø ÄÚµå)
+        // 1. ë± ì´ˆê¸°í™” ë¡œì§ (ì•„ê¹Œ ë§Œë“¤ì—ˆë˜ ì½”ë“œ)
         myDeck.Clear();
 
-        //if (deckNameInput != null) deckNameInput.text = "»õ µ¦";  // ±âÁ¸²¨
+        //if (deckNameInput != null) deckNameInput.text = "ìƒˆ ë±";  // ê¸°ì¡´êº¼
 
-        // 2. [ÇÙ½É] "»õ µ¦" ÀÌ¸§ Áßº¹ °Ë»ç ¹× ÀÚµ¿ ¹øÈ£ ¸Å±â±â
+        // 2. [í•µì‹¬] "ìƒˆ ë±" ì´ë¦„ ì¤‘ë³µ ê²€ì‚¬ ë° ìë™ ë²ˆí˜¸ ë§¤ê¸°ê¸°
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
-        string baseName = "»õ µ¦";
+        string baseName = "ìƒˆ ë±";
         string finalName = baseName;
 
-        // Æú´õ°¡ ÀÖ°í, "»õ µ¦.json" ÆÄÀÏÀÌ ÀÌ¹Ì Á¸ÀçÇÑ´Ù¸é?
+        // í´ë”ê°€ ìˆê³ , "ìƒˆ ë±.json" íŒŒì¼ì´ ì´ë¯¸ ì¡´ì¬í•œë‹¤ë©´?
         if (Directory.Exists(folderPath) && File.Exists(Path.Combine(folderPath, baseName + ".json")))
         {
             int maxNumber = 0;
 
-            // "»õ µ¦"À¸·Î ½ÃÀÛÇÏ´Â ¸ğµç ÆÄÀÏÀ» Ã£À½
+            // "ìƒˆ ë±"ìœ¼ë¡œ ì‹œì‘í•˜ëŠ” ëª¨ë“  íŒŒì¼ì„ ì°¾ìŒ
             string[] files = Directory.GetFiles(folderPath, baseName + "*.json");
 
             foreach (string filePath in files)
             {
                 string fName = Path.GetFileNameWithoutExtension(filePath);
 
-                // "»õ µ¦_¼ıÀÚ" Çü½ÄÀÎÁö È®ÀÎ
+                // "ìƒˆ ë±_ìˆ«ì" í˜•ì‹ì¸ì§€ í™•ì¸
                 string prefix = baseName + "_";
                 if (fName.StartsWith(prefix))
                 {
@@ -578,28 +578,28 @@ if (File.Exists(path))
                 }
             }
 
-            // °¡Àå Å« ¼ıÀÚ ´ÙÀ½ ¹øÈ£·Î ¼³Á¤
-            // ¿¹: "»õ µ¦", "»õ µ¦_1"ÀÌ ÀÖÀ¸¸é max´Â 1 -> °á°ú´Â "»õ µ¦_2"
+            // ê°€ì¥ í° ìˆ«ì ë‹¤ìŒ ë²ˆí˜¸ë¡œ ì„¤ì •
+            // ì˜ˆ: "ìƒˆ ë±", "ìƒˆ ë±_1"ì´ ìˆìœ¼ë©´ maxëŠ” 1 -> ê²°ê³¼ëŠ” "ìƒˆ ë±_2"
             finalName = $"{baseName}_{maxNumber + 1}";
         }
 
-        // 3. °áÁ¤µÈ ÀÌ¸§À» ÀÔ·ÂÄ­¿¡ ³Ö±â
+        // 3. ê²°ì •ëœ ì´ë¦„ì„ ì…ë ¥ì¹¸ì— ë„£ê¸°
         if (deckNameInput != null) deckNameInput.text = finalName;
 
         RefreshAllUI();
 
-        // 2. ¿­·ÁÀÖ´Â È®ÀÎ ÆË¾÷ ´İ±â
+        // 2. ì—´ë ¤ìˆëŠ” í™•ì¸ íŒì—… ë‹«ê¸°
         ClosePopup();
 
-        // 3. ¼º°ø ¸Ş½ÃÁö ¶ç¿ì±â
-        ShowMessagePopup("»õ µ¦À» »ı¼ºÇÏ¿´½À´Ï´Ù.");
+        // 3. ì„±ê³µ ë©”ì‹œì§€ ë„ìš°ê¸°
+        ShowMessagePopup("ìƒˆ ë±ì„ ìƒì„±í•˜ì˜€ìŠµë‹ˆë‹¤.");
 
-        Debug.Log("»õ µ¦ »ı¼º ¿Ï·á");
+        Debug.Log("ìƒˆ ë± ìƒì„± ì™„ë£Œ");
     }
     // ---------------------------------------------------
-    // ÆË¾÷ °ü·Ã
+    // íŒì—… ê´€ë ¨
     // ---------------------------------------------------
-    // ÆË¾÷ ¿­±â
+    // íŒì—… ì—´ê¸°
     void ShowMessagePopup(string msg)
     {
         if (saveText != null) saveText.text = msg;
@@ -607,7 +607,7 @@ if (File.Exists(path))
         if (savePopup != null) savePopup.SetActive(true);
     }
 
-    // ÆË¾÷ ´İ±â
+    // íŒì—… ë‹«ê¸°
     public void ClosePopup()
     {
         if (warningPopup != null) warningPopup.SetActive(false);
@@ -616,7 +616,7 @@ if (File.Exists(path))
 
         if (savePopup != null) savePopup.SetActive(false);
 
-        if (deleteConfirmPopup !=null) deleteConfirmPopup.SetActive(false);
+        if (deleteConfirmPopup != null) deleteConfirmPopup.SetActive(false);
 
         if (cardZoomPopup != null) cardZoomPopup.SetActive(false);
 
@@ -628,11 +628,11 @@ if (File.Exists(path))
 
     public void OpenCardZoom(int cardId)
     {
-        // 1. ÆË¾÷ ÄÑ±â
+        // 1. íŒì—… ì¼œê¸°
         if (PopupPanel != null) PopupPanel.SetActive(true);
         cardZoomPopup.SetActive(true);
 
-        // 2. È®´ë¿ë ÇÔ¼ö È£Ãâ (ID¸¸ ³Ñ°ÜÁÖ¸é ¾Ë¾Æ¼­ ±×¸²)
+        // 2. í™•ëŒ€ìš© í•¨ìˆ˜ í˜¸ì¶œ (IDë§Œ ë„˜ê²¨ì£¼ë©´ ì•Œì•„ì„œ ê·¸ë¦¼)
         if (zoomedCardUI != null)
         {
             zoomedCardUI.SetupForZoom(cardId);

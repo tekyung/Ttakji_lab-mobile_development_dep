@@ -17,20 +17,20 @@ public class CardDataManager : MonoBehaviour
 
     void LoadCardData()
     {
-        // 1. Resources Æú´õ¿¡¼­ JSON ÆÄÀÏ ÀĞ¾î¿À±â (È®ÀåÀÚ .json Á¦¿Ü)
+        // 1. Resources í´ë”ì—ì„œ JSON íŒŒì¼ ì½ì–´ì˜¤ê¸° (í™•ì¥ì .json ì œì™¸)
         TextAsset jsonFile = Resources.Load<TextAsset>("GameData/Card");
 
         if (jsonFile == null)
         {
-            Debug.LogError("JSON ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù! Assets/Resources/GameData/card_data.json È®ÀÎ ÇÊ¿ä");
+            Debug.LogError("JSON íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤! Assets/Resources/GameData/card_data.json í™•ì¸ í•„ìš”");
             return;
         }
 
-        // 2. JSON ¹®ÀÚ¿­À» °´Ã¼·Î º¯È¯ (¿ªÁ÷·ÄÈ­)
-        // ²®µ¥±â(Wrapper) Å¬·¡½º¸¦ ÅëÇØ ¸®½ºÆ®¸¦ ÅëÂ°·Î °¡Á®¿É´Ï´Ù.
+        // 2. JSON ë¬¸ìì—´ì„ ê°ì²´ë¡œ ë³€í™˜ (ì—­ì§ë ¬í™”)
+        // ê»ë°ê¸°(Wrapper) í´ë˜ìŠ¤ë¥¼ í†µí•´ ë¦¬ìŠ¤íŠ¸ë¥¼ í†µì§¸ë¡œ ê°€ì ¸ì˜µë‹ˆë‹¤.
         CardDataWrapper wrapper = JsonUtility.FromJson<CardDataWrapper>(jsonFile.text);
 
-        // 3. µñ¼Å³Ê¸®¿Í ¸®½ºÆ®¿¡ Á¤¸®ÇØ ³Ö±â
+        // 3. ë”•ì…”ë„ˆë¦¬ì™€ ë¦¬ìŠ¤íŠ¸ì— ì •ë¦¬í•´ ë„£ê¸°
         if (wrapper != null && wrapper.Card != null)
         {
             allCardList = wrapper.Card;
@@ -42,15 +42,15 @@ public class CardDataManager : MonoBehaviour
                     cardDic.Add(card.id, card);
                 }
             }
-            Debug.Log($"Ä«µå µ¥ÀÌÅÍ ·Îµå ¿Ï·á! ÃÑ {allCardList.Count}Àå");
+            Debug.Log($"ì¹´ë“œ ë°ì´í„° ë¡œë“œ ì™„ë£Œ! ì´ {allCardList.Count}ì¥");
         }
         else
         {
-            Debug.LogError("JSON Çü½ÄÀÌ Àß¸øµÇ¾ú½À´Ï´Ù.");
+            Debug.LogError("JSON í˜•ì‹ì´ ì˜ëª»ë˜ì—ˆìŠµë‹ˆë‹¤.");
         }
     }
 
-    // ID·Î Ä«µå Á¤º¸ °¡Á®¿À´Â ÇÔ¼ö (±âÁ¸°ú µ¿ÀÏ)
+    // IDë¡œ ì¹´ë“œ ì •ë³´ ê°€ì ¸ì˜¤ëŠ” í•¨ìˆ˜ (ê¸°ì¡´ê³¼ ë™ì¼)
     public CardData GetCard(int id)
     {
         if (cardDic.ContainsKey(id))
