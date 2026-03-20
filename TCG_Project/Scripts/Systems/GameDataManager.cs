@@ -141,21 +141,21 @@ namespace TCG_Project.Scripts.Systems
 
         private class RulebookCardWrapper
         {
-            public List<RawRulebookCard> RulebookCards;
+            public List<RawRulebookCard> Card;
         }
 
         /// <summary>Data/RulebookCards.json 을 읽어 AllCards에 추가한다.</summary>
         public void LoadRulebookCards(string basePath)
         {
             var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
-            if (wrapper?.RulebookCards == null)
+            if (wrapper?.Card == null)
             {
                 Console.WriteLine("[System] RulebookCards.json 없음, 룰북 카드 로드 생략.");
                 return;
             }
 
             int loaded = 0;
-            foreach (var raw in wrapper.RulebookCards)
+            foreach (var raw in wrapper.Card)
             {
                 CardSpeed speed = raw.speed switch
                 {
@@ -447,7 +447,7 @@ namespace TCG_Project.Scripts.Systems
                         { ["buffType"] = "Armor", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
-                        bf.PerTurnEffect = buffEff;
+                        bf.PerResourcePhaseEffect = buffEff;
                         break;
                     }
 
@@ -458,7 +458,7 @@ namespace TCG_Project.Scripts.Systems
                         { ["buffType"] = "Firepower", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
-                        bf.PerTurnEffect = buffEff;
+                        bf.PerResourcePhaseEffect = buffEff;
                         break;
                     }
 

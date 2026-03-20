@@ -23,7 +23,7 @@ namespace TCG_Project.Scripts.Effects
         private int _amount = 1;
         public bool isPiercing { get; private set; } = false;
         public int Times { get; private set; } = 1;
-        private bool _targetSelf = false;
+        public bool TargetSelf = false;
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
 
@@ -43,7 +43,7 @@ namespace TCG_Project.Scripts.Effects
                 Times = Math.Max(1, Convert.ToInt32(parameters["times"]));
 
             if (parameters.ContainsKey("targetSelf"))
-                _targetSelf = Convert.ToBoolean(parameters["targetSelf"]);
+                TargetSelf = Convert.ToBoolean(parameters["targetSelf"]);
 
             if (parameters.ContainsKey("requirePreviousSuccess"))
                 RequirePreviousSuccess = Convert.ToBoolean(parameters["requirePreviousSuccess"]);
@@ -58,7 +58,7 @@ namespace TCG_Project.Scripts.Effects
         {
             Player attacker = context.ActivePlayer;
 
-            if (_targetSelf)
+            if (TargetSelf)
             {
                 if (attacker == null) { onComplete?.Invoke(); return; }
                 EventManager.OnLogMessage?.Invoke(

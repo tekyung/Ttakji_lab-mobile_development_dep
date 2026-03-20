@@ -1,5 +1,5 @@
 {
-  "RulebookCards": [
+  "Card": [
     {
       "id": "ELLI-02", "characterId": "ELLIE", "name": "퀵 드로우",
       "type": "Attack", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
