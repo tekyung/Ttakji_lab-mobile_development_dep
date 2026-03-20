@@ -6,20 +6,6 @@ using TCG_Project.Scripts.Managers; // ★ EventManager를 쓰기 위해 추가
 
 namespace TCG_Project.Scripts.Systems
 {
-    // JSON 구조에 맞춘 래퍼 클래스
-    [Serializable]
-    public class ConfigItem
-    {
-        public string Name { get; set; }
-        public string Value { get; set; }
-    }
-
-    [Serializable]
-    public class CommonConfigWrapper
-    {
-        public List<ConfigItem> CommonConfig { get; set; }
-    }
-
     public static class GameRules
     {
         // 파싱된 데이터를 담을 딕셔너리
@@ -58,14 +44,6 @@ namespace TCG_Project.Scripts.Systems
         }
 
         // === 어디서든 접근 가능한 프로퍼티들 ===
-        public static int FirstPlayerFirstTurnEnergy => GetValue("first_player_first_turn_having_energy", 0);
-        public static int SecondPlayerFirstTurnEnergy => GetValue("second_player_first_turn_having_energy", 1);
-        public static int BasicEnergy => GetValue("basic_having_energy", 3);
-
-        public static int WinPrizePoints => GetValue("prize_count_to_win", 7);
-        public static int GainPrizeByDirect => GetValue("gain_prize_by_direct", 1);
-
-        public static int MaxFieldUnitCount => GetValue("max_field_unit_count", 3);
         public static int MaxHandSize => GetValue("max_hand_size", 20);
 
         public static int MinDeckCardCount => GetValue("min_deck_card_count", 20);
@@ -79,5 +57,19 @@ namespace TCG_Project.Scripts.Systems
         // --- 룰북 신규 룰 ---
         public static int LifeTokens => GetValue("life_tokens", 5);
         public static int ResourceDeckCount => GetValue("resource_deck_count", 15);
+    }
+    
+    // JSON 구조에 맞춘 래퍼 클래스
+    [Serializable]
+    public class ConfigItem
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+
+    [Serializable]
+    public class CommonConfigWrapper
+    {
+        public List<ConfigItem> CommonConfig { get; set; }
     }
 }
