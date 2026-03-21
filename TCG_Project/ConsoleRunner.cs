@@ -50,7 +50,8 @@ namespace TCG_Project
             // 2. 데이터 로드 (매치 전체에서 1회)
             GameRules.LoadRules("./Data/CommonConfig.json");
             _dataManager = new GameDataManager();
-            _dataManager.LoadRulebookCards("./Data");
+            _dataManager.LoadRulebookCards("../Assets/Resources/GameData");
+            // _dataManager.LoadRulebookCards("./Data"); // 예비 경로
             _dataManager.LoadCharacterCards("./Data");
             _dataManager.LoadResourceCards("./Data");
 
@@ -178,7 +179,18 @@ namespace TCG_Project
             // 시작 패 드로우
             GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
             GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
+
+            /* ==============================================================
+            // ★ QA 인젝션 테스트: 게임 시작하자마자 Bot_Blue 스택존에 방어 카드 3장 수동 장전
+            // ==============================================================
+            InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
+            InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
+            InjectTestCard(p2, "VERO-05", ZoneType.StackZone); // 요새화
             
+            // Bot_Red가 바로 함포 준비를 쏠 수 있게 패에 강제 주입
+            InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
+            // ============================================================== */
+
             EventManager.OnLogMessage?.Invoke($"\n[초기 상태]");
             EventManager.OnLogMessage?.Invoke(
                 $"{p1.Name} - 라이프: {p1.LifeTokens} / 덱: {p1.Deck.Count}장 / 자원덱: {p1.ResourceDeck.Count}장 / 패: {p1.Hand.Count}장");
@@ -741,12 +753,20 @@ namespace TCG_Project
             // 공격 카드의 효과를 분석하여 타격 횟수와 관통 여부를 계산합니다.
             foreach (var effect in playedCard.Effects)
             {
+                
                 if (effect is DamageEffect dmgEffect)
                 {
-                    incomingHits += dmgEffect.Times;
-                    if (dmgEffect.isPiercing) isPiercingAttack = true;
+                    // ★ 피아식별 로직 추가!
+                    // 자해(Self) 데미지는 방어할 필요가 없으므로 타격 횟수에서 제외합니다.
+                    // 나(방어자)를 향한 공격일 때만 카운트
+                    if (!dmgEffect.TargetSelf)
+                    {
+                        incomingHits += dmgEffect.Times;
+                        if (dmgEffect.isPiercing) isPiercingAttack = true;
+                    }
                 }
             }
+
 
             // [AI 포인트 1] 데미지가 없는 카드라면 스택을 아낍니다.
             if (incomingHits == 0) return;
@@ -814,6 +834,54 @@ namespace TCG_Project
             // ★ 상태 복구 (State Restore)
             context.ActivePlayer = originalActive;
             context.TargetPlayer = originalTarget;
+        }
+
+        /// <summary>
+        /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
+        /// 복잡한 엣지 케이스(스택 3개 중첩 등)를 1턴 만에 재현하기 위한 디버깅용 툴입니다.
+        /// </summary>
+        private static void InjectTestCard(Player player, string cardId, ZoneType targetZone)
+        {
+            // 1. 데이터 매니저에서 카드 템플릿 검색
+            if (!_dataManager.AllCards.TryGetValue(cardId, out Card template))
+            {
+                EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] 주입 실패: ID '{cardId}'를 찾을 수 없습니다.</color>");
+                return;
+            }
+
+            // 2. 실제 게임에 사용될 독립된 객체로 복제 (Deep Copy)
+            Card injectedCard = template.Clone();
+
+            // 3. 타겟 존의 성격에 맞춰 안전하게 밀어넣기
+            switch (targetZone)
+            {
+                case ZoneType.Hand:
+                    player.InsertCard(ZoneType.Hand, injectedCard);
+                    break;
+                case ZoneType.Deck:
+                    // 덱 조작: 다음 턴에 바로 뽑히도록 덱의 맨 위(0번 인덱스)에 강제 삽입
+                    player.Deck.Insert(0, injectedCard);
+                    break;
+                case ZoneType.Graveyard:
+                    player.InsertCard(ZoneType.Graveyard, injectedCard);
+                    break;
+                case ZoneType.ResourceZone:
+                    player.InsertCard(ZoneType.ResourceZone, injectedCard);
+                    break;
+                case ZoneType.StackZone:
+                    // 스택존 전용 공식 파이프라인 탑재
+                    player.AddToStackZone(injectedCard);
+                    break;
+                case ZoneType.BattlefieldZone:
+                    // 전장 전용 공식 파이프라인 탑재 (기존 전장이 있다면 덮어씌움)
+                    player.PlaceBattlefield(injectedCard);
+                    break;
+                default:
+                    EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] '{targetZone}'은(는) 주입이 지원되지 않는 존입니다.</color>");
+                    return;
+            }
+
+            EventManager.OnLogMessage?.Invoke($"<color=yellow>[QA Inject] {player.Name}의 {targetZone}에 '{injectedCard.Name}' 강제 장전 완료.</color>");
         }
 
         private static void CustomColoredConsoleLogger(string message)

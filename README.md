@@ -275,3 +275,14 @@ BattleManager.cs의 86번 줄에서 플레이어/봇 생성. 콜백 로직이 �
 세트 존을 단일 카드 변수 대신 리스트로 관리하는 것에 대한 논의 중 (다이나의 "기뢰" 처럼 세트 존 외 카드 효과 발동에 대한 재정)
 
 스택의 종류를 방어뿐 아니라 무적, 반격, 화력 등 추가 구현
+
+
+## 26.03.20 진행사항
+
+RulebookCards.json 의 카드 항목 이름 Card 로 변경 (UI 요청사항 반영)
+
+RulebookCards.json 의 경로를 Assets/Resources/GameData 로 변경
+
+스택 발동 관련 버그 수정 (스택이 상대의 자해 데미지에도 터지는 버그 수정)
+
+QA 에서 쉽게 상황을 테스트할 게임 상태 주입 로직 생성. (ConsoleRunner, BattleManager 덱 세팅 부분의 주석 참고)

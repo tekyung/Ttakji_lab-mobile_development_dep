@@ -99,6 +99,7 @@ public class BattleManager : MonoBehaviour
     {
         string primaryPath = Path.Combine(Application.dataPath, "Resources", "GameData");
         string dataPath = Directory.Exists(primaryPath) ? primaryPath : "./Data";
+        string CardDataPath = Directory.Exists(primaryPath) ? primaryPath : "../Assets/Resources/GameData";
 
         try { GameRules.LoadRules(Path.Combine(dataPath, "CommonConfig.json")); }
         catch (Exception e)
@@ -107,7 +108,8 @@ public class BattleManager : MonoBehaviour
         }
 
         _dataManager = new GameDataManager();
-        _dataManager.LoadRulebookCards(dataPath);
+        _dataManager.LoadRulebookCards(CardDataPath); // M1 용 수정 경로
+        // _dataManager.LoadRulebookCards(dataPath); <- 예비 경로
         _dataManager.LoadCharacterCards(dataPath);
         _dataManager.LoadResourceCards(dataPath);
 
@@ -238,8 +240,8 @@ public class BattleManager : MonoBehaviour
                         // 필요시 여기에 ID를 더 추가하세요.
             ];
 
-            string[] p2TestIds = // BorBlue : 베로니카 + 소니아
-            {
+        string[] p2TestIds = // BorBlue : 베로니카 + 소니아
+        {
                 "VERO-02", // 숙청
                 "VERO-03", // 계획대로
                 "VERO-05", // 요새화
@@ -262,7 +264,7 @@ public class BattleManager : MonoBehaviour
 
         context = new GameContext();
         context.CurrentTurn = 1;
-        
+
         context.Players.Add(p1);
         context.Players.Add(p2);
 
@@ -271,6 +273,17 @@ public class BattleManager : MonoBehaviour
 
         GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
         GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
+
+        // ==============================================================
+        // ★ QA 인젝션 테스트 (유니티 환경)
+        // ==============================================================
+        // (예시) 봇 블루의 스택에 방어막 강제 장전
+        // InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
+        // InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
+        
+        // (예시) 플레이어 레드의 패에 무기 강제 쥐어주기
+        // InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
+        // ==============================================================
 
         EventManager.OnGameStart?.Invoke(p1, p2);
         EventManager.OnLogMessage?.Invoke($"\n[초기] {p1.Name} — 라이프:{p1.LifeTokens} / 덱:{p1.Deck.Count} / 자원덱:{p1.ResourceDeck.Count} / 패:{p1.Hand.Count}");
@@ -545,7 +558,7 @@ public class BattleManager : MonoBehaviour
 
                 // ★ UI 팀 참고: 이 이벤트가 터지면 카드가 전장 중앙으로 팝업되는 연출을 재생하세요!
                 EventManager.OnPlayCard?.Invoke(player, card);
-                
+
                 player.PlayingCard = card;
                 context.LastEffectSucceeded = true;
                 bool effectDone = false;
@@ -568,11 +581,11 @@ public class BattleManager : MonoBehaviour
                 {
                     EventManager.OnLogMessage?.Invoke($"  [{card.Name}] 전장 카드 발동!");
                     player.ExtractCard(ZoneType.SetZone, card);
-                    player.PlaceBattlefield(card); 
+                    player.PlaceBattlefield(card);
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.BattlefieldZone);
 
                     // 메인 페이즈 발동 즉시 전장 효과 1회 장전 (On-Play Wake)
-                    GameLogicHelpers.ApplyBattlefieldTurnEffects(player, context); 
+                    GameLogicHelpers.ApplyBattlefieldTurnEffects(player, context);
                 }
                 else if (player.ResourceZone.Contains(card))
                 {
@@ -598,7 +611,7 @@ public class BattleManager : MonoBehaviour
                 }
 
                 yield return new WaitForSeconds(ActionDelay);
-            } 
+            }
 
             if (CheckAndHandleGameOver())
             {
@@ -622,8 +635,14 @@ public class BattleManager : MonoBehaviour
         {
             if (effect is DamageEffect dmgEffect)
             {
-                incomingHits += dmgEffect.Times;
-                if (dmgEffect.isPiercing) isPiercingAttack = true;
+                // ★ 피아식별 로직 추가!
+                // 자해(Self) 데미지는 방어할 필요가 없으므로 타격 횟수에서 제외합니다.
+                // 나(방어자)를 향한 공격일 때만 카운트
+                if (!dmgEffect.TargetSelf)
+                {
+                    incomingHits += dmgEffect.Times;
+                    if (dmgEffect.isPiercing) isPiercingAttack = true;
+                }
             }
         }
 
@@ -749,6 +768,54 @@ public class BattleManager : MonoBehaviour
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────
+    
+    /// <summary>
+    /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
+    /// 복잡한 엣지 케이스를 1턴 만에 재현하기 위한 유니티 디버깅용 툴입니다.
+    /// </summary>
+    private void InjectTestCard(Player player, string cardId, ZoneType targetZone)
+    {
+        if (_dataManager == null) return;
+
+        // 1. 데이터 매니저에서 카드 템플릿 검색
+        if (!_dataManager.AllCards.TryGetValue(cardId, out Card template))
+        {
+            EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] 주입 실패: ID '{cardId}'를 찾을 수 없습니다.</color>");
+            return;
+        }
+
+        // 2. 실제 게임에 사용될 독립된 객체로 복제 (Deep Copy)
+        Card injectedCard = template.Clone();
+
+        // 3. 타겟 존의 성격에 맞춰 안전하게 밀어넣기
+        switch (targetZone)
+        {
+            case ZoneType.Hand:
+                player.InsertCard(ZoneType.Hand, injectedCard);
+                break;
+            case ZoneType.Deck:
+                // 덱 조작: 다음 턴에 바로 뽑히도록 덱의 맨 위(0번 인덱스)에 강제 삽입
+                player.Deck.Insert(0, injectedCard);
+                break;
+            case ZoneType.Graveyard:
+                player.InsertCard(ZoneType.Graveyard, injectedCard);
+                break;
+            case ZoneType.ResourceZone:
+                player.InsertCard(ZoneType.ResourceZone, injectedCard);
+                break;
+            case ZoneType.StackZone:
+                player.AddToStackZone(injectedCard);
+                break;
+            case ZoneType.BattlefieldZone:
+                player.PlaceBattlefield(injectedCard);
+                break;
+            default:
+                EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] '{targetZone}'은(는) 주입이 지원되지 않는 존입니다.</color>");
+                return;
+        }
+
+        EventManager.OnLogMessage?.Invoke($"<color=yellow>[QA Inject] {player.Name}의 {targetZone}에 '{injectedCard.Name}' 강제 장전 완료.</color>");
+    }
 
     private void ResolveSimultaneousDeckout()
     {
