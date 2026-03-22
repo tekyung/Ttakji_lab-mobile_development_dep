@@ -1,0 +1,13 @@
+{
+  "ResourceCards": [
+    {
+      "id": "RES-01",
+      "name": "자원 카드",
+      "type": "Resource",
+      "speed": 0,
+      "cost": 0,
+      "description": "코스트 지불에 사용되는 자원 카드. 모든 플레이어 동일.",
+      "ImagePath": "GameDesign/Card_image/ResourceCard.png"
+    }
+  ]
+}

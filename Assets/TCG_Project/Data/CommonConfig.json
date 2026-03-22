@@ -1,0 +1,52 @@
+{
+  "CommonConfig": [
+    {
+      "Name": "min_deck_card_count",
+      "Value": "20"
+    },
+    {
+      "Name": "max_deck_card_count",
+      "Value": "20"
+    },
+    {
+      "Name": "max_hand_size",
+      "Value": "20"
+    },
+    {
+      "Name": "room_session_time",
+      "Value": "120000"
+    },
+    {
+      "Name": "choose_wait_time",
+      "Value": "20000"
+    },
+    {
+        "Name": "gain_prize_by_direct",
+        "Value": "1"
+    },
+    {
+        "Name": "starting_hands",
+        "Value": "5"
+    },
+    {
+        "Name": "draw_per_turn",
+        "Value": "1"
+    },
+    {
+        "Name": "life_tokens",
+        "Value": "5"
+    },
+    {
+        "Name": "resource_deck_count",
+        "Value": "15"
+    },
+    {
+        "Name": "Bot_delay_time",
+        "Value": "500"
+    },
+    {
+        "Name": "Bot_single_game",
+        "Value": "false"
+    }
+  ]
+}
