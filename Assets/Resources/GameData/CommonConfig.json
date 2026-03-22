@@ -1,26 +1,6 @@
 {
   "CommonConfig": [
     {
-      "Name": "first_player_first_turn_having_energy",
-      "Value": "0"
-    },
-    {
-      "Name": "second_player_first_turn_having_energy",
-      "Value": "1"
-    },
-    {
-      "Name": "basic_having_energy",
-      "Value": "3"
-    },
-    {
-      "Name": "prize_count_to_win",
-      "Value": "7"
-    },
-    {
-      "Name": "max_field_unit_count",
-      "Value": "3"
-    },
-    {
       "Name": "min_deck_card_count",
       "Value": "20"
     },
@@ -41,8 +21,32 @@
       "Value": "20000"
     },
     {
-      "Name": "gain_prize_by_direct",
-      "Value": "1"
+        "Name": "gain_prize_by_direct",
+        "Value": "1"
+    },
+    {
+        "Name": "starting_hands",
+        "Value": "5"
+    },
+    {
+        "Name": "draw_per_turn",
+        "Value": "1"
+    },
+    {
+        "Name": "life_tokens",
+        "Value": "5"
+    },
+    {
+        "Name": "resource_deck_count",
+        "Value": "15"
+    },
+    {
+        "Name": "Bot_delay_time",
+        "Value": "500"
+    },
+    {
+        "Name": "Bot_single_game",
+        "Value": "false"
     }
   ]
 }
