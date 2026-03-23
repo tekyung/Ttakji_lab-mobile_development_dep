@@ -1,4 +1,6 @@
-// VeronicaAbility.cs — Phase 14: VERO-01 베로니카 고유 능력
+﻿// VeronicaAbility.cs — Phase 14: VERO-01 베로니카 고유 능력
+using System;
+using System.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 

@@ -1,3 +1,4 @@
+﻿using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Core
@@ -12,7 +13,7 @@ namespace TCG_Project.Scripts.Core
 
         // 타겟팅된 플레이어 (공격 대상 등) - 상황에 따라 null일 수 있음
         public Player TargetPlayer { get; set; }
-        
+
         // 게임 중 현재의 턴
         public int CurrentTurn { get; set; } = 1;
 

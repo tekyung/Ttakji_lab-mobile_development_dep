@@ -1,4 +1,4 @@
-// Scripts/Effects/OptionalActionEffect.cs ì‹ ê·œ ìƒì„±
+// Scripts/Effects/OptionalActionEffect.cs ½Å±Ô »ı¼º
 using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
@@ -8,27 +8,27 @@ using TCG_Project.Scripts.Managers;
 namespace TCG_Project.Scripts.Effects
 {
     /// <summary>
-    /// ë£°ë¶ ê¸°ë¯¹: "Aë¥¼ í•  ìˆ˜ ìˆë‹¤. í–ˆë‹¤ë©´ Bë¥¼ í•œë‹¤."ë¥¼ ì²˜ë¦¬í•˜ëŠ” ì´í™íŠ¸.
-    /// í”Œë ˆì´ì–´ì—ê²Œ ì˜ì‚¬ë¥¼ ë¬»ê³ , ìˆ˜ë½í•˜ë©´ ActionToPerformì„ ì‹¤í–‰í•©ë‹ˆë‹¤.
-    /// ê±°ì ˆí•˜ë©´ GameContext.LastEffectSucceededë¥¼ falseë¡œ ë§Œë“¤ì–´ í›„ì† "ê·¸ í›„" íš¨ê³¼ë“¤ì„ ì·¨ì†Œì‹œí‚µë‹ˆë‹¤.
+    /// ·êºÏ ±â¹Í: "A¸¦ ÇÒ ¼ö ÀÖ´Ù. Çß´Ù¸é B¸¦ ÇÑ´Ù."¸¦ Ã³¸®ÇÏ´Â ÀÌÆåÆ®.
+    /// ÇÃ·¹ÀÌ¾î¿¡°Ô ÀÇ»ç¸¦ ¹¯°í, ¼ö¶ôÇÏ¸é ActionToPerformÀ» ½ÇÇàÇÕ´Ï´Ù.
+    /// °ÅÀıÇÏ¸é GameContext.LastEffectSucceeded¸¦ false·Î ¸¸µé¾î ÈÄ¼Ó "±× ÈÄ" È¿°úµéÀ» Ãë¼Ò½ÃÅµ´Ï´Ù.
     /// </summary>
     public class OptionalActionEffect : ICardEffect
     {
         public string Description { get; private set; }
-        public ICardEffect ActionToPerform { get; private set; } // Yes ì‹œ ìˆ˜í–‰í•  ì‹¤ì œ íš¨ê³¼ (ì˜ˆ: ë± 4ì¥ íê¸°)
-        public bool RequirePreviousSuccess { get; set; } = false; // ê¸°ë³¸ê°’ì€ false (ë…ë¦½ ì‹¤í–‰)
-        public bool IsStackAction { get; set; } = false; // ê¸°ë³¸ê°’ì€ false (ì¹´ë“œì˜ IsStackì„ ë”°ë¼ê°€ë˜, JSONì—ì„œ ì˜¤ë²„ë¼ì´ë“œ ê°€ëŠ¥)
+        public ICardEffect ActionToPerform { get; private set; } // Yes ½Ã ¼öÇàÇÒ ½ÇÁ¦ È¿°ú (¿¹: µ¦ 4Àå Æó±â)
+        public bool RequirePreviousSuccess { get; set; } = false; // ±âº»°ªÀº false (µ¶¸³ ½ÇÇà)
+        public bool IsStackAction { get; set; } = false; // ±âº»°ªÀº false (Ä«µåÀÇ IsStackÀ» µû¶ó°¡µÇ, JSON¿¡¼­ ¿À¹ö¶óÀÌµå °¡´É)
         public void Initialize(Dictionary<string, object> parameters)
         {
             if (parameters.TryGetValue("description", out var descObj))
                 Description = descObj.ToString();
 
-            // JSON íŒŒì‹± ì‹œ ë‚´ë¶€ íš¨ê³¼ ìƒì„± (GameDataManagerì˜ íŒ©í† ë¦¬ ë¡œì§ ì—°ê³„ í•„ìš”)
+            // JSON ÆÄ½Ì ½Ã ³»ºÎ È¿°ú »ı¼º (GameDataManagerÀÇ ÆÑÅä¸® ·ÎÁ÷ ¿¬°è ÇÊ¿ä)
             // if (parameters.TryGetValue("action", out var actionDict))
             // {
             //     ActionToPerform = GameDataManager.CreateEffect((Dictionary<string,object>)actionDict);
             // }
-            
+
             if (parameters.TryGetValue("isStackAction", out var isStackObj))
             {
                 IsStackAction = Convert.ToBoolean(isStackObj.ToString());
@@ -39,16 +39,16 @@ namespace TCG_Project.Scripts.Effects
         {
             Player me = context.ActivePlayer;
 
-            // í”Œë ˆì´ì–´ì˜ ì„ íƒì„ ì²˜ë¦¬í•˜ëŠ” ë¡œì»¬ ì½œë°± í•¨ìˆ˜
+            // ÇÃ·¹ÀÌ¾îÀÇ ¼±ÅÃÀ» Ã³¸®ÇÏ´Â ·ÎÄÃ Äİ¹é ÇÔ¼ö
             Action<bool> handleChoice = (choice) =>
             {
                 if (choice)
                 {
-                    EventManager.OnLogMessage?.Invoke($"  â–¶ [{me.Name}] ì„ íƒ: '{Description}' (ìˆ˜í–‰í•¨)");
+                    EventManager.OnLogMessage?.Invoke($"  ¢º [{me.Name}] ¼±ÅÃ: '{Description}' (¼öÇàÇÔ)");
 
                     if (ActionToPerform != null)
                     {
-                        // ì„ íƒ í–‰ë™ì„ ì‹¤ì œë¡œ ìˆ˜í–‰ (ì´ ë‚´ë¶€ì—ì„œ ì‹¤íŒ¨í•˜ë©´ LastEffectSucceededê°€ falseê°€ ë¨)
+                        // ¼±ÅÃ Çàµ¿À» ½ÇÁ¦·Î ¼öÇà (ÀÌ ³»ºÎ¿¡¼­ ½ÇÆĞÇÏ¸é LastEffectSucceeded°¡ false°¡ µÊ)
                         ActionToPerform.Execute(context, () =>
                         {
                             onComplete?.Invoke();
@@ -62,23 +62,23 @@ namespace TCG_Project.Scripts.Effects
                 }
                 else
                 {
-                    // í–‰ë™ì„ í¬ê¸°í–ˆìœ¼ë¯€ë¡œ, "ê·¸ í›„" ë”°ë¼ì˜¤ëŠ” í›„ì† íš¨ê³¼ëŠ” ë¶ˆë°œë˜ì–´ì•¼ í•¨
-                    EventManager.OnLogMessage?.Invoke($"  â–¶ [{me.Name}] ì„ íƒ: '{Description}' (ì·¨ì†Œí•¨)");
+                    // Çàµ¿À» Æ÷±âÇßÀ¸¹Ç·Î, "±× ÈÄ" µû¶ó¿À´Â ÈÄ¼Ó È¿°ú´Â ºÒ¹ßµÇ¾î¾ß ÇÔ
+                    EventManager.OnLogMessage?.Invoke($"  ¢º [{me.Name}] ¼±ÅÃ: '{Description}' (Ãë¼ÒÇÔ)");
                     context.LastEffectSucceeded = false;
                     onComplete?.Invoke();
                 }
             };
 
-            // í–‰ë™ ì£¼ì²´ê°€ ë´‡ì¸ì§€ ì¸ê°„ì¸ì§€ ë¶„ê¸°
+            // Çàµ¿ ÁÖÃ¼°¡ º¿ÀÎÁö ÀÎ°£ÀÎÁö ºĞ±â
             if (me.Type == UserType.Bot)
             {
-                // TODO: í–¥í›„ BotBrain.ChooseOptionalAction() ìœ¼ë¡œ ìœ„ì„í•˜ì—¬ ì „ëµí™” ê°€ëŠ¥
-                // í˜„ì¬ëŠ” ë´‡ì´ ê°€ëŠ¥í•œ ì˜µì…˜ì€ í•­ìƒ ìˆ˜ë½í•œë‹¤ê³  ê°€ì •
+                // TODO: ÇâÈÄ BotBrain.ChooseOptionalAction() À¸·Î À§ÀÓÇÏ¿© Àü·«È­ °¡´É
+                // ÇöÀç´Â º¿ÀÌ °¡´ÉÇÑ ¿É¼ÇÀº Ç×»ó ¼ö¶ôÇÑ´Ù°í °¡Á¤
                 handleChoice(true);
             }
             else
             {
-                // ì¸ê°„ì¼ ê²½ìš° UIì˜ ì„ íƒ ì‘ë‹µì„ ëŒ€ê¸° (ì½œë°±ì„ í†µí•´ ì¬ê°œ)
+                // ÀÎ°£ÀÏ °æ¿ì UIÀÇ ¼±ÅÃ ÀÀ´äÀ» ´ë±â (Äİ¹éÀ» ÅëÇØ Àç°³)
                 EventManager.OnRequireOptionalAction?.Invoke(me, Description, context, handleChoice);
             }
         }

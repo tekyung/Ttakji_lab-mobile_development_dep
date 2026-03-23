@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -86,7 +86,7 @@ namespace TCG_Project.Scripts.Core
         public int NextTurnArmorBonus { get; set; } = 0;
         public int NextTurnSuperArmorBonus { get; set; } = 0;
         public bool NextTurnIsInvincible { get; set; } = false;
-        public bool NextTurnCounterAttack {get; set;} = false;
+        public bool NextTurnCounterAttack { get; set; } = false;
 
         // [전장 전용 버프] 매 턴 드로우 페이즈에 리필되며, 첫 타격 발생 시 즉시 소진됨
         public int BattlefieldArmor { get; set; } = 0;

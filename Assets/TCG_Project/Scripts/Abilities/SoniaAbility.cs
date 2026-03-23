@@ -1,4 +1,5 @@
-// SoniaAbility.cs — Phase 14: SONI-01 소니아 고유 능력
+﻿// SoniaAbility.cs — Phase 14: SONI-01 소니아 고유 능력
+using System;
 using System.Linq;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
@@ -8,7 +9,7 @@ namespace TCG_Project.Scripts.Abilities
     public class SoniaAbility : CharacterAbilityBase
     {
         public override string CharacterCardId => "SONI-01";
-        
+
         // Gemini 버전
         public override void OnSetPhase(Player me, GameContext ctx, Action<bool> onComplete)
         {

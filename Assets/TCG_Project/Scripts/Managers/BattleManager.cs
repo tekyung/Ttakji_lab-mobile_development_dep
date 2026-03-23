@@ -1,4 +1,4 @@
-// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
+﻿// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
 // [팀원 공유용] ConsoleRunner의 최신 아키텍처(Phase 18+)를 100% 반영한 유니티 매니저입니다.
 using System;
 using System.Collections;
@@ -227,7 +227,8 @@ public class BattleManager : MonoBehaviour
         // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
         // ==============================================================
         string[] p1TestIds = // BotRed : 엘리 + 다이나
-            [
+            new string[]
+            {
                 "ELLI-02", // 퀵 드로우
                 "ELLI-03", // 수류탄 투척
                 "ELLI-04", // 미니건 난사
@@ -240,8 +241,8 @@ public class BattleManager : MonoBehaviour
                 "DAIN-07", // 강도 테스트
                 "DAIN-09", // 리벤지
                 "DAIN-11", // 조선소
-                        // 필요시 여기에 ID를 더 추가하세요.
-            ];
+                           // 필요시 여기에 ID를 더 추가하세요.
+            };
 
         string[] p2TestIds = // BorBlue : 베로니카 + 소니아
         {
@@ -283,7 +284,7 @@ public class BattleManager : MonoBehaviour
         // (예시) 봇 블루의 스택에 방어막 강제 장전
         // InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
         // InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
-        
+
         // (예시) 플레이어 레드의 패에 무기 강제 쥐어주기
         // InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
         // ==============================================================
@@ -771,7 +772,7 @@ public class BattleManager : MonoBehaviour
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────
-    
+
     /// <summary>
     /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
     /// 복잡한 엣지 케이스를 1턴 만에 재현하기 위한 유니티 디버깅용 툴입니다.
