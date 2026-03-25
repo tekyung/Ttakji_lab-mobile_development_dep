@@ -267,7 +267,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         RectTransform rect = GetComponent<RectTransform>();
 
         // ⭐ [추가됨] 패로 돌아왔으니, 다른 카드들과 밑선이 맞도록 피벗을 다시 발바닥(Y: 0)으로 돌려놓습니다!
-        rect.pivot = new Vector2(0.5f, 0f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
 
         transform.localScale = Vector3.one;
         myCanvas.overrideSorting = false;
@@ -346,7 +346,12 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             }
             // 아까 만들어둔 완벽한 이동 함수를 불러서 필드 중앙에 꽂아버립니다!
             DeselectCard();
-            PlayThisCard(setField.transform);
+            //PlayThisCard(setField.transform);
+            // ⭐ 1. 내 카드에 적힌 ID를 가져옵니다.
+            string myId = GetComponent<CardUI>().myCardID;
+
+            // ⭐ 2. 내 UI 매니저에게 "나 이 카드 낼 거니까 심판한테 알려줘!" 라고 넘깁니다.
+            PlayerUIManager.Instance.ConfirmSetCard(myId, this.gameObject);
         }
         else
         {

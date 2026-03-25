@@ -37,6 +37,8 @@ public class InGameUIManager : MonoBehaviour
             if (zoomCardImage != null && cardUI.cardImage != null)
             {
                 zoomCardImage.sprite = cardUI.cardImage.sprite;
+
+                Debug.Log($"📸 줌 패널 사진 복사 완료! 가져온 사진 이름: {cardUI.cardImage.sprite.name}");
             }
 
             // ⭐ 2. 카드 이름 복사
