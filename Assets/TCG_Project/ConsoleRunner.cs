@@ -1,4 +1,4 @@
-// 룰북 6페이즈 구조 (자원→드로우→세트→오픈→메인→엔드) + 3판 2선승 매치
+﻿// 룰북 6페이즈 구조 (자원→드로우→세트→오픈→메인→엔드) + 3판 2선승 매치
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -757,7 +757,7 @@ namespace TCG_Project
             // 공격 카드의 효과를 분석하여 타격 횟수와 관통 여부를 계산합니다.
             foreach (var effect in playedCard.Effects)
             {
-                
+
                 if (effect is DamageEffect dmgEffect)
                 {
                     // ★ 피아식별 로직 추가!

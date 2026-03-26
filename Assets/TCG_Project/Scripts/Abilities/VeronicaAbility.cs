@@ -39,6 +39,7 @@ namespace TCG_Project.Scripts.Abilities
                 {
                     me.Deck.Remove(chosenCard);
                     me.Hand.Add(chosenCard);
+                    EventManager.OnCardMove?.Invoke(chosenCard, me, ZoneType.Deck, me, ZoneType.Hand);
                     EventManager.OnLogMessage?.Invoke($"  ▶ [{me.Name}] 베로니카 능력 발동! '{chosenCard.Name}' 패로 추가. (나머지 덱 위 유지)");
 
                     me.MarkCharacterAbilityUsed(CharacterCardId); // 1회 사용 마킹

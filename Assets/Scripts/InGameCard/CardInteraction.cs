@@ -17,6 +17,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     public GameObject actionButtonPanel; // 공개, 폐기 버튼
     private bool isSelected = false; // 현재 내가 선택되었는가
     private static CardInteraction currentlySelectedCard; // 현재 카드 기억하기
+    public bool isInSetZone = false; // 네트존에 있는가
 
     [Header("Drag to Center Settings")]
     public GameObject actionButtonPanelBottom; // 하단 공개, 폐기 버튼
@@ -53,6 +54,8 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     void Update()
     {
+        if (isInSetZone) return; // 세트존에 있을 때 누르기 금지
+
         if (isPointerDown && !isDragging)
         {
             pointerDownTimer += Time.deltaTime;
@@ -93,7 +96,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (isPlayed || isDragging) return; // 필드에 나갔거나 드래그 중이면 무시
+        if (isInSetZone || isPlayed || isDragging) return; // 필드에 나갔거나 드래그 중이면 무시
 
         if (isSelected)
         {
@@ -149,6 +152,8 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     {
         Debug.Log("🔄 회수 버튼 클릭! 카드를 다시 패로 가져옵니다.");
 
+        isInSetZone = false;
+
         // 1. 씬에서 패(HandArea)를 찾습니다. 
         GameObject handArea = GameObject.Find("MyHand");
 
@@ -180,6 +185,11 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             }
 
             DeselectCard();
+
+            if (PlayerUIManager.Instance != null)
+            {
+                PlayerUIManager.Instance.CancelSet();
+            }
         }
         else
         {
@@ -193,7 +203,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     // 1. 드래그를 시작할 때
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (isPlayed) return;
+        if (isPlayed || isInSetZone) return;
         if (isSelected) DeselectCard();
 
         isDragging = true;
@@ -218,7 +228,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     // 2. 드래그 중일 때 (마우스 따라다니기)
     public void OnDrag(PointerEventData eventData)
     {
-        if (isPlayed) return;
+        if (isPlayed || isInSetZone) return;
 
         Debug.Log("드래그 이동중");
         RectTransformUtility.ScreenPointToWorldPointInRectangle(
@@ -234,7 +244,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     // 3. 드래그를 끝냈을 때 (마우스에서 손을 뗐을 때)
     public void OnEndDrag(PointerEventData eventData)
     {
-        if (isPlayed) return;
+        if (isPlayed || isInSetZone) return;
 
         isDragging = false;
         canvasGroup.blocksRaycasts = true;
@@ -267,7 +277,7 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         RectTransform rect = GetComponent<RectTransform>();
 
         // ⭐ [추가됨] 패로 돌아왔으니, 다른 카드들과 밑선이 맞도록 피벗을 다시 발바닥(Y: 0)으로 돌려놓습니다!
-        rect.pivot = new Vector2(0.5f, 0f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
 
         transform.localScale = Vector3.one;
         myCanvas.overrideSorting = false;
@@ -319,18 +329,18 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     public void OnClickReveal()
     {
         Debug.Log("👁️ 공개 버튼 클릭! 세트 필드로 이동합니다.");
-        SendToSetField();
+        SendToSetField(true);
     }
 
     // '폐기' 버튼을 눌렀을 때 실행됩니다.
     public void OnClickDiscard()
     {
         Debug.Log("🗑️ 폐기 버튼 클릭! 세트 필드로 이동합니다.");
-        SendToSetField();
+        SendToSetField(false);
     }
 
     // 카드를 찾아내서 세트 필드로 쏘아 보내는 공통 함수
-    private void SendToSetField()
+    private void SendToSetField(bool isReveal)
     {
         // 씬(Scene)에서 '세트 필드' 역할을 하는 오브젝트를 이름으로 찾습니다.
         GameObject setField = GameObject.Find("set");
@@ -346,7 +356,19 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             }
             // 아까 만들어둔 완벽한 이동 함수를 불러서 필드 중앙에 꽂아버립니다!
             DeselectCard();
-            PlayThisCard(setField.transform);
+            //PlayThisCard(setField.transform);
+            // ⭐ 1. 내 카드에 적힌 ID를 가져옵니다.
+            string myId = GetComponent<CardUI>().myCardID;
+
+            // ⭐ 2. 내 UI 매니저에게 "나 이 카드 낼 거니까 심판한테 알려줘!" 라고 넘깁니다.
+            if (PlayerUIManager.Instance != null)
+            {
+                PlayerUIManager.Instance.ConfirmSetCard(myId, this.gameObject, isReveal);
+            }
+            else
+            {
+                Debug.LogError("🚨 PlayerUIManager.Instance를 찾을 수 없습니다! 하이어라키에 PlayerUI가 있나요?");
+            }
         }
         else
         {
