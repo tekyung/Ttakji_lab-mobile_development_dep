@@ -180,6 +180,7 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator RunSingleGame()
     {
+        yield return null;
         InitializeSingleGame();
         context.CurrentTurn = 1;
 
@@ -434,7 +435,16 @@ public class BattleManager : MonoBehaviour
         }
 
         if (cardToSet != null)
+        {
+            // 메모리 상에서 세트!
             player.SetCard(cardToSet);
+
+            // ⭐ [추가할 부분] 봇일 경우, UI 거울에게 카드가 패에서 세트존으로 이동했다고 방송을 쏴줍니다!, 나중에 없앨수도
+            if (player.Type == UserType.Bot)
+            {
+                EventManager.OnCardMove?.Invoke(cardToSet, player, ZoneType.Hand, player, ZoneType.SetZone);
+            }
+        }
     }
 
     // ─── 페이즈 4: 오픈 페이즈 ───────────────────────────────────────
@@ -490,6 +500,8 @@ public class BattleManager : MonoBehaviour
             EventManager.OnLogMessage?.Invoke($"{player.Name}: 코스트 부족 (필요: {effectiveCost} / 자원존: {player.GetResourceCount()}) → 폐기 선택");
             player.AbandonSetCard();
             GameLogicHelpers.DrawCards(player, 1, context);
+
+            EventManager.OnCardMove?.Invoke(setCard, player, ZoneType.SetZone, player, ZoneType.Graveyard); // 추가
 
             foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
             {
@@ -720,6 +732,10 @@ public class BattleManager : MonoBehaviour
                 stackOwner.PlayingCard = null;
 
                 stackOwner.UseAndDiscardStack(stackCard);
+
+                // 스택 카드 사용했다는 표시
+                EventManager.OnCardMove?.Invoke(stackCard, stackOwner, ZoneType.StackZone, stackOwner, ZoneType.Graveyard);
+
                 activatedCount++;
                 yield return new WaitForSeconds(ActionDelay);
             }

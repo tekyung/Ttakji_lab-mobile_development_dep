@@ -1,4 +1,4 @@
-// GameLogicHelpers.cs — Phase 13: ConsoleRunner·BattleManager 공유 로직
+﻿// GameLogicHelpers.cs — Phase 13: ConsoleRunner·BattleManager 공유 로직
 // Zero Unity Dependency — Scripts/Systems에 위치
 using System;
 using System.Collections.Generic;

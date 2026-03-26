@@ -3098,6 +3098,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerUIManager
   myHandTransform: {fileID: 1391486264}
   mySetZoneTransform: {fileID: 626117088}
+  myGraveyardTransform: {fileID: 176251152}
+  myStackZoneTransform: {fileID: 1040047757}
+  myBattlefieldTransform: {fileID: 2019444410}
   myCardPrefab: {fileID: 8456415601423846929, guid: 50a6ab8f5cb59c54d8696a27c3bd72af, type: 3}
   readyButtonObj: {fileID: 402830684}
 --- !u!4 &509403884
@@ -4046,7 +4049,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyVisualTester
   enemyHandTransform: {fileID: 461606206}
   enemySetZoneTransform: {fileID: 1678132280}
+  enemyGraveyardTransform: {fileID: 1621361767}
+  enemyStackZoneTransform: {fileID: 829141213}
+  enemyBattlefieldTransform: {fileID: 958344851}
   cardBackPrefab: {fileID: 7725646687710810970, guid: 29e79ed516f6b0c48a014d7a9acb07eb, type: 3}
+  cardFrontPrefab: {fileID: 8456415601423846929, guid: 50a6ab8f5cb59c54d8696a27c3bd72af, type: 3}
 --- !u!4 &645034583
 Transform:
   m_ObjectHideFlags: 0
@@ -10686,5 +10693,5 @@ SceneRoots:
   - {fileID: 786708946}
   - {fileID: 131497430}
   - {fileID: 645034583}
-  - {fileID: 1926648251}
   - {fileID: 509403884}
+  - {fileID: 1926648251}
