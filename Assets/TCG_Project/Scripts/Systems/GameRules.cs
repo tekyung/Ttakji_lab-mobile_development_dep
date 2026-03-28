@@ -58,6 +58,8 @@ namespace TCG_Project.Scripts.Systems
         public static int LifeTokens => GetValue("life_tokens", 5);
         public static int ResourceDeckCount => GetValue("resource_deck_count", 15);
         public static float BotDelayTime => GetValue("Bot_delay_time", 500) / 1000f;
+        public static int BotSingleGame => GetValue("Bot_single_game", 1);
+        public static int WaitTime => GetValue("choose_wait_time", 10000);
     }
     
     // JSON 구조에 맞춘 래퍼 클래스
