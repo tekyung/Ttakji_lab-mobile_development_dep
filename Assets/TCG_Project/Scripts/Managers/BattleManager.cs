@@ -1,4 +1,4 @@
-﻿// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
+// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
 // [팀원 공유용] ConsoleRunner의 최신 아키텍처(Phase 18+)를 100% 반영한 유니티 매니저입니다.
 using System;
 using System.Collections;
@@ -123,7 +123,15 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator MatchLoop()
     {
-        _matchManager = new MatchManager(gamesToWin: 2, maxGames: 3);
+        int MaxGame = 3;
+        int PlayToWin = 2;
+
+        if (GameRules.BotSingleGame == 1) // 단판제일 경우
+        {   MaxGame = 1;
+            PlayToWin = 1;
+        }
+
+        _matchManager = new MatchManager(gamesToWin: PlayToWin, maxGames: MaxGame);
 
         while (!_matchManager.IsMatchOver())
         {
@@ -180,7 +188,6 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator RunSingleGame()
     {
-        yield return null;
         InitializeSingleGame();
         context.CurrentTurn = 1;
 
@@ -228,8 +235,7 @@ public class BattleManager : MonoBehaviour
         // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
         // ==============================================================
         string[] p1TestIds = // BotRed : 엘리 + 다이나
-            new string[]
-            {
+            [
                 "ELLI-02", // 퀵 드로우
                 "ELLI-03", // 수류탄 투척
                 "ELLI-04", // 미니건 난사
@@ -242,8 +248,8 @@ public class BattleManager : MonoBehaviour
                 "DAIN-07", // 강도 테스트
                 "DAIN-09", // 리벤지
                 "DAIN-11", // 조선소
-                           // 필요시 여기에 ID를 더 추가하세요.
-            };
+                        // 필요시 여기에 ID를 더 추가하세요.
+            ];
 
         string[] p2TestIds = // BorBlue : 베로니카 + 소니아
         {
@@ -285,7 +291,7 @@ public class BattleManager : MonoBehaviour
         // (예시) 봇 블루의 스택에 방어막 강제 장전
         // InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
         // InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
-
+        
         // (예시) 플레이어 레드의 패에 무기 강제 쥐어주기
         // InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
         // ==============================================================
@@ -435,16 +441,7 @@ public class BattleManager : MonoBehaviour
         }
 
         if (cardToSet != null)
-        {
-            // 메모리 상에서 세트!
             player.SetCard(cardToSet);
-
-            // ⭐ [추가할 부분] 봇일 경우, UI 거울에게 카드가 패에서 세트존으로 이동했다고 방송을 쏴줍니다!, 나중에 없앨수도
-            if (player.Type == UserType.Bot)
-            {
-                EventManager.OnCardMove?.Invoke(cardToSet, player, ZoneType.Hand, player, ZoneType.SetZone);
-            }
-        }
     }
 
     // ─── 페이즈 4: 오픈 페이즈 ───────────────────────────────────────
@@ -500,8 +497,6 @@ public class BattleManager : MonoBehaviour
             EventManager.OnLogMessage?.Invoke($"{player.Name}: 코스트 부족 (필요: {effectiveCost} / 자원존: {player.GetResourceCount()}) → 폐기 선택");
             player.AbandonSetCard();
             GameLogicHelpers.DrawCards(player, 1, context);
-
-            EventManager.OnCardMove?.Invoke(setCard, player, ZoneType.SetZone, player, ZoneType.Graveyard); // 추가
 
             foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
             {
@@ -638,6 +633,141 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 스마트 스택 AI 및 발동 코루틴 (다단히트, 관통 완벽 대응 + 타임아웃 자동 선택 기능)
+    /// </summary>
+    private IEnumerator HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
+    {
+        if (stackOwner.StackZone.Count == 0 || stackOwner.IsInvincible) yield break;
+
+        int incomingHits = 0;
+        bool isPiercingAttack = false;
+
+        // 1. 공격 카드의 타격 횟수 스캔
+        foreach (var effect in playedCard.Effects)
+        {
+            if (effect is DamageEffect dmgEffect)
+            {
+                // ★ 피아식별: 자해(Self) 데미지는 방어할 필요가 없으므로 타격 횟수에서 제외
+                if (!dmgEffect.TargetSelf)
+                {
+                    incomingHits += dmgEffect.Times;
+                    if (dmgEffect.isPiercing) isPiercingAttack = true;
+                }
+            }
+        }
+
+        if (incomingHits == 0) yield break;
+
+        // 2. 발동 "가능한" 방어 카드 모두 추리기 (수집)
+        List<Card> validStackCards = new List<Card>();
+        foreach (var stackCard in stackOwner.StackZone)
+        {
+            bool canBlock = false;
+            // 봇이 서포트 방어카드도 인식하도록 수정됨
+            if (stackCard.Type == CardType.Defense || stackCard.Type == CardType.Support)
+            {
+                foreach (var effect in stackCard.Effects)
+                {
+                    if (effect is BuffEffect buffEffect)
+                    {
+                        if (isPiercingAttack)
+                        {
+                            if (buffEffect.TypeOfBuff == BuffType.SuperArmor || buffEffect.TypeOfBuff == BuffType.Invincible)
+                                canBlock = true;
+                        }
+                        else
+                        {
+                            if (buffEffect.TypeOfBuff == BuffType.Armor || buffEffect.TypeOfBuff == BuffType.SuperArmor || buffEffect.TypeOfBuff == BuffType.Invincible)
+                                canBlock = true;
+                        }
+                    }
+                }
+            }
+            if (canBlock) validStackCards.Add(stackCard);
+        }
+
+        // 막을 수 있는 카드가 하나도 없다면 종료
+        if (validStackCards.Count == 0) yield break;
+
+        // 3. 강제 발동해야 할 횟수 계산 (유효한 카드 수와 타격 횟수 중 작은 값)
+        int requiredCount = Mathf.Min(incomingHits, validStackCards.Count);
+        List<Card> selectedCards = new List<Card>();
+
+        // 4. 순서 및 대상 선택 (AI vs Human + Timeout)
+        if (stackOwner.Type == UserType.Bot)
+        {
+            // 봇은 단순하게 먼저 깔린 순서대로 필요한 만큼 선택
+            selectedCards = validStackCards.Take(requiredCount).ToList();
+        }
+        else
+        {
+            // 휴먼은 UI를 통해 직접 발동 순서를 고름
+            bool done = false;
+            bool timeOutOccurred = false; // ★ 지각 응답 차단용 플래그
+            
+            EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, chosenCards =>
+            {
+                // 이미 시간이 지나서 시스템이 강제 선택했다면, 뒤늦게 들어온 UI 클릭은 무시!
+                if (timeOutOccurred) return; 
+                selectedCards = chosenCards;
+                done = true;
+            });
+
+            // ★ 무한 대기(WaitUntil)를 버리고, 타이머 루프를 돌립니다.
+            // GameRules.ChooseWaitTime은 밀리초(기본 10000)이므로 초 단위(10f)로 변환
+            float waitLimit = GameRules.ChooseWaitTime / 1000f; 
+            float timer = 0f;
+
+            // 응답이 아직 안 왔고, 타이머가 제한 시간을 넘지 않았다면 계속 대기
+            while (!done && timer < waitLimit)
+            {
+                timer += Time.deltaTime;
+                yield return null; // 다음 프레임까지 대기
+            }
+
+            // ★ 루프를 빠져나왔는데 여전히 done이 false라면? = 타임아웃 발생!
+            if (!done)
+            {
+                timeOutOccurred = true;
+                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간({waitLimit}초) 초과! 시스템이 강제로 방어 카드를 자동 선택합니다.</color>");
+                
+                // 봇과 동일하게 앞에서부터 필요한 만큼 강제 선택
+                selectedCards = validStackCards.Take(requiredCount).ToList();
+            }
+        }
+
+        // 5. 선택된 카드들을 순서대로 발동 (실행)
+        Player originalActive = context.ActivePlayer;
+        Player originalTarget = context.TargetPlayer;
+
+        foreach (var stackCard in selectedCards)
+        {
+            context.ActivePlayer = stackOwner;
+            context.TargetPlayer = cardPlayer;
+
+            // 스택 카드를 발동하기 전에 시스템에 "현재 사용 중인 카드"를 명시적으로 주입
+            stackOwner.PlayingCard = stackCard;
+            EventManager.OnLogMessage?.Invoke($"{stackOwner.Name}: [{stackCard.Name}] 스택 발동! (← 상대: [{playedCard.Name}])");
+
+            bool done = false;
+            context.LastEffectSucceeded = true;
+
+            stackCard.Play(context, () => done = true, isStackTrigger: true);
+            yield return new WaitUntil(() => done);
+
+            // 복구: 발동이 끝났으니 다시 null로 비워줍니다.
+            stackOwner.PlayingCard = null;
+            stackOwner.UseAndDiscardStack(stackCard);
+            
+            yield return new WaitForSeconds(ActionDelay);
+        }
+
+        // ★ 상태 복구 (State Restore)
+        context.ActivePlayer = originalActive;
+        context.TargetPlayer = originalTarget;
+    }
+
+    /* <summary>
     /// 스마트 스택 AI 및 발동 코루틴 (다단히트 및 관통 완벽 대응)
     /// </summary>
     private IEnumerator HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
@@ -668,6 +798,8 @@ public class BattleManager : MonoBehaviour
         Player originalTarget = context.TargetPlayer;
         int activatedCount = 0;
 
+        // 2. 발동 "가능한" 방어 카드 모두 추리기 (수집)
+        List<Card> validStackCards = new List<Card>();
         foreach (var stackCard in new List<Card>(stackOwner.StackZone))
         {
             if (activatedCount >= incomingHits) break;
@@ -732,10 +864,6 @@ public class BattleManager : MonoBehaviour
                 stackOwner.PlayingCard = null;
 
                 stackOwner.UseAndDiscardStack(stackCard);
-
-                // 스택 카드 사용했다는 표시
-                EventManager.OnCardMove?.Invoke(stackCard, stackOwner, ZoneType.StackZone, stackOwner, ZoneType.Graveyard);
-
                 activatedCount++;
                 yield return new WaitForSeconds(ActionDelay);
             }
@@ -743,7 +871,7 @@ public class BattleManager : MonoBehaviour
 
         context.ActivePlayer = originalActive;
         context.TargetPlayer = originalTarget;
-    }
+    }*/
 
     // ─── 페이즈 6: 엔드 페이즈 ──────────────────────────────────────
 
@@ -788,7 +916,7 @@ public class BattleManager : MonoBehaviour
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────
-
+    
     /// <summary>
     /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
     /// 복잡한 엣지 케이스를 1턴 만에 재현하기 위한 유니티 디버깅용 툴입니다.
