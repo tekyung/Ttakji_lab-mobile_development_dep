@@ -48,7 +48,6 @@ public class BattleManager : MonoBehaviour
     private const string P2_CHAR2 = "SONI-01";
 
     // ─── Unity 라이프사이클 ───────────────────────────────────────────
-
     private void Awake()
     {
         if (Instance == null) Instance = this;
@@ -57,14 +56,25 @@ public class BattleManager : MonoBehaviour
 
     private void OnEnable()
     {
+        // 1. 게임 상태 이벤트 구독
         EventManager.OnGameSet += HandleGameSet;
         EventManager.OnGameDraw += HandleGameDraw;
+
+        // 2. 로깅 및 QA 임시 자동 응답기 구독
+        EventManager.OnLogMessage += HandleLogMessage;
+        EventManager.OnRequireCardPick += HandleQA_CardPick;
+        EventManager.OnRequireOptionalAction += HandleQA_OptionalAction; // Yes/No 자동 응답기
     }
 
     private void OnDisable()
     {
+        // 구독 해제 (메모리 누수 및 중복 실행 완벽 방지)
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
+        
+        EventManager.OnLogMessage -= HandleLogMessage;
+        EventManager.OnRequireCardPick -= HandleQA_CardPick;
+        EventManager.OnRequireOptionalAction -= HandleQA_OptionalAction;
     }
 
     private void HandleGameSet(Player winner)
@@ -78,18 +88,41 @@ public class BattleManager : MonoBehaviour
         context.IsGameOver = true;
     }
 
+    // ─── 이벤트 핸들러 (익명 람다 대신 기명 메서드 사용) ───
+
+    private void HandleLogMessage(string msg)
+    {
+        Debug.Log(msg);
+    }
+
+    private void HandleQA_CardPick(Player player, List<Card> validCards, int count, Action<List<Card>> callback)
+    {
+        // UI가 없을 때의 임시 카드 선택기 (앞에서부터 강제 선택)
+        Debug.Log($"<color=orange>[임시 UI] {player.Name}에게 카드 선택 요청 ({validCards.Count}장 중 {count}장) -> 앞쪽부터 강제 자동 선택</color>");
+        callback?.Invoke(validCards.Take(count).ToList());
+    }
+
+    private void HandleQA_OptionalAction(Player player, string message, GameContext ctx, Action<bool> callback)
+    {
+        // UI가 없을 때의 임시 Yes/No 선택기 (무조건 Yes 발동)
+        Debug.Log($"<color=orange>[임시 UI] {player.Name}에게 질문: '{message}' -> 무조건 Yes 응답</color>");
+        callback?.Invoke(true);
+    }
+
+    // ─── Start 로직 ───────────────────────────────────────────────────
+
     private void Start()
     {
-        EventManager.OnLogMessage += msg => Debug.Log(msg);
         InitializeSystem();
 
         // Player 객체 생성 (매치 전체 재사용)
-        // 만약 아직 플레이어 선택 및 콜백 로직이 없다면 User.Type을 전부 Bot으로 통일해주세요.
         p1 = new Player { Name = "Player1", Type = UserType.Human, CharacterCardId = P1_CHAR1, SecondaryCharacterId = P1_CHAR2 };
         p2 = new Player { Name = "Bot_AI", Type = UserType.Bot, CharacterCardId = P2_CHAR1, SecondaryCharacterId = P2_CHAR2 };
+        
         p1.InitializeBrain();
         p2.InitializeBrain();
 
+        // 람다 구독 지옥 제거, 깔끔하게 루프만 시작.
         StartCoroutine(MatchLoop());
     }
 
@@ -127,7 +160,8 @@ public class BattleManager : MonoBehaviour
         int PlayToWin = 2;
 
         if (GameRules.BotSingleGame == 1) // 단판제일 경우
-        {   MaxGame = 1;
+        {
+            MaxGame = 1;
             PlayToWin = 1;
         }
 
@@ -234,25 +268,25 @@ public class BattleManager : MonoBehaviour
         // 배열에 적어둔 ID 1개당 자동으로 2장씩 덱에 들어갑니다.
         // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
         // ==============================================================
-        string[] p1TestIds = new string[]
-{
-    "ELLI-02", // 퀵 드로우
-    "ELLI-03", // 수류탄 투척
-    "ELLI-04", // 미니건 난사
-    "ELLI-05", // 준비된 방어선
-    "ELLI-06", // 격추 시스템
-    "ELLI-07", // 카모플라쥬
+        string[] p1TestIds = // BotRed : 엘리 + 다이나
+            {
+                "ELLI-02", // 퀵 드로우
+                "ELLI-03", // 수류탄 투척
+                "ELLI-04", // 미니건 난사
+                "ELLI-05", // 준비된 방어선
+                "ELLI-06", // 격추 시스템
+                "ELLI-07", // 카모플라쥬
 
-    "DAIN-02", // 함포 준비, 발사
-    "DAIN-03", // 미사일 발사
-    "DAIN-07", // 강도 테스트
-    "DAIN-09", // 리벤지
-    "DAIN-11", // 조선소
-    // 필요시 여기에 ID를 더 추가하세요.
-};
+                "DAIN-02", // 함포 준비, 발사
+                "DAIN-03", // 미사일 발사
+                "DAIN-07", // 강도 테스트
+                "DAIN-09", // 리벤지
+                "DAIN-11", // 조선소
+                        // 필요시 여기에 ID를 더 추가하세요.
+            };
 
         string[] p2TestIds = // BorBlue : 베로니카 + 소니아
-        {
+            {
                 "VERO-02", // 숙청
                 "VERO-03", // 계획대로
                 "VERO-05", // 요새화
@@ -291,7 +325,7 @@ public class BattleManager : MonoBehaviour
         // (예시) 봇 블루의 스택에 방어막 강제 장전
         // InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
         // InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
-        
+
         // (예시) 플레이어 레드의 패에 무기 강제 쥐어주기
         // InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
         // ==============================================================
@@ -330,7 +364,68 @@ public class BattleManager : MonoBehaviour
         yield return new WaitForSeconds(ActionDelay);
     }
 
-    // ─── 페이즈 2: 드로우 페이즈 ─────────────────────────────────────
+    // ─── 페이즈 2: 드로우 페이즈 (병렬 처리 적용) ─────────────────────────────────────
+
+    private IEnumerator ExecuteDrawPhaseRoutine()
+    {
+        context.CurrentPhase = GamePhase.DrawPhase;
+        EventManager.OnDrawPhase?.Invoke("양측", context.CurrentTurn);
+        EventManager.OnLogMessage?.Invoke("[ 드로우 페이즈 ]");
+
+        // 1. 전장 효과(자동)는 순차 처리해도 무방함 (체크메이트, 조선소 등)
+        context.ActivePlayer = p1; context.TargetPlayer = p2;
+        if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p1, context)) yield break;
+
+        context.ActivePlayer = p2; context.TargetPlayer = p1;
+        if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p2, context)) yield break;
+
+        // 2. 캐릭터 능력(베로니카의 3픽 1 선택 등)과 드로우를 "동시에" 수집 및 처리
+        bool p1DrawDone = false;
+        bool p2DrawDone = false;
+
+        StartCoroutine(ExecuteDrawForPlayerParallel(p1, () => p1DrawDone = true));
+        StartCoroutine(ExecuteDrawForPlayerParallel(p2, () => p2DrawDone = true));
+
+        // 양측이 드로우(또는 선택)를 모두 마칠 때까지 대기
+        yield return new WaitUntil(() => p1DrawDone && p2DrawDone);
+
+        EventManager.OnLogMessage?.Invoke($"{p1.Name} 패: {p1.Hand.Count}장");
+        EventManager.OnLogMessage?.Invoke($"{p2.Name} 패: {p2.Hand.Count}장");
+
+        yield return new WaitForSeconds(ActionDelay);
+    }
+
+    // 헬퍼: 각 플레이어의 드로우/선택을 독립적인 흐름으로 실행
+    private IEnumerator ExecuteDrawForPlayerParallel(Player player, Action onDone)
+    {
+        bool drawHandledByAbility = false;
+
+        foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
+        {
+            if (ability.CanUse(player, context))
+            {
+                bool abilityDone = false;
+                // 베로니카 능력 등이 UI 입력을 기다림 (타임아웃 로직은 능력 내부나 EventManager 호출부에 구현)
+                ability.OnDrawPhase(player, context, used =>
+                {
+                    drawHandledByAbility = used;
+                    abilityDone = true;
+                });
+                yield return new WaitUntil(() => abilityDone);
+                if (drawHandledByAbility) break;
+            }
+        }
+
+        // 능력을 안 썼다면 일반 드로우 진행
+        if (!drawHandledByAbility)
+        {
+            GameLogicHelpers.DrawCards(player, GameRules.DrawPerTurn, context);
+        }
+
+        onDone?.Invoke();
+    }
+
+    /* ─── 페이즈 2: 드로우 페이즈 ─────────────────────────────────────
 
     private IEnumerator ExecuteDrawPhaseRoutine()
     {
@@ -352,7 +447,7 @@ public class BattleManager : MonoBehaviour
         yield return new WaitForSeconds(ActionDelay);
     }
 
-    private IEnumerator ExecuteDrawForPlayer(Player player)
+    private IEnumerator ExecuteDrawForPlayer(Player player) // 베로니카 효과 사용 시
     {
         bool drawHandledByAbility = false;
 
@@ -375,9 +470,112 @@ public class BattleManager : MonoBehaviour
         {
             GameLogicHelpers.DrawCards(player, GameRules.DrawPerTurn, context);
         }
+    }*/
+
+    // ─── 페이즈 3: 세트 페이즈 (동시 처리) ───────────────────────────────────────
+
+    private IEnumerator ExecuteSetPhaseRoutine()
+    {
+        context.CurrentPhase = GamePhase.SetPhase;
+        EventManager.OnSetPhase?.Invoke("양측", context.CurrentTurn);
+        EventManager.OnLogMessage?.Invoke("[ 세트 페이즈 ]");
+
+        // 1. 세트 전 능력(소니아 등) 동시 처리
+        bool p1AbilityDone = false; bool p2AbilityDone = false;
+        StartCoroutine(CheckPreSetAbilities(p1, () => p1AbilityDone = true));
+        StartCoroutine(CheckPreSetAbilities(p2, () => p2AbilityDone = true));
+        yield return new WaitUntil(() => p1AbilityDone && p2AbilityDone);
+
+        // 2. 양측의 '세트할 카드 선택'을 동시에 수집
+        Card p1SetCard = null; Card p2SetCard = null;
+        bool p1SetDone = false; bool p2SetDone = false;
+
+        StartCoroutine(GetSetCardChoice(p1, card => { p1SetCard = card; p1SetDone = true; }));
+        StartCoroutine(GetSetCardChoice(p2, card => { p2SetCard = card; p2SetDone = true; }));
+
+        // 양측이 카드를 고를 때까지 대기
+        yield return new WaitUntil(() => p1SetDone && p2SetDone);
+
+        // 3. 일괄 적용 (동시에 세트존에 배치)
+        if (p1SetCard != null) p1.SetCard(p1SetCard);
+        if (p2SetCard != null) p2.SetCard(p2SetCard);
+
+        EventManager.OnLogMessage?.Invoke($"{p1.Name} 세트존: {(p1.SetZoneCard != null ? "세트됨" : "없음")}");
+        EventManager.OnLogMessage?.Invoke($"{p2.Name} 세트존: {(p2.SetZoneCard != null ? "세트됨" : "없음")}");
+
+        yield return new WaitForSeconds(ActionDelay);
     }
 
-    // ─── 페이즈 3: 세트 페이즈 ───────────────────────────────────────
+    private IEnumerator CheckPreSetAbilities(Player player, Action onDone)
+    {
+        foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
+        {
+            if (ability.CanUse(player, context))
+            {
+                bool done = false;
+                ability.OnSetPhase(player, context, _ => done = true);
+                yield return new WaitUntil(() => done);
+            }
+        }
+        onDone?.Invoke();
+    }
+
+    // ★ 헬퍼 변경: 실제로 카드를 세트하지 않고, '무엇을 세트할지' 선택만 수집합니다.
+    private IEnumerator GetSetCardChoice(Player player, Action<Card> onChosen)
+    {
+        if (player.Hand.Count == 0)
+        {
+            onChosen(null);
+            yield break;
+        }
+
+        if (player.Type == UserType.Bot)
+        {
+            // 봇 로직: 지불 가능한 카드 중 랜덤 선택 (즉시 완료)
+            var affordableCards = player.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count).ToList();
+            var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
+            Card cardToSet = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
+
+            onChosen(cardToSet);
+        }
+        else
+        {
+            // 휴먼 로직: UI 대기 + 타임아웃
+            bool done = false;
+            Card chosenCard = null;
+            bool timeOutOccurred = false;
+
+            EventManager.OnRequireSetPhaseAction?.Invoke(player, context, card =>
+            {
+                if (timeOutOccurred) return;
+                chosenCard = card;
+                done = true;
+            });
+
+            float waitLimit = GameRules.ChooseWaitTime / 1000f;
+            float timer = 0f;
+
+            while (!done && timer < waitLimit)
+            {
+                timer += Time.deltaTime;
+                yield return null;
+            }
+
+            if (!done)
+            {
+                timeOutOccurred = true;
+                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간 초과! 시스템이 강제로 세트 카드를 무작위 선택합니다.</color>");
+                // 타임아웃 시 봇과 동일한 전략으로 자동 선택
+                var affordableCards = player.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count).ToList();
+                var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
+                chosenCard = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
+            }
+
+            onChosen(chosenCard);
+        }
+    }
+
+    /* ─── 구 페이즈 3: 세트 페이즈 ───────────────────────────────────────
 
     private IEnumerator ExecuteSetPhaseRoutine()
     {
@@ -442,9 +640,122 @@ public class BattleManager : MonoBehaviour
 
         if (cardToSet != null)
             player.SetCard(cardToSet);
+    }*/
+
+    // ─── 페이즈 4: 오픈 페이즈 (동시 처리) ───────────────────────────────────────
+
+    private IEnumerator ExecuteOpenPhaseRoutine()
+    {
+        context.CurrentPhase = GamePhase.OpenPhase;
+        EventManager.OnOpenPhase?.Invoke("양측", context.CurrentTurn);
+        EventManager.OnLogMessage?.Invoke("[ 오픈 페이즈 ]");
+
+        context.ClearOpenPhaseStates();
+
+        // 1. 양측의 '오픈/폐기 선택'을 동시에 수집
+        OpenPhaseChoice p1Choice = OpenPhaseChoice.Abandon;
+        OpenPhaseChoice p2Choice = OpenPhaseChoice.Abandon;
+        bool p1Done = false; bool p2Done = false;
+
+        StartCoroutine(GetOpenChoiceParallel(p1, choice => { p1Choice = choice; p1Done = true; }));
+        StartCoroutine(GetOpenChoiceParallel(p2, choice => { p2Choice = choice; p2Done = true; }));
+
+        // 양측이 선택을 마칠 때까지 대기
+        yield return new WaitUntil(() => p1Done && p2Done);
+
+        // 2. 수집된 결과를 일괄 적용 (여기서 실제 효과와 로그가 터짐)
+        _p1RevealedCard = ApplyOpenChoice(p1, p1Choice);
+        context.OpenPhaseStates[p1.Name] = new PlayerOpenPhaseState { HasOpened = (_p1RevealedCard != null), RevealedCard = _p1RevealedCard };
+
+        _p2RevealedCard = ApplyOpenChoice(p2, p2Choice);
+        context.OpenPhaseStates[p2.Name] = new PlayerOpenPhaseState { HasOpened = (_p2RevealedCard != null), RevealedCard = _p2RevealedCard };
+
+        yield return new WaitForSeconds(ActionDelay);
     }
 
-    // ─── 페이즈 4: 오픈 페이즈 ───────────────────────────────────────
+    // ★ 헬퍼 변경: 선택만 수집 (결과 적용 X)
+    private IEnumerator GetOpenChoiceParallel(Player player, Action<OpenPhaseChoice> onChosen)
+    {
+        if (player.SetZoneCard == null)
+        {
+            onChosen(OpenPhaseChoice.Abandon);
+            yield break;
+        }
+
+        int effectiveCost = GameLogicHelpers.GetEffectiveCost(player.SetZoneCard, player);
+
+        if (player.Type == UserType.Bot)
+        {
+            // 봇 로직: 코스트 가능하면 오픈, 아니면 폐기
+            OpenPhaseChoice choice = (effectiveCost == 0 || player.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
+            onChosen(choice);
+        }
+        else
+        {
+            // 휴먼 로직: UI 대기 + 타임아웃
+            bool done = false;
+            bool timeOutOccurred = false;
+            OpenPhaseChoice chosen = OpenPhaseChoice.Abandon; // 기본값 타임아웃 시 폐기
+
+            EventManager.OnRequireOpenPhaseAction?.Invoke(player, player.SetZoneCard, effectiveCost, context, c =>
+            {
+                if (timeOutOccurred) return;
+                chosen = c;
+                done = true;
+            });
+
+            float waitLimit = GameRules.ChooseWaitTime / 1000f;
+            float timer = 0f;
+
+            while (!done && timer < waitLimit)
+            {
+                timer += Time.deltaTime;
+                yield return null;
+            }
+
+            if (!done)
+            {
+                timeOutOccurred = true;
+                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간 초과! 시스템이 강제로 세트 카드를 폐기합니다.</color>");
+                chosen = OpenPhaseChoice.Abandon; // 안전하게 폐기 처리
+            }
+
+            onChosen(chosen);
+        }
+    }
+
+    // ★ 신규 헬퍼: 수집된 선택을 실제로 집행
+    private Card ApplyOpenChoice(Player player, OpenPhaseChoice choice)
+    {
+        if (player.SetZoneCard == null) return null;
+
+        if (choice == OpenPhaseChoice.Abandon)
+        {
+            int effectiveCost = GameLogicHelpers.GetEffectiveCost(player.SetZoneCard, player);
+            // 휴먼이 '전략적 폐기'를 했을 수도 있으므로 로그 문구 개선
+            EventManager.OnLogMessage?.Invoke($"{player.Name}: 세트 카드 [{player.SetZoneCard.Name}] 폐기 선택 (코스트 필요: {effectiveCost} / 자원존: {player.GetResourceCount()})");
+
+            player.AbandonSetCard();
+            GameLogicHelpers.DrawCards(player, 1, context);
+
+            // 폐기 시 능력(DAIN 다이나 등) 발동
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
+            {
+                if (ability.CanUse(player, context))
+                {
+                    // 즉발 효과라 대기 불필요
+                    ability.OnOpenPhaseAbandon(player, context, _ => { });
+                }
+            }
+            return null;
+        }
+        else
+        {
+            return player.RevealSetCard();
+        }
+    }
+
+    /* ─── 페이즈 4: 오픈 페이즈 ───────────────────────────────────────
 
     private IEnumerator ExecuteOpenPhaseRoutine()
     {
@@ -513,7 +824,7 @@ public class BattleManager : MonoBehaviour
         {
             onResult(player.RevealSetCard());
         }
-    }
+    }*/
 
     // ─── 페이즈 5: 메인 페이즈 (동적 큐 + 완벽한 SBA 대응) ────────────────────
 
@@ -611,13 +922,26 @@ public class BattleManager : MonoBehaviour
                     player.InsertCard(ZoneType.Graveyard, card);
                     EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
 
-                    foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
+                    foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player)) // 엘리 효과
                     {
+                        bool abilityDone = false;
+                        ability.OnMainPhaseAfterAttack(player, card, enemy, context, followUpCard =>
+                        {
+                            if (followUpCard != null)
+                            {
+                                pendingQueue.Add((player, enemy, followUpCard));
+                            }
+                            abilityDone = true;
+                        });
+
+                        // 유저가 결정을 내리거나 타임아웃이 끝날 때까지 엔진을 잠시 대기시킴
+                        yield return new WaitUntil(() => abilityDone);
+                        /* 기존 동기화 방식 (콜백 이전 자동 선택 로직)
                         Card followUpCard = ability.OnMainPhaseAfterAttack(player, card, enemy, context);
                         if (followUpCard != null)
                         {
                             pendingQueue.Add((player, enemy, followUpCard));
-                        }
+                        }*/
                     }
                 }
 
@@ -704,18 +1028,18 @@ public class BattleManager : MonoBehaviour
             // 휴먼은 UI를 통해 직접 발동 순서를 고름
             bool done = false;
             bool timeOutOccurred = false; // ★ 지각 응답 차단용 플래그
-            
+
             EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, chosenCards =>
             {
                 // 이미 시간이 지나서 시스템이 강제 선택했다면, 뒤늦게 들어온 UI 클릭은 무시!
-                if (timeOutOccurred) return; 
+                if (timeOutOccurred) return;
                 selectedCards = chosenCards;
                 done = true;
             });
 
             // ★ 무한 대기(WaitUntil)를 버리고, 타이머 루프를 돌립니다.
             // GameRules.ChooseWaitTime은 밀리초(기본 10000)이므로 초 단위(10f)로 변환
-            float waitLimit = GameRules.ChooseWaitTime / 1000f; 
+            float waitLimit = GameRules.ChooseWaitTime / 1000f;
             float timer = 0f;
 
             // 응답이 아직 안 왔고, 타이머가 제한 시간을 넘지 않았다면 계속 대기
@@ -730,7 +1054,7 @@ public class BattleManager : MonoBehaviour
             {
                 timeOutOccurred = true;
                 EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간({waitLimit}초) 초과! 시스템이 강제로 방어 카드를 자동 선택합니다.</color>");
-                
+
                 // 봇과 동일하게 앞에서부터 필요한 만큼 강제 선택
                 selectedCards = validStackCards.Take(requiredCount).ToList();
             }
@@ -758,7 +1082,7 @@ public class BattleManager : MonoBehaviour
             // 복구: 발동이 끝났으니 다시 null로 비워줍니다.
             stackOwner.PlayingCard = null;
             stackOwner.UseAndDiscardStack(stackCard);
-            
+
             yield return new WaitForSeconds(ActionDelay);
         }
 
@@ -916,7 +1240,7 @@ public class BattleManager : MonoBehaviour
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────
-    
+
     /// <summary>
     /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
     /// 복잡한 엣지 케이스를 1턴 만에 재현하기 위한 유니티 디버깅용 툴입니다.

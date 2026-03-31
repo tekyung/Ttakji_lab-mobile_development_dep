@@ -12,7 +12,9 @@ namespace TCG_Project.Scripts.Effects
         SuperArmor,   // 관통 포함 모든 데미지 경감
         Invincible,   // 무적 (데미지/관통/반격 차단)
         Firepower,    // 화력 (데미지 수치 증가)
-        CounterAttack // 반격 (받은 원본 데미지를 상대에게 그대로 반환)
+        CounterAttack, // 반격 (받은 원본 데미지를 상대에게 그대로 반환)
+        BattlefieldArmor,     // 전장 전용 아머_체트메이트 (첫 피격 시 즉시 소진)
+        BattlefieldFirepower  // 전장 전용 화력_조선소 (첫 공격 시 즉시 소진)
     }
 
     public enum EffectDuration
@@ -132,27 +134,6 @@ namespace TCG_Project.Scripts.Effects
                             $"  [슈퍼아머] {owner.Name} 슈퍼아머 +{Amount} (이번 라운드 합계: {owner.SuperArmorBonus})");
                     }
                     break;
-                /*
-                case BuffType.Invincible:
-                    if (_duration == EffectDuration.Stack) // 스택형 무적(1회성) 지원
-                    {
-                        owner.StackInvincibilities.Add(new Card { Name = "스택 무적 효과 카드" }); // 실제 카드 객체로 관리하여 추후 제거 시 참조 가능
-                        EventManager.OnLogMessage?.Invoke(
-                            $"  [스택 무적] {owner.Name} 스택 무적 효과 장전 (현재 대기: {owner.StackInvincibilities.Count}개)");
-                    }
-                    else if (_duration == EffectDuration.NextTurn)
-                    {
-                        owner.NextTurnIsInvincible = true;
-                        EventManager.OnLogMessage?.Invoke(
-                            $"  [다음 턴 예약] {owner.Name}: 다음 라운드 무적 예약됨");
-                    }
-                    else // ThisTurn
-                    {
-                        owner.IsInvincible = true;
-                        EventManager.OnLogMessage?.Invoke(
-                            $"  [무적] {owner.Name} 이번 라운드 무적 상태");
-                    }
-                    break;*/
 
                 case BuffType.Firepower:
                     if (_duration == EffectDuration.Stack) // 스택형 화력 지원 (1회성)
@@ -209,7 +190,7 @@ namespace TCG_Project.Scripts.Effects
                         EventManager.OnLogMessage?.Invoke(
                             $"  [스택 반격] {owner.Name} 즉발 스택 반격 장전 (현재 대기: {owner.StackCounterAttacks.Count}개)");
 
-                        // 보상 처리 (마하 10 등에 보상이 있다면)
+                        // 보상 처리 (리벤지 등에 보상이 있다면)
                         if (_rewardOnSuccess == "SelfToResource" && sourceCard != null)
                         {
                             owner.PendingCounterRewards.Enqueue(() =>
@@ -250,32 +231,17 @@ namespace TCG_Project.Scripts.Effects
                         }
                     }
                     break;
-                /*
-                case BuffType.CounterAttack:
-                    owner.HasCounterAttack = true;
-                    EventManager.OnLogMessage?.Invoke(
-                        $"  [반격] {owner.Name} 이번 라운드 반격 상태!");
 
-                    // 반격을 부여한 카드 정보 저장
-                    Card sourceCard = context.ActivePlayer.PlayingCard;
+                case BuffType.BattlefieldArmor: // 체트메이트 전용 아머
+                    owner.BattlefieldArmor += Amount;
+                    EventManager.OnLogMessage?.Invoke($"  [전장 기동] {owner.Name} 전장 아머 +{Amount} 장전 (첫 피격 시 소진)");
+                    break;
 
-                    // JSON에 보상이 명시되어 있다면, 큐에 행동(Action)을 장전합니다.
-                    if (_rewardOnSuccess == "SelfToResource" && sourceCard != null)
-                    {
-                        owner.PendingCounterRewards.Enqueue(() =>
-                        {
-                            // 이 람다식은 미래에 반격이 성공했을 때 실행됩니다.
-                            // 이미 카드가 폐기존에 가 있으므로, 폐기존에서 찾아옵니다.
-                            if (owner.Graveyard.Contains(sourceCard))
-                            {
-                                owner.ExtractCard(ZoneType.Graveyard, sourceCard);
-                                owner.InsertCard(ZoneType.ResourceZone, sourceCard);
-                                EventManager.OnCardMove?.Invoke(sourceCard, owner, ZoneType.Graveyard, owner, ZoneType.ResourceZone);
-                                EventManager.OnLogMessage?.Invoke($"  ✨ [반격 성공 보상] '{sourceCard.Name}'이(가) 자원존으로 이동했습니다!");
-                            }
-                        });
-                    }
-                    break;*/
+                case BuffType.BattlefieldFirepower: // 조선소 전용 화력
+                    owner.BattlefieldFirepower += Amount;
+                    EventManager.OnLogMessage?.Invoke($"  [전장 기동] {owner.Name} 전장 화력 +{Amount} 장전 (첫 타격 시 소진)");
+                    break;
+                
             }
 
             onComplete?.Invoke();

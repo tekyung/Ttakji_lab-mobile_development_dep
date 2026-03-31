@@ -18,7 +18,7 @@
     },
     {
       "Name": "choose_wait_time",
-      "Value": "20000"
+      "Value": "10000"
     },
     {
         "Name": "gain_prize_by_direct",
@@ -46,7 +46,7 @@
     },
     {
         "Name": "Bot_single_game",
-        "Value": "false"
+        "Value": "1"
     }
   ]
 }
