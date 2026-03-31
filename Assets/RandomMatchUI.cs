@@ -1,10 +1,15 @@
 using UnityEngine;
 using TMPro;
+using System.Collections;
+using UnityEngine.SceneManagement;
 
 public class RandomMatchUI : MonoBehaviour
 {
     [Header("·£´ý ¸ÅÄª ÆË¾÷")]
     public GameObject popupRandomMatching;
+
+    [Header("·£´ý ¸ÅÄª ¿Ï·á ÆË¾÷")]
+    public GameObject popupRandomMatched;
 
     [Header("ÅØ½ºÆ®")]
     public TMP_Text timerText;
@@ -12,8 +17,12 @@ public class RandomMatchUI : MonoBehaviour
     [Header("Å×½ºÆ®¿ë ÀÚµ¿ ¼º°ø ½Ã°£(ÃÊ)")]
     public float matchSuccessTime = 3f;
 
+    [Header("ÀÌµ¿ÇÒ ¾À ÀÌ¸§")]
+    public string nextSceneName = "TestGameScene";
+
     private float timer = 0f;
     private bool isMatching = false;
+    private bool isSuccessProcessing = false;
 
     void Update()
     {
@@ -24,10 +33,12 @@ public class RandomMatchUI : MonoBehaviour
         int minutes = Mathf.FloorToInt(timer / 60f);
         int seconds = Mathf.FloorToInt(timer % 60f);
 
-        timerText.text = $"{minutes:00}:{seconds:00}";
+        if (timerText != null)
+            timerText.text = $"{minutes:00}:{seconds:00}";
 
-        if (timer >= matchSuccessTime)
+        if (timer >= matchSuccessTime && !isSuccessProcessing)
         {
+            isSuccessProcessing = true;
             MatchSuccess();
         }
     }
@@ -36,20 +47,32 @@ public class RandomMatchUI : MonoBehaviour
     {
         timer = 0f;
         isMatching = true;
-        timerText.text = "00:00";
+        isSuccessProcessing = false;
+
+        if (timerText != null)
+            timerText.text = "00:00";
 
         if (popupRandomMatching != null)
             popupRandomMatching.SetActive(true);
+
+        if (popupRandomMatched != null)
+            popupRandomMatched.SetActive(false);
     }
 
     public void CancelRandomMatch()
     {
         isMatching = false;
+        isSuccessProcessing = false;
         timer = 0f;
-        timerText.text = "00:00";
+
+        if (timerText != null)
+            timerText.text = "00:00";
 
         if (popupRandomMatching != null)
             popupRandomMatching.SetActive(false);
+
+        if (popupRandomMatched != null)
+            popupRandomMatched.SetActive(false);
     }
 
     private void MatchSuccess()
@@ -57,10 +80,18 @@ public class RandomMatchUI : MonoBehaviour
         isMatching = false;
         Debug.Log("¸ÅÄª ¼º°ø!");
 
-        // Áö±ÝÀº Å×½ºÆ®¿ëÀ¸·Î ·£´ý ¸ÅÄª ÆË¾÷¸¸ ²û
         if (popupRandomMatching != null)
             popupRandomMatching.SetActive(false);
 
-        // ³ªÁß¿¡ ¿©±â¼­ ¸ÅÄª ¼º°ø ÆË¾÷ ¶Ç´Â BattleScene ÀÌµ¿ ³ÖÀ¸¸é µÊ
+        if (popupRandomMatched != null)
+            popupRandomMatched.SetActive(true);
+
+        StartCoroutine(CoGoToBattleScene());
+    }
+
+    private IEnumerator CoGoToBattleScene()
+    {
+        yield return new WaitForSeconds(1f);
+        SceneManager.LoadScene(nextSceneName);
     }
 }

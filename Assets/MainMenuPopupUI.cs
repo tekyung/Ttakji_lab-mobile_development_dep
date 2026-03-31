@@ -21,4 +21,15 @@ public class LobbyUI : MonoBehaviour
         Debug.Log("Quit");
         Application.Quit();
     }
+public GameObject popupDim;
+    public GameObject popupMatchMode;
+
+public void OpenMatchMode()
+{
+    if (popupDim != null)
+        popupDim.SetActive(true);
+
+    if (popupMatchMode != null)
+        popupMatchMode.SetActive(true);
+}
 }
