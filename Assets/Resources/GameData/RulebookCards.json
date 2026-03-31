@@ -4,10 +4,9 @@
       "id": "ELLI-02", "characterId": "ELLIE", "name": "퀵 드로우",
       "type": "Attack", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 1]를 준다. 패 1장을 버린다.",
-      "skin_res": "Assets/Resources/card_image/엘리/2퀵드로우.png",
       "effects": [
         { "type": "DamageEffect", "amount": 1 },
-        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random" }
+        { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/ELLI/ELLI-02.png"
     },
@@ -15,10 +14,9 @@
       "id": "ELLI-03", "characterId": "ELLIE", "name": "수류탄 투척",
       "type": "Attack", "speed": 1, "cost": 2, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 2]를 준다. 자신의 패에서 2장을 고르고 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/엘리/3수류탄 투척.png",
       "effects": [
         { "type": "DamageEffect", "amount": 2 },
-        { "type": "DiscardFromHandEffect", "count": 2, "mode": "random" }
+        { "type": "DiscardFromHandEffect", "count": 2, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/ELLI/ELLI-03.png"
     },
@@ -26,7 +24,6 @@
       "id": "ELLI-04", "characterId": "ELLIE", "name": "미니건 난사",
       "type": "Attack", "speed": 2, "cost": 3, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 3]를 준다.",
-      "skin_res": "Assets/Resources/card_image/엘리/4미니건 난사.png",
       "effects": [
         { "type": "DamageEffect", "amount": 3 }
       ],
@@ -36,7 +33,6 @@
       "id": "ELLI-05", "characterId": "ELLIE", "name": "준비된 방어선",
       "type": "Defense", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [아머 1]을 획득한다.",
-      "skin_res": "Assets/Resources/card_image/엘리/5준비된 방어선.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 1, "duration": "ThisTurn" }
       ],
@@ -46,10 +42,9 @@
       "id": "ELLI-06", "characterId": "ELLIE", "name": "격추 시스템",
       "type": "Defense", "speed": 1, "cost": 0, "rarity": "C1", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [슈퍼아머 1]을 획득한다. 자신의 패에서 1장을 고르고, 앞면으로 자신의 폐기존에 보낸다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/엘리/6격추 시스템.png",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true },
-        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "isStackAction": false }
+        { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose", "isStackAction": false }
       ],
       "imagePath": "GameDesign/card_image/ELLI/ELLI-06.png"
     },
@@ -57,7 +52,6 @@
       "id": "ELLI-07", "characterId": "ELLIE", "name": "카모플라쥬",
       "type": "Defense", "speed": 1, "cost": 3, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [무적]을 획득한다.",
-      "skin_res": "Assets/Resources/card_image/엘리/7카모플라쥬.png",
       "effects": [
         { "type": "InvincibilityEffect", "duration": "ThisTurn" }
       ],
@@ -67,10 +61,9 @@
       "id": "ELLI-08", "characterId": "ELLIE", "name": "보급 전달",
       "type": "Support", "speed": 3, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "이 카드를 자원카드로서 자신의 자원존에 놓는다. 패 1장을 고르고 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/엘리/8보급 전달.png",
       "effects": [
         { "type": "SelfAsResourceEffect" },
-        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random" }
+        { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/ELLI/ELLI-08.png"
     },
@@ -78,7 +71,6 @@
       "id": "ELLI-09", "characterId": "ELLIE", "name": "리로드",
       "type": "Support", "speed": 2, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "폐기존에 앞면으로 존재하는 엘리의 공격 카드 1장을 자신의 패로 가지고 온다.",
-      "skin_res": "Assets/Resources/card_image/엘리/9리로드.png",
       "effects": [
         { "type": "RecoverFromDiscardEffect", "count": 1, "filter": "character:ELLIE,type:Attack" }
       ],
@@ -88,10 +80,9 @@
       "id": "ELLI-10", "characterId": "ELLIE", "name": "전략적 후퇴",
       "type": "Support", "speed": 3, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 메인덱에서 맨 위의 2장을 뽑는다. 그 후, 자신의 패에서 2장을 고르고 자신의 메인덱으로 되돌린다. 되돌린 후, 자신의 메인덱을 섞는다.",
-      "skin_res": "Assets/Resources/card_image/엘리/10전략적 후퇴.png",
       "effects": [
         { "type": "DrawEffect", "count": 2 },
-        { "type": "ShuffleReturnEffect", "count": 2, "mode": "random", "requirePreviousSuccess": true }
+        { "type": "ShuffleReturnEffect", "count": 2, "mode": "choose", "requirePreviousSuccess": true }
       ],
       "imagePath": "GameDesign/card_image/ELLI/ELLI-10.png"
     },
@@ -99,7 +90,6 @@
       "id": "ELLI-11", "characterId": "ELLIE", "name": "무작위 노획",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
       "description": "[전장] 매 자원페이즈마다 자신의 폐기존에서 앞면 공격카드 1장을 랜덤으로 가져올 수 있다.",
-      "skin_res": "Assets/Resources/card_image/엘리/11무작위 노획.png",
       "effects": [
         { "type": "PeriodicRecoveryBattlefieldEffect", "filter": "type:Attack" }
       ],
@@ -109,7 +99,6 @@
       "id": "VERO-02", "characterId": "VERONICA", "name": "숙청",
       "type": "Attack", "speed": 2, "cost": 2, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 2]를 준다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/2숙청.png",
       "effects": [
         { "type": "DamageEffect", "amount": 2 }
       ],
@@ -119,9 +108,8 @@
       "id": "VERO-03", "characterId": "VERONICA", "name": "계획대로",
       "type": "Attack", "speed": 1, "cost": 3, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "자신의 패에서 3장을 고르고 앞면으로 자신의 폐기존에 보낸다. 그 후, 상대에게 [데미지 3]를 준다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/3계획대로.png",
       "effects": [
-        { "type": "DiscardFromHandEffect", "count": 3, "mode": "random" },
+        { "type": "DiscardFromHandEffect", "count": 3, "mode": "choose" },
         { "type": "DamageEffect", "amount": 3, "requirePreviousSuccess": true }
       ],
       "imagePath": "GameDesign/card_image/VERONICA/VERO-03.png"
@@ -130,7 +118,6 @@
       "id": "VERO-04", "characterId": "VERONICA", "name": "프로젝트 : 바빌론", "isBattlefield": false,
       "type": "Attack", "speed": 3, "cost": 6, "rarity": "C1", "isStack": false,
       "description": "상대에게 [데미지 5]을 준다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/4프로젝트 바빌론.png",
       "effects": [
         { "type": "DamageEffect", "amount": 5 }
       ],
@@ -140,7 +127,6 @@
       "id": "VERO-05", "characterId": "VERONICA", "name": "요새화",
       "type": "Defense", "speed": 3, "cost": 0, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [아머 1]을 획득한다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/5요새화.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true }
       ],
@@ -150,7 +136,6 @@
       "id": "VERO-06", "characterId": "VERONICA", "name": "흐릿한 안개성",
       "type": "Defense", "speed": 2, "cost": 2, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [아머 3]을 획득한다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/6흐릿한 안개성.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 3, "duration": "Stack", "isStackAction": true }
       ],
@@ -160,10 +145,9 @@
       "id": "VERO-07", "characterId": "VERONICA", "name": "시위 해산",
       "type": "Defense", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [슈퍼아머 1]을 획득한다. 자신의 패에서 1장을 고르고 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/7시위 해산.png",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 1, "duration": "ThisTurn" },
-        { "type": "DiscardFromHandEffect", "count": 1, "mode": "random" }
+        { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/VERONICA/VERO-07.png"
     },
@@ -171,7 +155,6 @@
       "id": "VERO-08", "characterId": "VERONICA", "name": "정세 읽기",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 자원덱에서 자원카드 1장을 자신의 자원존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/8정세 읽기.png",
       "effects": [
         { "type": "ResourceGainEffect", "count": 1 }
       ],
@@ -181,7 +164,6 @@
       "id": "VERO-09", "characterId": "VERONICA", "name": "준비는 철저하게",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 메인덱에서 2장을 드로우한다. [이번 턴] 자신은 [아머 1]을 획득한다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/9준비는 철저하게.png",
       "effects": [
         { "type": "DrawEffect", "count": 2 },
         { "type": "ArmorEffect", "amount": 1, "duration": "ThisTurn" }
@@ -192,7 +174,6 @@
       "id": "VERO-10", "characterId": "VERONICA", "name": "테러의 잔향",
       "type": "Support", "speed": 2, "cost": 3, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통[데미지 1]를 준다. 자신의 자원덱에서 자원카드 2장을 자신의 자원존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/베로니카/10테러의 잔향.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 1 },
         { "type": "ResourceGainEffect", "count": 2 }
@@ -203,7 +184,6 @@
       "id": "VERO-11", "characterId": "VERONICA", "name": "체크메이트",
       "type": "Support", "speed": 1, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
       "description": "[전장] 매 턴 자신은 [+아머 1]을 획득한다. (이 아머는 첫 공격에만 적용된다.)",
-      "skin_res": "Assets/Resources/card_image/베로니카/11체크메이트.png",
       "effects": [
         { "type": "ArmorBattlefieldEffect", "amount": 1 }
       ],
@@ -213,7 +193,6 @@
       "id": "DAIN-02", "characterId": "DAINA", "name": "함포 준비, 발사!",
       "type": "Attack", "speed": 2, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 1]를 2번 준다. 시전자는 체력(코인) 1개를 잃는다.",
-      "skin_res": "Assets/Resources/card_image/다이나/함포 준비, 발사.png",
       "effects": [
         { "type": "MultiHitDamageEffect", "amount": 1, "times": 2 },
         { "type": "SelfDamageEffect", "amount": 1 }
@@ -224,7 +203,6 @@
       "id": "DAIN-03", "characterId": "DAINA", "name": "미사일 발사!",
       "type": "Attack", "speed": 3, "cost": 2, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통 [데미지 2]를 준다.",
-      "skin_res": "Assets/Resources/card_image/다이나/미사일 발사!.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 2 }
       ],
@@ -234,7 +212,6 @@
       "id": "DAIN-04", "characterId": "DAINA", "name": "풀 버스트!",
       "type": "Attack", "speed": 3, "cost": 5, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 [데미지 2]를 3번 준다. 시전자는 체력(코인) 2개를 잃는다.",
-      "skin_res": "Assets/Resources/card_image/다이나/풀 버스트!.png",
       "effects": [
         { "type": "MultiHitDamageEffect", "amount": 2, "times": 3 },
         { "type": "SelfDamageEffect", "amount": 2 }
@@ -245,7 +222,6 @@
       "id": "DAIN-05", "characterId": "DAINA", "name": "잠수정",
       "type": "Defense", "speed": 2, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [아머 2]을 획득한다.",
-      "skin_res": "Assets/Resources/card_image/다이나/잠수정.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ],
@@ -255,7 +231,6 @@
       "id": "DAIN-06", "characterId": "DAINA", "name": "공습 주의",
       "type": "Defense", "speed": 3, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [슈퍼아머 2]을 획득한다.",
-      "skin_res": "Assets/Resources/card_image/다이나/공습 주의.png",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ],
@@ -265,7 +240,6 @@
       "id": "DAIN-07", "characterId": "DAINA", "name": "강도 테스트",
       "type": "Defense", "speed": 1, "cost": 1, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [아머 2]을 획득한다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/다이나/강도 테스트.png",
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "Stack", "isStackAction": true }
       ],
@@ -275,7 +249,6 @@
       "id": "DAIN-08", "characterId": "DAINA", "name": "약탈",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 메인덱에서 맨 위의 3장을 드로우한다. 그 후, 자신의 패에서 랜덤으로 1장을 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/다이나/약탈.png",
       "effects": [
         { "type": "DrawEffect", "count": 3 },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "requirePreviousSuccess": true }
@@ -286,7 +259,6 @@
       "id": "DAIN-09", "characterId": "DAINA", "name": "리벤지",
       "type": "Support", "speed": 1, "cost": 1, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [반격]을 획득한다. 반격 성공 시 이 카드를 자원카드로서 자원존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/다이나/리벤지.png",
       "effects": [
         { "type": "CounterAttackEffect", "duration": "ThisTurn", "rewardOnSuccess": "SelfToResource" }
       ],
@@ -296,7 +268,6 @@
       "id": "DAIN-10", "characterId": "DAINA", "name": "기뢰",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "자신의 폐기존에서 효과 카드 중 원하는 카드 1장을 골라서 코스트1을 줄이고 즉시 사용한다.",
-      "skin_res": "Assets/Resources/card_image/다이나/기뢰.png",
       "effects": [
         { "type": "ReplayCardEffect", "costReduction": 1 }
       ],
@@ -306,7 +277,6 @@
       "id": "DAIN-11", "characterId": "DAINA", "name": "조선소",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
       "description": "[전장] 매 턴 [+화력 1]을 획득한다. (턴의 첫 공격에만 적용)",
-      "skin_res": "Assets/Resources/card_image/다이나/조선소.png",
       "effects": [
         { "type": "FirepowerBattlefieldEffect", "amount": 1 }
       ],
@@ -316,7 +286,6 @@
       "id": "SONI-02", "characterId": "SONIA", "name": "빵야!",
       "type": "Attack", "speed": 2, "cost": 1, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통 [데미지 1]를 준다.",
-      "skin_res": "Assets/Resources/card_image/소니아/2빵야.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 1 }
       ],
@@ -326,7 +295,6 @@
       "id": "SONI-03", "characterId": "SONIA", "name": "내 선물이야 ♬",
       "type": "Attack", "speed": 1, "cost": 3, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통 [데미지 2]를 준다.",
-      "skin_res": "Assets/Resources/card_image/소니아/3내 선물이야.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 2 }
       ],
@@ -336,7 +304,6 @@
       "id": "SONI-04", "characterId": "SONIA", "name": "전술 핵",
       "type": "Attack", "speed": 3, "cost": 8, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "상대에게 관통 [데미지 6]을 준다. 자신의 모든 패를 앞면으로 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/소니아/4전술 핵.png",
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 6 },
         { "type": "DiscardFromHandEffect", "count": 0, "mode": "all" }
@@ -347,7 +314,6 @@
       "id": "SONI-05", "characterId": "SONIA", "name": "곡예 비행",
       "type": "Defense", "speed": 1, "cost": 0, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "[이번 턴] 자신은 [슈퍼아머 1]을 획득한다. 자신의 메인덱에서 맨 위의 1장을 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/소니아/5곡예 비행.png",
       "effects": [
         { "type": "SuperArmorEffect", "amount": 1, "duration": "ThisTurn" },
         { "type": "TopDeckToDiscardEffect", "count": 1 }
@@ -358,7 +324,6 @@
       "id": "SONI-06", "characterId": "SONIA", "name": "엔진 예열",
       "type": "Defense", "speed": 3, "cost": 2, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [아머 1]을 획득한다. [다음 턴] 자신은 [화력 1]을 얻는다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/소니아/6엔진 예열.png",
       "effects": [
         { "type": "NextTurnBuffEffect", "buffType": "Firepower", "amount": 1, "isStackAction": false },
         { "type": "ArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true }
@@ -369,7 +334,6 @@
       "id": "SONI-07", "characterId": "SONIA", "name": "마하 10",
       "type": "Defense", "speed": 3, "cost": 2, "rarity": "C2", "isStack": true, "isBattlefield": false,
       "description": "[스택] 자신은 [무적]을 획득한다. 이 카드를 자신의 스택존에 놓는다.",
-      "skin_res": "Assets/Resources/card_image/소니아/7마하 10.png",
       "effects": [
         { "type": "InvincibilityEffect", "duration": "Stack", "isStackAction": true }
       ],
@@ -379,7 +343,6 @@
       "id": "SONI-08", "characterId": "SONIA", "name": "연료 충전",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "자신의 자원덱에서 2장을 자원존에 놓는다. 그 후, 자신의 메인덱 맨 위의 4장을 앞면으로 자신의 폐기존에 보낸다.",
-      "skin_res": "Assets/Resources/card_image/소니아/8연료 충전.png",
       "effects": [
         { "type": "ResourceGainEffect", "count": 2 },
         { "type": "TopDeckToDiscardEffect", "count": 4, "requirePreviousSuccess": true }
@@ -390,10 +353,9 @@
       "id": "SONI-09", "characterId": "SONIA", "name": "공격적인 전술",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false,
       "description": "자신의 패에서 3장을 고르고 앞면으로 폐기한다. 그 후, 자신의 메인덱에서 소니아 공격 카드 1장을 고르고 자신의 패에 넣는다.",
-      "skin_res": "Assets/Resources/card_image/소니아/9공격적인 전술.png",
       "effects": [
-        { "type": "DiscardFromHandEffect", "count": 3, "mode": "random" },
-        { "type": "SearchDeckEffect", "filter": "character:SONIA,type:Attack", "count": 1, "requirePreviousSuccess": true }
+        { "type": "DiscardFromHandEffect", "count": 3, "mode": "choose" },
+        { "type": "SearchDeckEffect", "filter": "character:SONIA,type:Attack", "count": 1, "requirePreviousSuccess": true, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/SONIA/SONI-09.png"
     },
@@ -401,10 +363,9 @@
       "id": "SONI-10", "characterId": "SONIA", "name": "신재생에너지",
       "type": "Support", "speed": 1, "cost": 0, "rarity": "C1", "isStack": false, "isBattlefield": false, "cannotBePlayedByEffect": true,
       "description": "자신의 폐기존의 자원카드 1장을 자신의 자원존에 놓는다. 그 후, 자신의 폐기존의 이 카드와 이름이 다른 효과 카드 1장을 자신의 덱으로 되돌린다. 이 카드는 다른 카드의 효과로 사용될 수 없다.",
-      "skin_res": "Assets/Resources/card_image/소니아/10신재생 에너지.png",
       "effects": [
         { "type": "ResourceFromDiscardEffect", "count": 1 },
-        { "type": "ReturnFromDiscardEffect", "count": 1, "filter": "type:Effect", "requirePreviousSuccess": true }
+        { "type": "ReturnFromDiscardEffect", "count": 1, "filter": "type:Effect", "requirePreviousSuccess": true, "mode": "choose" }
       ],
       "imagePath": "GameDesign/card_image/SONIA/SONI-10.png"
     },
@@ -412,7 +373,6 @@
       "id": "SONI-11", "characterId": "SONIA", "name": "노을지는 활주로",
       "type": "Support", "speed": 3, "cost": 2, "rarity": "C2", "isStack": false, "isBattlefield": true,
       "description": "[전장] 소니아 효과 카드를 코스트를 1 줄이고 사용할 수 있다.",
-      "skin_res": "Assets/Resources/card_image/소니아/11노을지는 활주로.png",
       "effects": [
         { "type": "CostReductionBattlefieldEffect", "filter": "character:SONIA", "reduction": 1 }
       ],
