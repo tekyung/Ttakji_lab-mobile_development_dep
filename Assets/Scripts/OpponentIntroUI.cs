@@ -7,16 +7,19 @@ public class OpponentIntroUI : MonoBehaviour
 
     void Start()
     {
-        StartCoroutine(CoShowIntro());
+        StartCoroutine(ShowIntro());
     }
 
-    private IEnumerator CoShowIntro()
+    IEnumerator ShowIntro()
     {
+        // 처음에 켜기
         if (popupOpponentIntro != null)
             popupOpponentIntro.SetActive(true);
 
+        // 1초 기다림
         yield return new WaitForSeconds(1f);
 
+        // 끄기
         if (popupOpponentIntro != null)
             popupOpponentIntro.SetActive(false);
     }
