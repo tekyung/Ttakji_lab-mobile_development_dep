@@ -16,14 +16,14 @@ public class firebase_network : MonoBehaviour
 
     private EventHandler<ChildChangedEventArgs> eventHandler;
     private DatabaseReference eventRef;
-    public async Task<bool> Initialize()    //³×Æ®¿öÅ© ÃÊ±âÈ­
+    public async Task<bool> Initialize()    //ë„¤íŠ¸ì›Œí¬ ì´ˆê¸°í™”
     {
         var dependencystatus = await FirebaseApp.CheckAndFixDependenciesAsync();
 
         if (dependencystatus == DependencyStatus.Available)
         {
 
-            dbRef = FirebaseDatabase.DefaultInstance.RootReference; //DB ¿¬°á
+            dbRef = FirebaseDatabase.DefaultInstance.RootReference; //DB ì—°ê²°
             return true;
         }
         else
@@ -33,35 +33,35 @@ public class firebase_network : MonoBehaviour
         }
     }
 
-    public async Task<bool> CreateSession(string sessioncode, session_data newSession)  //¼¼¼Ç »ı¼º ÇÔ¼ö
+    public async Task<bool> CreateSession(string sessioncode, session_data newSession)  //ì„¸ì…˜ ìƒì„± í•¨ìˆ˜
     {
-        string json = JsonUtility.ToJson(newSession);   //JSONÇüÅÂ·Î
+        string json = JsonUtility.ToJson(newSession);   //JSONí˜•íƒœë¡œ
         var task = dbRef.Child("sessions").Child(sessioncode).SetRawJsonValueAsync(json);
         await task;
         return task.IsCompleted;
     }
 
-    public async Task<List<string>> GetPublicSession()  //°ø°³µÈ ¼¼¼Ç °¡Á®¿È
+    public async Task<List<string>> GetPublicSession()  //ê³µê°œëœ ì„¸ì…˜ ê°€ì ¸ì˜´
     {
         if (dbRef == null)
         {
             return new List<string>();
         }
 
-        DataSnapshot snapshot = await dbRef.Child("sessions").GetValueAsync();
-        List<string> PublicRooms = new List<string>();
-        //session¾È¿¡ ÀÖ´Â µ¥ÀÌÅÍ¸¦ List¿¡ ³ÖÀ½
+        DataSnapshot snapshot = await dbRef.Child("sessions").GetValueAsync();  
+        List<string> PublicRooms = new List<string>();  
+        //sessionì•ˆì— ìˆëŠ” ë°ì´í„°ë¥¼ Listì— ë„£ìŒ
 
-        if (snapshot.Exists)
+        if (snapshot.Exists) 
         {
-            //µ¥ÀÌÅÍ°¡ Á¸ÀçÇÒ °æ¿ì
+            //ë°ì´í„°ê°€ ì¡´ì¬í•  ê²½ìš°
             foreach (var child in snapshot.Children)
             {
-                if (!child.HasChild("state") || !child.HasChild("secret")) continue; //state¿Í secret»óÅÂ°¡ ¾øÀ»°æ¿ì ¹«½Ã
+                if (!child.HasChild("state") || !child.HasChild("secret")) continue; //stateì™€ secretìƒíƒœê°€ ì—†ì„ê²½ìš° ë¬´ì‹œ
                 string stateWaiting = child.Child("state").Value.ToString();
                 string statePrivate = child.Child("secret").Value.ToString();
 
-                if (stateWaiting == SessionStatus.STATE_WAITING && statePrivate == SessionStatus.STATE_PUBLIC)  //state°¡ WAITINGÀÌ°í secretÀÌ PUBLICÀÎ °æ¿ì¿¡¸¸ List¿¡ Ãß°¡
+                if (stateWaiting == SessionStatus.STATE_WAITING && statePrivate == SessionStatus.STATE_PUBLIC)  //stateê°€ WAITINGì´ê³  secretì´ PUBLICì¸ ê²½ìš°ì—ë§Œ Listì— ì¶”ê°€
                 {
                     PublicRooms.Add(child.Key);
                 }
@@ -70,9 +70,9 @@ public class firebase_network : MonoBehaviour
         return PublicRooms;
     }
 
-    public async Task<bool> JoinSession(string sessioncode, string myID)    //¼¼¼Ç¿¡ µé¾î°¡´Â ÇÔ¼ö
+    public async Task<bool> JoinSession(string sessioncode, string myID)    //ì„¸ì…˜ì— ë“¤ì–´ê°€ëŠ” í•¨ìˆ˜
     {
-        // ¼¼¼Ç Á¸Àç ¿©ºÎ È®ÀÎ
+        // ì„¸ì…˜ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
         DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
         if (!snapshot.Exists) return false;
 
@@ -81,40 +81,40 @@ public class firebase_network : MonoBehaviour
         return JoinSession.IsCompleted;
     }
 
-    public async Task<bool> ExitSession(string sessioncode, string myID)    //¼¼¼Ç¿¡¼­ ³ª°¡´Â ÇÔ¼ö
+    public async Task<bool> ExitSession(string sessioncode, string myID)    //ì„¸ì…˜ì—ì„œ ë‚˜ê°€ëŠ” í•¨ìˆ˜
+{
+    // ì„¸ì…˜ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
+    var snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
+    if (!snapshot.Exists)
     {
-        // ¼¼¼Ç Á¸Àç ¿©ºÎ È®ÀÎ
-        var snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
-        if (!snapshot.Exists)
-        {
-            // ÀÌ¹Ì »èÁ¦µÈ ¼¼¼ÇÀÌ¸é ±×³É ³ª°£ °É·Î Ã³¸®
-            return true;
-        }
-
-        string hostId = snapshot.Child("host").Value?.ToString();
-        string guestId = snapshot.Child("guest").Value?.ToString();
-
-        //³»°¡ È£½ºÆ®ÀÎ °æ¿ì, ¼¼¼Ç ÀüÃ¼ »èÁ¦
-        if (myID == hostId)
-        {
-            var task = dbRef.Child("sessions").Child(sessioncode).RemoveValueAsync();
-            await task;
-            return task.IsCompleted;
-        }
-        // ³»°¡ °Ô½ºÆ®ÀÎ °æ¿ì,guest ºñ¿ì°í »óÅÂ WAITINGÀ¸·Î
-        else if (myID == guestId)
-        {
-            var updates = new Dictionary<string, object>();
-            updates["guest"] = "";
-            updates["state"] = SessionStatus.STATE_WAITING;
-
-            var task = dbRef.Child("sessions").Child(sessioncode).UpdateChildrenAsync(updates);
-            await task;
-            return task.IsCompleted;
-        }
-        // ¼¼¼Ç¿¡ µî·ÏµÈ host ¶Ç´Â guest°¡ ¾Æ´Ï¸é ½ÇÆĞ
-        return false;
+        // ì´ë¯¸ ì‚­ì œëœ ì„¸ì…˜ì´ë©´ ê·¸ëƒ¥ ë‚˜ê°„ ê±¸ë¡œ ì²˜ë¦¬
+        return true;
     }
+
+    string hostId = snapshot.Child("host").Value?.ToString();
+    string guestId = snapshot.Child("guest").Value?.ToString();
+
+    //ë‚´ê°€ í˜¸ìŠ¤íŠ¸ì¸ ê²½ìš°, ì„¸ì…˜ ì „ì²´ ì‚­ì œ
+    if (myID == hostId)
+    {
+        var task = dbRef.Child("sessions").Child(sessioncode).RemoveValueAsync();
+        await task;
+        return task.IsCompleted;
+    }
+    // ë‚´ê°€ ê²ŒìŠ¤íŠ¸ì¸ ê²½ìš°,guest ë¹„ìš°ê³  ìƒíƒœ WAITINGìœ¼ë¡œ
+    else if (myID == guestId)
+    {
+        var updates = new Dictionary<string, object>();
+        updates["guest"] = "";
+        updates["state"] = SessionStatus.STATE_WAITING;
+
+        var task = dbRef.Child("sessions").Child(sessioncode).UpdateChildrenAsync(updates);
+        await task;
+        return task.IsCompleted;
+    }
+    // ì„¸ì…˜ì— ë“±ë¡ëœ host ë˜ëŠ” guestê°€ ì•„ë‹ˆë©´ ì‹¤íŒ¨
+    return false;
+}
     public async Task SendAction(string sessioncode, string actionType, string senderRole)
     {
         var actionData = new Dictionary<string, string>();
@@ -127,16 +127,16 @@ public class firebase_network : MonoBehaviour
         await dbRef.Child("sessions").Child(sessioncode).Child("turn").SetValueAsync(nextTurn);
     }
 
-    public async Task SetGameReady(string sessioncode)  //°ÔÀÓ»óÅÂ¸¦ READY·Î º¯È¯
+    public async Task SetGameReady(string sessioncode)  //ê²Œì„ìƒíƒœë¥¼ READYë¡œ ë³€í™˜
     {
         await dbRef.Child("sessions").Child(sessioncode).Child("state").SetValueAsync(SessionStatus.STATE_READY);
     }
-    public async Task SetGameStart(string sessioncode)  //°ÔÀÓ »óÅÂ¸¦ PLAYINGÀ¸·Î º¯È¯
+    public async Task SetGameStart(string sessioncode)  //ê²Œì„ ìƒíƒœë¥¼ PLAYINGìœ¼ë¡œ ë³€í™˜
     {
         await dbRef.Child("sessions").Child(sessioncode).Child("state").SetValueAsync(SessionStatus.STATE_PLAYING);
     }
 
-    public void ListenForGuest(string sessioncode)  //°Ô½ºÆ® ÀÔÀå °¨Áö
+    public void ListenForGuest(string sessioncode)  //ê²ŒìŠ¤íŠ¸ ì…ì¥ ê°ì§€
     {
         dbRef.Child("sessions").Child(sessioncode).Child("guest").ValueChanged += (sender, args) =>
         {
@@ -152,7 +152,7 @@ public class firebase_network : MonoBehaviour
         };
     }
 
-    public void ListenForGameStart(string sessioncode) //°ÔÀÓ ½ÃÀÛ °¨Áö
+    public void ListenForGameStart(string sessioncode) //ê²Œì„ ì‹œì‘ ê°ì§€
     {
         dbRef.Child("sessions").Child(sessioncode).Child("state").ValueChanged += (sender, args) =>
         {
@@ -163,49 +163,23 @@ public class firebase_network : MonoBehaviour
         };
     }
 
-    //ÀÌº¥Æ®¸®½º³Ê
-    public void ListenForEvent(string sessioncode, Action<string, string> eventreceive)
+    //ì´ë²¤íŠ¸ë¦¬ìŠ¤ë„ˆ
+    public void ListenForEvent(string sessioncode, Action<string,string> eventreceive)
     {
-        // 1. À¯È¿¼º °Ë»ç Ãß°¡
-        if (string.IsNullOrEmpty(sessioncode))
+        StopListeningEvents();
+        eventRef = dbRef.Child("sessions").Child(sessioncode).Child("events");
+        eventHandler = (sender, args) =>
         {
-            Debug.LogError("Firebase Error: sessioncode°¡ ºñ¾îÀÖ½À´Ï´Ù! È£Ãâ À§Ä¡¸¦ È®ÀÎÇÏ¼¼¿ä.");
-            return;
-        }
-
-        // 2. dbRef°¡ ÃÊ±âÈ­µÇ¾ú´ÂÁö È®ÀÎ
-        if (dbRef == null)
-        {
-            Debug.LogError("Firebase Error: dbRef°¡ ÃÊ±âÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. Initialize()¸¦ ¸ÕÀú ±â´Ù·Á¾ß ÇÕ´Ï´Ù.");
-            return;
-        }
-
-        try
-        {
-            StopListeningEvents();
-
-            // ¹®Á¦°¡ ¹ß»ıÇÏ´Â ÁöÁ¡: sessioncode¿¡ Æ¯¼ö¹®ÀÚ°¡ ÀÖ´ÂÁö ·Î±×·Î Âï¾îº¸¼¼¿ä.
-            Debug.Log($"Attempting to listen to: sessions/{sessioncode}/events");
-
-            eventRef = dbRef.Child("sessions").Child(sessioncode).Child("events");
-
-            eventHandler = (sender, args) =>
+            if (args.Snapshot.Exists)
             {
-                if (args.Snapshot.Exists)
-                {
-                    var action = args.Snapshot.Child("action").Value?.ToString();
-                    var who = args.Snapshot.Child("sender").Value?.ToString();
-                    if (action != null && who != null) eventreceive?.Invoke(action, who);
-                }
-            };
-            eventRef.ChildAdded += eventHandler;
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogError($"Firebase Path Error: {e.Message}");
-        }
+                var action = args.Snapshot.Child("action").Value?.ToString();
+                var who = args.Snapshot.Child("sender").Value?.ToString();
+                if (action != null && who != null) eventreceive?.Invoke(action, who);
+            }
+        };
+        eventRef.ChildAdded += eventHandler;
     }
-    //ÀÌº¥Æ® ¸®½º³Ê »èÁ¦
+    //ì´ë²¤íŠ¸ ë¦¬ìŠ¤ë„ˆ ì‚­ì œ
     public void StopListeningEvents()
     {
         if (eventRef != null && eventHandler != null)
@@ -216,7 +190,7 @@ public class firebase_network : MonoBehaviour
         }
     }
 
-    //ÅÏ º¯°æ °¨Áö
+    //í„´ ë³€ê²½ ê°ì§€
     public void ListenForTurn(string sessioncode, Action<string> onTurnChanged)
     {
         dbRef.Child("sessions").Child(sessioncode).Child("turn").ValueChanged += (sender, args) =>
@@ -228,16 +202,16 @@ public class firebase_network : MonoBehaviour
     {
         dbRef.Child("sessions").Child(sessioncode).ValueChanged += (sender, args) =>
         {
-            // ¹æ Á¸Àç °Ë»ç
+            // ë°© ì¡´ì¬ ê²€ì‚¬
             if (!args.Snapshot.Exists)
             {
                 onDestroyed?.Invoke();
             }
         };
     }
-    public async Task<String> GetSessionStatus(String sessioncode)  //¼¼¼Ç »óÅÂ¸¦ ¹İÈ¯
+    public async Task<String> GetSessionStatus(String sessioncode)  //ì„¸ì…˜ ìƒíƒœë¥¼ ë°˜í™˜
     {
-        var task = await dbRef.Child("sessions").Child(sessioncode).Child("state").GetValueAsync();
+        var task= await dbRef.Child("sessions").Child(sessioncode).Child("state").GetValueAsync();
         return task.Value.ToString();
     }
 
@@ -246,9 +220,69 @@ public class firebase_network : MonoBehaviour
         await dbRef.Child("sessions").Child(sessioncode).Child("decks").Child(role).SetRawJsonValueAsync(Deck);
     }
 
-    public void GoOffline() //³×Æ®¿öÅ© Á¾·á ÇÔ¼ö
+    public async Task SyncBoardState(string sessioncode, string jsonState)
     {
-        FirebaseDatabase.DefaultInstance.GoOffline();
+        // sessions/{sessioncode}/board_state ê²½ë¡œì— JSON ë°ì´í„°ë¥¼ í†µì§¸ë¡œ ë®ì–´ì”ë‹ˆë‹¤.
+        await dbRef.Child("sessions").Child(sessioncode).Child("board_state").SetRawJsonValueAsync(jsonState);
+    }
+
+    public void ListenForBoardState(string sessioncode, Action<string> onStateChanged)
+    {
+        // board_state ê²½ë¡œì˜ ê°’ì´ ë°”ë€” ë•Œë§ˆë‹¤ ìë™ìœ¼ë¡œ ì‹¤í–‰ë©ë‹ˆë‹¤.
+        dbRef.Child("sessions").Child(sessioncode).Child("board_state").ValueChanged += (sender, args) =>
+        {
+            if (args.Snapshot.Exists)
+            {
+                // íŒŒì´ì–´ë² ì´ìŠ¤ì— ì €ì¥ëœ JSON ë¬¸ìì—´ì„ ê·¸ëŒ€ë¡œ êº¼ë‚´ì„œ ë°–ìœ¼ë¡œ ì „ë‹¬í•´ ì¤ë‹ˆë‹¤.
+                string jsonString = args.Snapshot.GetRawJsonValue();
+                onStateChanged?.Invoke(jsonString);
+            }
+        };
+    }
+
+    // 1. JSON DTO ë³´ë‚´ê¸°
+    public async Task SendRequestDTO<T>(string sessioncode, string eventType, T requestObj)
+    {
+        string jsonPayload = JsonUtility.ToJson(requestObj);
+        System.Type requestType = requestObj.GetType();
+        string senderName =
+            requestType.GetProperty("PlayerName")?.GetValue(requestObj, null)?.ToString()
+            ?? requestType.GetField("PlayerName")?.GetValue(requestObj)?.ToString()
+            ?? string.Empty;
+
+        //Debug.Log($"[firebase_network] SendRequestDTO eventType={eventType}, sender={senderName}, session={sessioncode}");
+
+        var actionData = new Dictionary<string, object> {
+            { "action", eventType },
+            { "sender", senderName },
+            { "jsonData", jsonPayload }
+        };
+        await dbRef.Child("sessions").Child(sessioncode).Child("events").Push().SetValueAsync(actionData);
+    }
+
+    // 2. JSON DTO ë°›ê¸° (ë¦¬ìŠ¤ë„ˆ)
+    public void ListenForEventDTO(string sessioncode, Action<string, string, string> onEventReceived)
+    {
+        StopListeningEvents();
+        eventRef = dbRef.Child("sessions").Child(sessioncode).Child("events");
+        Debug.Log($"[firebase_network] ListenForEventDTO ë“±ë¡ session={sessioncode}");
+        eventHandler = (sender, args) =>
+        {
+            if (args.Snapshot.Exists)
+            {
+                var action = args.Snapshot.Child("action").Value?.ToString();
+                var who = args.Snapshot.Child("sender").Value?.ToString();
+                var data = args.Snapshot.Child("jsonData").Value?.ToString(); // JSON ë°ì´í„° ì¶”ì¶œ
+
+                if (action != null && who != null)
+                    onEventReceived?.Invoke(action, who, data);
+            }
+        };
+        eventRef.ChildAdded += eventHandler;
+    }
+    public void GoOffline() //ë„¤íŠ¸ì›Œí¬ ì¢…ë£Œ í•¨ìˆ˜
+    {
+        FirebaseDatabase.DefaultInstance.GoOffline();   
     }
 
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
+using System;
 
 namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
 {

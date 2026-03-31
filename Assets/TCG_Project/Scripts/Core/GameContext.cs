@@ -1,4 +1,5 @@
 using TCG_Project.Scripts.Core;
+using System.Collections.Generic;
 
 namespace TCG_Project.Scripts.Core
 {

@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using ServerScripts.EventScripts;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,45 +8,72 @@ using static session_manage;
 
 public class session_ui : MonoBehaviour
 {
-    public TMP_InputField session_id;       //»ç¿ëÀÚÀÇ id   
-    public TMP_InputField session_code;     //¼¼¼ÇÀÔÀåÄÚµå
-    public TextMeshProUGUI session_status;  //¼¼¼Ç»óÅÂ
-    public Button session_create;           //¼¼¼Ç»ı¼º
-    public Button session_join;             //¼¼¼ÇÀÔÀå
-    public Button session_random_match;     //·£´ı¸ÅÄª
-    public Button session_start;            //¼¼¼Ç½ÃÀÛ
-    public Button session_exit;             //¼¼¼Ç³ª°¡±â
+    public TMP_InputField session_id;       //ì‚¬ìš©ìì˜ id   
+    public TMP_InputField session_code;     //ì„¸ì…˜ì…ì¥ì½”ë“œ
+    public TextMeshProUGUI session_status;  //ì„¸ì…˜ìƒíƒœ
+    public Button session_create;           //ì„¸ì…˜ìƒì„±
+    public Button session_join;             //ì„¸ì…˜ì…ì¥
+    public Button session_random_match;     //ëœë¤ë§¤ì¹­
+    public Button session_start;            //ì„¸ì…˜ì‹œì‘
+    public Button session_exit;             //ì„¸ì…˜ë‚˜ê°€ê¸°
 
-    public Button btn_action_A; // Çàµ¿ A
-    public Button btn_action_B; // Çàµ¿ B
-    public Button btn_action_C; // Çàµ¿ C
+    public Button btn_action_A; // í–‰ë™ A
+    public Button btn_action_B; // í–‰ë™ B
+    public Button btn_action_C; // í–‰ë™ C
 
     public TextMeshProUGUI session_timer;
+    public TextMeshProUGUI phase_text;
+    public TextMeshProUGUI result_text;
+
+    public TextMeshProUGUI my_life_text;
+    public TextMeshProUGUI my_deck_text;
+    public TextMeshProUGUI my_hand_text;
+    public TextMeshProUGUI my_hand_cards_text;
+    public TextMeshProUGUI my_resource_deck_text;
+    public TextMeshProUGUI my_resource_zone_text;
+    public TextMeshProUGUI my_grave_text;
+    public TextMeshProUGUI my_set_zone_text;
+    public TextMeshProUGUI my_set_card_text;
+    public TextMeshProUGUI my_stack_zone_text;
+    public TextMeshProUGUI my_stack_cards_text;
+    public TextMeshProUGUI my_battlefield_text;
+
+    public TextMeshProUGUI enemy_life_text;
+    public TextMeshProUGUI enemy_deck_text;
+    public TextMeshProUGUI enemy_hand_text;
+    public TextMeshProUGUI enemy_resource_deck_text;
+    public TextMeshProUGUI enemy_resource_zone_text;
+    public TextMeshProUGUI enemy_grave_text;
+    public TextMeshProUGUI enemy_set_zone_text;
+    public TextMeshProUGUI enemy_set_card_text;
+    public TextMeshProUGUI enemy_stack_zone_text;
+    public TextMeshProUGUI enemy_stack_cards_text;
+    public TextMeshProUGUI enemy_battlefield_text;
 
     [System.Serializable]
     public class ActionButton
     {
-        public ActionType type; // Çàµ¿ Á¾·ù (A, B...)
-        public Button button;   // ¿¬°áÇÒ ¹öÆ°
+        public ActionType type; // í–‰ë™ ì¢…ë¥˜ (A, B...)
+        public Button button;   // ì—°ê²°í•  ë²„íŠ¼
     }
     public List<ActionButton> actionButtons;
 
-    public string GetID()  //»ç¿ëÀÚID¸¦ ¹İÈ¯            
+    public string GetID()  //ì‚¬ìš©ìIDë¥¼ ë°˜í™˜            
     {
         return session_id.text; 
     }
-    public string GetSessionCode()  //¼¼¼ÇÀÔÀåÄÚµå ¹İÈ¯
+    public string GetSessionCode()  //ì„¸ì…˜ì…ì¥ì½”ë“œ ë°˜í™˜
     {
         return session_code.text;
     }
 
-    public void UpdateStatus(string status) //¼¼¼Ç»óÅÂ¾÷µ¥ÀÌÆ®
+    public void UpdateStatus(string status) //ì„¸ì…˜ìƒíƒœì—…ë°ì´íŠ¸
     {
         session_status.text = status;
         Debug.Log(status);
     }
 
-    public void ToggleHost(bool host)   //¹öÆ° ON OFF
+    public void ToggleHost(bool host)   //ë²„íŠ¼ ON OFF
     {
         if (session_start != null)
         {
@@ -52,7 +81,7 @@ public class session_ui : MonoBehaviour
         }
     }
 
-    public void ToggleUI(bool isOn) //¹öÆ° ON OFF
+    public void ToggleUI(bool isOn) //ë²„íŠ¼ ON OFF
     {
         if (session_id != null) session_id.interactable = isOn;
         if (session_create != null) session_create.interactable = isOn;
@@ -62,12 +91,13 @@ public class session_ui : MonoBehaviour
     }
     public void SetActionButtonsState(bool isActive)
     {
-        if (btn_action_A != null) btn_action_A.interactable = isActive;
-        if (btn_action_B != null) btn_action_B.interactable = isActive;
-        if (btn_action_C != null) btn_action_C.interactable = isActive;
+        // A/B/C ë²„íŠ¼ì€ í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ ìƒíƒœë¥¼ ì œì–´í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
+        // if (btn_action_A != null) btn_action_A.interactable = isActive;
+        // if (btn_action_B != null) btn_action_B.interactable = isActive;
+        // if (btn_action_C != null) btn_action_C.interactable = isActive;
     }
 
-    public void DestroySessionTimer(float time) //¼¼¼Ç Á¦ÇÑ ½Ã°£
+    public void DestroySessionTimer(float time) //ì„¸ì…˜ ì œí•œ ì‹œê°„
     {
         if (session_timer == null) return;
         if (time > 0)
@@ -79,40 +109,137 @@ public class session_ui : MonoBehaviour
             session_timer.text = "";
         }
     }
-    public void CheckButton(ActionType targetType)
+    public void UpdateBoardStateUI(string myRole, BoardState boardState)
     {
-        foreach (var pair in actionButtons)
-        {
-            if (pair.type == targetType && pair.button != null)
-            {
-                ColorBlock cb = pair.button.colors;
-                cb.normalColor = Color.green;
-                cb.selectedColor = Color.green;
-                cb.highlightedColor = Color.green;
-                cb.pressedColor = Color.green;
-                cb.disabledColor = Color.green;
+        if (boardState == null) return;
 
-                pair.button.colors = cb;
+        bool amHost = myRole == "HOST";
+        PlayerState myState = amHost ? boardState.HostState : boardState.GuestState;
+        PlayerState enemyState = amHost ? boardState.GuestState : boardState.HostState;
+
+        if (myState == null || enemyState == null) return;
+
+        int mySetCount = CountZoneCards(boardState, myRole, "SetZone");
+        int myStackCount = CountZoneCards(boardState, myRole, "Stack");
+        int myBattlefieldCount = CountZoneCards(boardState, myRole, "Battlefield");
+
+        string enemyRole = amHost ? "GUEST" : "HOST";
+        int enemySetCount = CountZoneCards(boardState, enemyRole, "SetZone");
+        int enemyStackCount = CountZoneCards(boardState, enemyRole, "Stack");
+        int enemyBattlefieldCount = CountZoneCards(boardState, enemyRole, "Battlefield");
+        CardState mySetCardState = FindSetCardState(boardState, myRole);
+        CardState enemySetCardState = FindSetCardState(boardState, enemyRole);
+
+        if (phase_text != null)
+            phase_text.text = $"Turn {boardState.CurrentTurn} / {boardState.CurrentPhase} / Active {boardState.ActivePlayer}";
+
+        if (result_text != null)
+        {
+            if (!boardState.IsGameOver)
+            {
+                result_text.text = "";
+            }
+            else if (boardState.WinnerRole == "DRAW")
+            {
+                result_text.text = string.IsNullOrEmpty(boardState.ResultMessage) ? "Draw" : boardState.ResultMessage;
+            }
+            else if (boardState.WinnerRole == myRole)
+            {
+                string resultMessage = string.IsNullOrEmpty(boardState.ResultMessage) ? "Victory" : boardState.ResultMessage;
+                result_text.text = $"Victory - {resultMessage}";
+            }
+            else
+            {
+                string resultMessage = string.IsNullOrEmpty(boardState.ResultMessage) ? "Defeat" : boardState.ResultMessage;
+                result_text.text = $"Defeat - {resultMessage}";
             }
         }
+
+        if (my_life_text != null) my_life_text.text = $"Life : {myState.LifeToken}";
+        if (my_deck_text != null) my_deck_text.text = $"Deck : {myState.DeckCount}";
+        if (my_hand_text != null) my_hand_text.text = $"Hand : {myState.HandCount}";
+        if (my_hand_cards_text != null)
+        {
+            string handCards = myState.HandCardDataIds != null && myState.HandCardDataIds.Length > 0
+                ? string.Join(", ", myState.HandCardDataIds)
+                : "(empty)";
+            my_hand_cards_text.text = $"My Cards : {handCards}";
+        }
+        if (my_resource_deck_text != null) my_resource_deck_text.text = $"ResDeck : {myState.ResourceDeckCount}";
+        if (my_resource_zone_text != null) my_resource_zone_text.text = $"ResZone : {myState.ResourceZoneCount}";
+        if (my_grave_text != null) my_grave_text.text = $"Grave : {myState.GraveCount}";
+        if (my_set_zone_text != null) my_set_zone_text.text = $"SetZone : {mySetCount}";
+        if (my_set_card_text != null) my_set_card_text.text = $"Set Card : {FormatSetCardText(mySetCardState, true)}";
+        if (my_stack_zone_text != null) my_stack_zone_text.text = $"Stack : {myStackCount}";
+        if (my_stack_cards_text != null) my_stack_cards_text.text = $"Stack Cards : {FormatStackCardList(boardState, myRole)}";
+        if (my_battlefield_text != null) my_battlefield_text.text = $"Battlefield : {myBattlefieldCount}";
+
+        if (enemy_life_text != null) enemy_life_text.text = $"Enemy Life : {enemyState.LifeToken}";
+        if (enemy_deck_text != null) enemy_deck_text.text = $"Enemy Deck : {enemyState.DeckCount}";
+        if (enemy_hand_text != null) enemy_hand_text.text = $"Enemy Hand : {enemyState.HandCount}";
+        if (enemy_resource_deck_text != null) enemy_resource_deck_text.text = $"Enemy ResDeck : {enemyState.ResourceDeckCount}";
+        if (enemy_resource_zone_text != null) enemy_resource_zone_text.text = $"Enemy ResZone : {enemyState.ResourceZoneCount}";
+        if (enemy_grave_text != null) enemy_grave_text.text = $"Enemy Grave : {enemyState.GraveCount}";
+        if (enemy_set_zone_text != null) enemy_set_zone_text.text = $"Enemy SetZone : {enemySetCount}";
+        if (enemy_set_card_text != null) enemy_set_card_text.text = $"Enemy Set Card : {FormatSetCardText(enemySetCardState, false)}";
+        if (enemy_stack_zone_text != null) enemy_stack_zone_text.text = $"Enemy Stack : {enemyStackCount}";
+        if (enemy_stack_cards_text != null) enemy_stack_cards_text.text = $"Enemy Stack Cards : {FormatStackCardList(boardState, enemyRole)}";
+        if (enemy_battlefield_text != null) enemy_battlefield_text.text = $"Enemy Battlefield : {enemyBattlefieldCount}";
     }
 
-    public void ResetButtons()
+    private int CountZoneCards(BoardState boardState, string ownerRole, string zone)
     {
-        foreach (var pair in actionButtons)
-        {
-            if (pair.button != null)
-            {
-                // image.color = Color.white ´ë½Å ColorBlock ¹æ½ÄÀ» »ç¿ëÇÕ´Ï´Ù.
-                ColorBlock cb = pair.button.colors;
-                cb.normalColor = Color.white;
-                cb.selectedColor = Color.white;
-                cb.highlightedColor = new Color(0.96f, 0.96f, 0.96f);
-                cb.pressedColor = new Color(0.78f, 0.78f, 0.78f);
-                cb.disabledColor = new Color(0.78f, 0.78f, 0.78f);
+        if (boardState.FieldCards == null) return 0;
 
-                pair.button.colors = cb;
-            }
+        return boardState.FieldCards.Count(card =>
+            card != null &&
+            card.OwnerRole == ownerRole &&
+            card.Zone == zone);
+    }
+
+    private CardState FindSetCardState(BoardState boardState, string ownerRole)
+    {
+        if (boardState.FieldCards == null) return null;
+
+        return boardState.FieldCards.FirstOrDefault(card =>
+            card != null &&
+            card.OwnerRole == ownerRole &&
+            card.Zone == "SetZone");
+    }
+
+    private string FormatStackCardList(BoardState boardState, string ownerRole)
+    {
+        if (boardState?.FieldCards == null) return "(none)";
+
+        var stackCards = boardState.FieldCards
+            .Where(card =>
+                card != null &&
+                card.OwnerRole == ownerRole &&
+                card.Zone == "Stack")
+            .ToList();
+
+        if (stackCards.Count == 0) return "(none)";
+
+        return string.Join(", ", stackCards.Select(card =>
+            string.IsNullOrEmpty(card.CardDataId) ? card.InstanceId : card.CardDataId));
+    }
+
+    private string FormatSetCardText(CardState setCardState, bool isMine)
+    {
+        if (setCardState == null)
+            return "(none)";
+
+        if (isMine)
+        {
+            string myCardId = string.IsNullOrEmpty(setCardState.CardDataId) ? setCardState.InstanceId : setCardState.CardDataId;
+            string myStatus = setCardState.IsRevealed ? "Revealed" : "Hidden";
+            return $"{myCardId} ({myStatus})";
         }
+
+        if (!setCardState.IsRevealed)
+            return "(hidden)";
+
+        string enemyCardId = string.IsNullOrEmpty(setCardState.CardDataId) ? setCardState.InstanceId : setCardState.CardDataId;
+        return $"{enemyCardId} (Revealed)";
     }
 }

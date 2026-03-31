@@ -1,4 +1,4 @@
-using System.Collections;
+using System.Collections; 
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -8,13 +8,13 @@ public class session_manage : MonoBehaviour
 {
     [SerializeField] private firebase_network networkService;
     [SerializeField] private session_ui uiManager;
-
+    
     private string myID;
     private string currentSessionCode;
     private bool amIHost = false;
     private Coroutine DestroySessionTimer;
 
-    public float session_time_limit = 50f; // ¼¼¼Ç Á¦ÇÑ½Ã°£
+    public float session_time_limit = 50f; // ì„¸ì…˜ ì œí•œì‹œê°„
     private Coroutine turnTimer;
 
     async void Start()
@@ -34,13 +34,13 @@ public class session_manage : MonoBehaviour
         networkService.OnGameReady += HandleGameReady;
     }
 
-    //ºñ°ø°³ ¼¼¼Ç »ı¼º ÇÔ¼ö
+    //ë¹„ê³µê°œ ì„¸ì…˜ ìƒì„± í•¨ìˆ˜
     public async void OnClickCreatePrivate()
     {
         await CreateSession(false);
     }
 
-    //·£´ı ¸ÅÄª ÇÔ¼ö
+    //ëœë¤ ë§¤ì¹­ í•¨ìˆ˜
     public async void OnClickRandomMatch()
     {
 
@@ -54,12 +54,12 @@ public class session_manage : MonoBehaviour
         uiManager.UpdateStatus("Searching...");
         uiManager.ToggleUI(false);
 
-        // ´ë±â ÁßÀÎ ¹æ ¸ñ·Ï °¡Á®¿À±â
+        // ëŒ€ê¸° ì¤‘ì¸ ë°© ëª©ë¡ ê°€ì ¸ì˜¤ê¸°
         List<string> publicRooms = await networkService.GetPublicSession();
-
+        
         if (publicRooms.Count > 0)
         {
-            // PUBLIC »óÅÂÀÎ ¹æÀÌ ÀÖÀ¸¸é ·£´ıÀ¸·Î ÇÏ³ª °ñ¶ó¼­ ÀÔÀå
+            // PUBLIC ìƒíƒœì¸ ë°©ì´ ìˆìœ¼ë©´ ëœë¤ìœ¼ë¡œ í•˜ë‚˜ ê³¨ë¼ì„œ ì…ì¥
             int randomIndex = Random.Range(0, publicRooms.Count);
             string targetRoom = publicRooms[randomIndex];
             Debug.Log($"Matched: {targetRoom}");
@@ -67,55 +67,55 @@ public class session_manage : MonoBehaviour
         }
         else
         {
-            // ¹æÀÌ ¾øÀ¸¸é ÀÚ½ÅÀÌ ¼¼¼ÇÀ» »ı¼º
+            // ë°©ì´ ì—†ìœ¼ë©´ ìì‹ ì´ ì„¸ì…˜ì„ ìƒì„±
             await CreateSession(true);
         }
-
+        
     }
 
-    public async void OnClickJoin() // ¼¼¼Ç Âü°¡ ÇÔ¼ö
+    public async void OnClickJoin() // ì„¸ì…˜ ì°¸ê°€ í•¨ìˆ˜
     {
         string inputCode = uiManager.GetSessionCode();
         if (string.IsNullOrEmpty(inputCode)) return;
 
         await JoinSessionProcess(inputCode);
     }
-    public async void OnClickExitSession() //¼¼¼Ç¿¡¼­ ³ª°¡´Â ÇÔ¼ö
+    public async void OnClickExitSession() //ì„¸ì…˜ì—ì„œ ë‚˜ê°€ëŠ” í•¨ìˆ˜
     {
-        if (string.IsNullOrEmpty(currentSessionCode)) // ¼¼¼Ç¿¡ µé¾î°¡ ÀÖÁö ¾Ê´Ù¸é ¹«½Ã
+    if (string.IsNullOrEmpty(currentSessionCode)) // ì„¸ì…˜ì— ë“¤ì–´ê°€ ìˆì§€ ì•Šë‹¤ë©´ ë¬´ì‹œ
         {
-            uiManager.UpdateStatus("No session to exit");
-            return;
-        }
+        uiManager.UpdateStatus("No session to exit");
+        return;
+    }
+    
+    // myIDê°€ ë¹„ì–´ ìˆìœ¼ë©´ UIì—ì„œ ë‹¤ì‹œ ê°€ì ¸ì˜¤ê¸°
+    if (string.IsNullOrEmpty(myID))
+    {
+        myID = uiManager.GetID();
+    }
 
-        // myID°¡ ºñ¾î ÀÖÀ¸¸é UI¿¡¼­ ´Ù½Ã °¡Á®¿À±â
-        if (string.IsNullOrEmpty(myID))
-        {
-            myID = uiManager.GetID();
-        }
+    bool success = await networkService.ExitSession(currentSessionCode, myID); 
+    //ì„¸ì…˜ ë‚˜ê°€ê¸°ë¥¼ ì„±ê³µí–ˆëŠ”ì§€ 
 
-        bool success = await networkService.ExitSession(currentSessionCode, myID);
-        //¼¼¼Ç ³ª°¡±â¸¦ ¼º°øÇß´ÂÁö 
-
-        if (success)
-        {
+    if (success)
+    {
             if (DestroySessionTimer != null)
             {
                 StopCoroutine(DestroySessionTimer);
                 uiManager.DestroySessionTimer(0);
             }
             uiManager.UpdateStatus("session exit");
-            uiManager.ToggleHost(true);
-            uiManager.ToggleUI(true);          // ·Îºñ UI ´Ù½Ã ¿­±â
-            currentSessionCode = null;         // ÇöÀç ¼¼¼Ç ÄÚµå ÃÊ±âÈ­
-            amIHost = false;
-            if (turnTimer != null) StopCoroutine(turnTimer);
-
-        }
-        else
-        {
-            uiManager.UpdateStatus("session exit failed");
-        }
+        uiManager.ToggleHost(true);
+        uiManager.ToggleUI(true);          // ë¡œë¹„ UI ë‹¤ì‹œ ì—´ê¸°
+        currentSessionCode = null;         // í˜„ì¬ ì„¸ì…˜ ì½”ë“œ ì´ˆê¸°í™”
+        amIHost = false;
+        if (turnTimer != null) StopCoroutine(turnTimer);
+            
+    }
+    else
+    {
+        uiManager.UpdateStatus("session exit failed");
+    }
     }
 
     private IEnumerator AutoDestroySession(string roomCode)
@@ -124,22 +124,22 @@ public class session_manage : MonoBehaviour
 
         while (timer > 0)
         {
-            timer -= Time.deltaTime; // ½Ã°£ °¨¼Ò
-            uiManager.DestroySessionTimer(timer);
-            yield return null;
+            timer -= Time.deltaTime; // ì‹œê°„ ê°ì†Œ
+            uiManager.DestroySessionTimer(timer); 
+            yield return null; 
         }
 
-        // ¼¼¼Ç ½Ã°£ÀÌ ´Ù µÇ¾úÀ» °æ¿ì
+        // ì„¸ì…˜ ì‹œê°„ì´ ë‹¤ ë˜ì—ˆì„ ê²½ìš°
         if (currentSessionCode == roomCode && amIHost)
         {
-            // ¹æ »èÁ¦ ¿äÃ»
+            // ë°© ì‚­ì œ ìš”ì²­
             var task = networkService.ExitSession(roomCode, myID);
 
-            // UI ÃÊ±âÈ­
+            // UI ì´ˆê¸°í™”
             uiManager.UpdateStatus("Session Timeout Deleted");
             uiManager.ToggleHost(true);
             uiManager.ToggleUI(true);
-            uiManager.SetActionButtonsState(false);
+            //uiManager.SetActionButtonsState(false);
 
             currentSessionCode = null;
             amIHost = false;
@@ -149,39 +149,39 @@ public class session_manage : MonoBehaviour
             Debug.Log("session not deleted");
         }
     }
-    public async void OnClickSessionStart() //¼¼¼Ç ½ÃÀÛ ÇÔ¼ö
+    public async void OnClickSessionStart() //ì„¸ì…˜ ì‹œì‘ í•¨ìˆ˜
     {
-        if (string.IsNullOrEmpty(currentSessionCode)) //¼¼¼Ç ÄÚµå°¡ ¾øÀ» °æ¿ì ½ÃÀÛ x
+        if (string.IsNullOrEmpty(currentSessionCode)) //ì„¸ì…˜ ì½”ë“œê°€ ì—†ì„ ê²½ìš° ì‹œì‘ x
         {
             uiManager.UpdateStatus("No Session Code");
             return;
         }
 
-        await networkService.SetGameStart(currentSessionCode);  //°ÔÀÓ »óÅÂ¸¦ playingÀ¸·Î º¯°æ
+        await networkService.SetGameStart(currentSessionCode);  //ê²Œì„ ìƒíƒœë¥¼ playingìœ¼ë¡œ ë³€ê²½
     }
 
-    private async Task CreateSession(bool isPublic) //¼¼¼Ç »ı¼º ÇÔ¼ö
+    private async Task CreateSession(bool isPublic) //ì„¸ì…˜ ìƒì„± í•¨ìˆ˜
     {
-
+        
         myID = uiManager.GetID();
-        if (string.IsNullOrEmpty(myID)) //id°¡ ºñ¾îÀÖÀ» °æ¿ì ¼¼¼Ç »ı¼ºx
+        if (string.IsNullOrEmpty(myID)) //idê°€ ë¹„ì–´ìˆì„ ê²½ìš° ì„¸ì…˜ ìƒì„±x
         {
             uiManager.UpdateStatus("Enter ID");
             return;
         }
 
-        uiManager.ToggleUI(false); // UI Àá±İ
+        uiManager.ToggleUI(false); // UI ì ê¸ˆ
         uiManager.UpdateStatus("Creating Room...");
 
-        string sessionCode = Random.Range(1000, 9999).ToString();  // ¼¼¼Ç ÄÚµå´Â 1000~9999 ·£´ı »ı¼º
-        string currentTime = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");   // ¼¼¼Ç »ı¼º ½Ã°£
-        string secretState = isPublic ? SessionStatus.STATE_PUBLIC : SessionStatus.STATE_PRIVATE;   // °ø°³¹æ ¿©ºÎ¿¡ µû¶ó state°¡ PUBLIC ¶Ç´Â PRIVATE·Î ³ª´¸
+        string sessionCode = Random.Range(1000, 9999).ToString();  // ì„¸ì…˜ ì½”ë“œëŠ” 1000~9999 ëœë¤ ìƒì„±
+        string currentTime = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");   // ì„¸ì…˜ ìƒì„± ì‹œê°„
+        string secretState = isPublic ? SessionStatus.STATE_PUBLIC : SessionStatus.STATE_PRIVATE;   // ê³µê°œë°© ì—¬ë¶€ì— ë”°ë¼ stateê°€ PUBLIC ë˜ëŠ” PRIVATEë¡œ ë‚˜ë‰¨
 
-        session_data newSession = new session_data(myID, "", SessionStatus.STATE_WAITING, currentTime, secretState, "HOST"); // ¼¼¼Ç µ¥ÀÌÅÍ¸¦ »ı¼º
+        session_data newSession = new session_data(myID, "", SessionStatus.STATE_WAITING, currentTime, secretState,"HOST"); // ì„¸ì…˜ ë°ì´í„°ë¥¼ ìƒì„±
 
-        bool success = await networkService.CreateSession(sessionCode, newSession);
+        bool success = await networkService.CreateSession(sessionCode, newSession); 
 
-        if (success) //¼¼¼Ç »ı¼º¿¡ ¼º°øÇÑ °æ¿ì
+        if (success) //ì„¸ì…˜ ìƒì„±ì— ì„±ê³µí•œ ê²½ìš°
         {
             amIHost = true;
             currentSessionCode = sessionCode;
@@ -189,20 +189,20 @@ public class session_manage : MonoBehaviour
             uiManager.ToggleHost(true);
             networkService.ListenForGuest(currentSessionCode);
             DestroySessionTimer = StartCoroutine(AutoDestroySession(sessionCode));
-            Debug.Log("!111");
+            
         }
-        else //¼¼¼Ç »ı¼º¿¡ ½ÇÆĞÇÑ °æ¿ì
+        else //ì„¸ì…˜ ìƒì„±ì— ì‹¤íŒ¨í•œ ê²½ìš°
         {
             uiManager.UpdateStatus("Create Failed");
-            uiManager.ToggleUI(true);
+            uiManager.ToggleUI(true); 
         }
     }
 
-    // ¹æ ÀÔÀå °øÅë ·ÎÁ÷
+    // ë°© ì…ì¥ ê³µí†µ ë¡œì§
     private async Task JoinSessionProcess(string sessionCode)
     {
         myID = uiManager.GetID();
-        if (string.IsNullOrEmpty(myID)) //id°¡ ºñ¾îÀÖÀ» °æ¿ì ¼¼¼Ç ÀÔÀåx
+        if (string.IsNullOrEmpty(myID)) //idê°€ ë¹„ì–´ìˆì„ ê²½ìš° ì„¸ì…˜ ì…ì¥x
         {
             uiManager.UpdateStatus("Enter ID");
             return;
@@ -214,23 +214,23 @@ public class session_manage : MonoBehaviour
 
         if (success)
         {
-            amIHost = false;
+            amIHost =  false;
             currentSessionCode = sessionCode;
             uiManager.UpdateStatus($"Joined: {sessionCode}");
             uiManager.ToggleHost(false);
-            // °Ô½ºÆ® °ÔÀÓÀÌ ½ÃÀÛ °¨Áö
+            // ê²ŒìŠ¤íŠ¸ ê²Œì„ì´ ì‹œì‘ ê°ì§€
             networkService.ListenForGameStart(currentSessionCode);
             networkService.ListenForSessionExit(currentSessionCode, () =>
             {
                 uiManager.UpdateStatus("Session Ended by Host");
-                uiManager.ToggleHost(true); // ·Îºñ ¹öÆ° º¸ÀÌ±â
-                uiManager.ToggleUI(true);   // ÀÔ·ÂÃ¢ È°¼ºÈ­       
-                uiManager.SetActionButtonsState(false); // °ÔÀÓ ¹öÆ° Àá±İ
+                uiManager.ToggleHost(true); // ë¡œë¹„ ë²„íŠ¼ ë³´ì´ê¸°
+                uiManager.ToggleUI(true);   // ì…ë ¥ì°½ í™œì„±í™”       
+                //uiManager.SetActionButtonsState(false); // ê²Œì„ ë²„íŠ¼ ì ê¸ˆ
 
                 currentSessionCode = null;
                 amIHost = false;
 
-                // °¢Á¾ ¸®½º³Ê ¹× Å¸ÀÌ¸Ó Á¤¸®
+                // ê°ì¢… ë¦¬ìŠ¤ë„ˆ ë° íƒ€ì´ë¨¸ ì •ë¦¬
                 networkService.StopListeningEvents();
                 if (DestroySessionTimer != null) StopCoroutine(DestroySessionTimer);
             });
@@ -242,22 +242,22 @@ public class session_manage : MonoBehaviour
         }
     }
 
-    // °Ô½ºÆ®°¡ µé¾î¿ÔÀ» °æ¿ì
+    // ê²ŒìŠ¤íŠ¸ê°€ ë“¤ì–´ì™”ì„ ê²½ìš°
     private async void HandleGuestJoined(string guestID)
     {
         uiManager.UpdateStatus($"{guestID} Joined!");
-        await networkService.SetGameReady(currentSessionCode); //°ÔÀÓ »óÅÂ¸¦ READY·Î º¯°æ
-        // °ÔÀÓ ½ÃÀÛ ½ÅÈ£¸¦ °¨Áö
+        await networkService.SetGameReady(currentSessionCode); //ê²Œì„ ìƒíƒœë¥¼ READYë¡œ ë³€ê²½
+        // ê²Œì„ ì‹œì‘ ì‹ í˜¸ë¥¼ ê°ì§€
         networkService.ListenForGameStart(currentSessionCode);
     }
-    private void HandleGameReady()
+    private void HandleGameReady() 
     {
         StartCoroutine(HandleGameStarted());
     }
 
     private IEnumerator HandleGameStarted()
     {
-        uiManager.SetActionButtonsState(false);
+        //uiManager.SetActionButtonsState(false);
         uiManager.UpdateStatus("3...");
         yield return new WaitForSeconds(1f);
         uiManager.UpdateStatus("2...");
@@ -272,8 +272,8 @@ public class session_manage : MonoBehaviour
         GameData.MyRole = amIHost ? "HOST" : "GUEST";
 
         string selectedName = PlayerPrefs.GetString("SelectedDeckName", "");
-
-        if (!string.IsNullOrEmpty(selectedName) && selectedName != "µ¦ ¾øÀ½" && selectedName != "µ¦ÀÌ ¾ø½À´Ï´Ù.")
+      
+        if (!string.IsNullOrEmpty(selectedName) && selectedName != "ë± ì—†ìŒ" && selectedName != "ë±ì´ ì—†ìŠµë‹ˆë‹¤.")
         {
             string filePath = System.IO.Path.Combine(Application.dataPath, "MyDeck", selectedName + ".json");
 
@@ -285,15 +285,15 @@ public class session_manage : MonoBehaviour
             }
             else
             {
-                Debug.LogError($"ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù: {filePath}");
+                Debug.LogError($"íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤: {filePath}");
             }
         }
         else
         {
-            Debug.LogError("¼±ÅÃµÈ µ¦ ÀÌ¸§ÀÌ ºñ¾îÀÖ°Å³ª À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù!");
+            Debug.LogError("ì„ íƒëœ ë± ì´ë¦„ì´ ë¹„ì–´ìˆê±°ë‚˜ ìœ íš¨í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤!");
         }
 
-        SceneManager.LoadScene("GameScene");
+        SceneManager.LoadScene("TestServerConnect");
     }
 
     void OnApplicationQuit()
