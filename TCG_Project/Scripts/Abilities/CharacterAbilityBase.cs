@@ -1,6 +1,7 @@
 // CharacterAbilityBase.cs — Phase 14: 기본 no-op 구현
 using System;
 using TCG_Project.Scripts.Core;
+using System.Threading.Tasks;
 
 namespace TCG_Project.Scripts.Abilities
 {
@@ -19,7 +20,7 @@ namespace TCG_Project.Scripts.Abilities
         public virtual void OnSetPhase(Player me, GameContext ctx, Action<bool> onComplete) { onComplete?.Invoke(false); }
         public virtual void OnOpenPhaseAbandon(Player me, GameContext ctx, Action<bool> onComplete) { onComplete?.Invoke(false); }
         //public virtual void OnMainPhaseAfterAttack(Player me, Card played, Player enemy, GameContext ctx, Action<bool> onComplete) { onComplete?.Invoke(false); }
-        public virtual Card OnMainPhaseAfterAttack(Player owner, Card playedCard, Player enemy, GameContext context) => null;
+        public virtual void OnMainPhaseAfterAttack(Player owner, Card playedCard, Player enemy, GameContext context, Action<Card> onComplete) { onComplete?.Invoke(null); }
         public virtual bool ShouldReplaceDraw(Player me) => false;
         public virtual void ExecuteDrawPhase(Player me, GameContext ctx, Card chosenCard) { }
 
@@ -31,4 +32,5 @@ namespace TCG_Project.Scripts.Abilities
         public virtual bool CanEllieExtraAttack(Player me, Card playedCard) => false;
         public virtual void ExecuteMainPhaseAfterAttack(Player me, Card played, Player enemy, GameContext ctx, Card chosenCard, Action onComplete = null) { }
     }
+    
 }

@@ -17,6 +17,7 @@ namespace TCG_Project.Scripts.Core
         public int Cost { get; set; }
         public string Description { get; set; }
         public string PlayCondition { get; set; } // 카드의 발동 조건
+        public string ImagePath { get; set; } // 이미지 경로
 
         // ★ 카드의 "효과 발동" 조건 (CardEffect.json의 effect_function_type 참조)
         public string EffectCondition { get; set; }
@@ -171,7 +172,8 @@ namespace TCG_Project.Scripts.Core
                 CharacterId = this.CharacterId,
                 IsStack = this.IsStack,
                 IsBattlefield = this.IsBattlefield,
-                CannotBePlayedByEffect = this.CannotBePlayedByEffect
+                CannotBePlayedByEffect = this.CannotBePlayedByEffect,
+                ImagePath = this.ImagePath
             };
 
             // ★ 효과 리스트 깊은 복사(Deep Copy) 적용

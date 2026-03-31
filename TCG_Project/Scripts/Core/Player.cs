@@ -331,7 +331,7 @@ namespace TCG_Project.Scripts.Core
             return true;
         }
 
-        // --- 전장존: 전장 카드 파괴 ---
+        // --- 전장존: 전장 카드 파괴 --- (260328 현재 미사용 중)
         public void DestroyBattlefield()
         {
             if (BattlefieldCard == null) return;
@@ -378,7 +378,7 @@ namespace TCG_Project.Scripts.Core
             ShuffleDeck();
         }
 
-        // 패에 있는 모든 카드의 사용 가능 여부를 검사하고 리스트 갱신
+        // 패에 있는 모든 카드의 사용 가능 여부를 검사하고 리스트 갱신 (안 씀)
         public void UpdatePlayableCards(GameContext context)
         {
             EnableCardList.Clear();

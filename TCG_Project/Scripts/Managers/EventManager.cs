@@ -67,9 +67,6 @@ namespace TCG_Project.Scripts.Managers
 
         // ─── 4. 플레이어 상태 변경 ─────────────────────────────────────────────
 
-        /// <summary>승점(PrizePoints) 변경. player=소유자, newValue=변경 후 값.</summary>
-        public static Action<Player, int> OnPrizeChange;
-
         /// <summary>라이프 토큰 변경. player=소유자, newValue=변경 후 값.</summary>
         public static Action<Player, int> OnLifeChange;
 

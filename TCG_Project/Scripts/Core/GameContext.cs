@@ -51,7 +51,7 @@ namespace TCG_Project.Scripts.Core
         // 예약된 효과 리스트
         public List<PendingEffect> PendingEffects { get; private set; } = new List<PendingEffect>();
 
-        public void RegisterPendingEffect(PendingEffect effect) // 후처리 효과 예약
+        public void RegisterPendingEffect(PendingEffect effect) // 후처리 효과 예약 (아직 미사용)
         {
             PendingEffects.Add(effect);
             System.Console.WriteLine($"⏰ [예약] {effect.TriggerPhase}에 효과 발동 예약됨.");
@@ -87,7 +87,7 @@ namespace TCG_Project.Scripts.Core
             variables.Clear();
         }
 
-        // 상대방이 특정 타입의 카드를 공개했는지 확인하는 유틸리티
+        // 상대방이 특정 타입의 카드를 공개했는지 확인하는 유틸리티 (S2 유나 컨셉)
         public bool DidOpponentRevealCardType(Player me, CardType targetType)
         {
             Player opponent = GetOpponent(me);

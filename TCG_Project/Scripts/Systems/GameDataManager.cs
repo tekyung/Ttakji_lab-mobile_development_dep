@@ -45,6 +45,7 @@ namespace TCG_Project.Scripts.Systems
             public bool isBattlefield;
             public string description;
             public bool cannotBePlayedByEffect; // 다른 카드를 통한 간접 사용이 가능한가?
+            public string imagePath;
             public List<RawRulebookEffect> effects;
         }
 
@@ -60,6 +61,7 @@ namespace TCG_Project.Scripts.Systems
             public string condition;
             public string description;
             public string flavorText;
+            public string imagePath;
         }
 
         private class CharacterCardWrapper
@@ -94,6 +96,7 @@ namespace TCG_Project.Scripts.Systems
             public int speed;
             public int cost;
             public string description;
+            public string imagePath;
         }
 
         private class ResourceCardWrapper
@@ -133,6 +136,7 @@ namespace TCG_Project.Scripts.Systems
                     Cost = raw.cost,
                     OriginalCost = raw.cost,
                     Description = raw.description ?? "",
+                    ImagePath = raw.imagePath ?? "",
                 };
                 AllCards[card.Id] = card;
             }
@@ -180,7 +184,8 @@ namespace TCG_Project.Scripts.Systems
                     CharacterId = raw.characterId,
                     IsStack = raw.isStack,
                     IsBattlefield = raw.isBattlefield,
-                    CannotBePlayedByEffect = raw.cannotBePlayedByEffect
+                    CannotBePlayedByEffect = raw.cannotBePlayedByEffect,
+                    ImagePath = raw.imagePath ?? "",
                 };
 
                 foreach (var eff in raw.effects ?? new List<RawRulebookEffect>())
@@ -316,7 +321,7 @@ namespace TCG_Project.Scripts.Systems
                 {
                     ["from"] = "Graveyard",
                     ["to"] = "PlayBuffer",
-                    ["mode"] = "Random",
+                    ["mode"] = "Choose",
                     ["count"] = 1,
                     ["filter"] = filter,
                     ["excludeSelf"] = true // 자기 자신 제외
@@ -403,7 +408,8 @@ namespace TCG_Project.Scripts.Systems
                 case "SearchDeckEffect":
                     p["from"] = "Deck";
                     p["to"] = "Hand";
-                    p["mode"] = "First";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "First";
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     p["shuffleAfter"] = true;
                     if (!string.IsNullOrEmpty(raw.filter)) p["filter"] = raw.filter;
@@ -412,7 +418,8 @@ namespace TCG_Project.Scripts.Systems
                 case "ResourceFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "ResourceZone";
-                    p["mode"] = "Top";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "Top";
                     p["count"] = raw.count != 0 ? raw.count : 99;  // 기본 전부
                     p["filter"] = "type:Resource";
                     break;
@@ -420,7 +427,8 @@ namespace TCG_Project.Scripts.Systems
                 case "ReturnFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "Deck";
-                    p["mode"] = "Last";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "Last";
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     p["filter"] = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
                     p["shuffleAfter"] = true;
@@ -444,7 +452,7 @@ namespace TCG_Project.Scripts.Systems
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
-                        { ["buffType"] = "Armor", ["amount"] = amt };
+                        { ["buffType"] = "BattlefieldArmor", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
                         bf.PerResourcePhaseEffect = buffEff;
@@ -455,7 +463,7 @@ namespace TCG_Project.Scripts.Systems
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
-                        { ["buffType"] = "Firepower", ["amount"] = amt };
+                        { ["buffType"] = "BattlefieldFirepower", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
                         bf.PerResourcePhaseEffect = buffEff;

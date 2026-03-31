@@ -19,7 +19,7 @@ namespace TCG_Project.Scripts.Abilities
         void OnDrawPhase(Player me, GameContext ctx, Action<bool> onComplete);
         void OnSetPhase(Player me, GameContext ctx, Action<bool> onComplete);
         void OnOpenPhaseAbandon(Player me, GameContext ctx, Action<bool> onComplete);
-        Card OnMainPhaseAfterAttack(Player owner, Card playedCard, Player enemy, GameContext context);
+        void OnMainPhaseAfterAttack(Player owner, Card playedCard, Player enemy, GameContext context, Action<Card> onComplete);
         /// <summary>드로우 페이즈: 일반 드로우 대신 이 능력으로 대체할지.</summary>
         bool ShouldReplaceDraw(Player me);
 

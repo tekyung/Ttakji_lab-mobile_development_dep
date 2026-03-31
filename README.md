@@ -286,3 +286,41 @@ RulebookCards.json 의 경로를 Assets/Resources/GameData 로 변경
 스택 발동 관련 버그 수정 (스택이 상대의 자해 데미지에도 터지는 버그 수정)
 
 QA 에서 쉽게 상황을 테스트할 게임 상태 주입 로직 생성. (ConsoleRunner, BattleManager 덱 세팅 부분의 주석 참고)
+
+
+## 26.03.22 진행사항
+
+03.21 일자에 M1 에 CardManual.md 파일 올라갔습니다
+
+Assets 폴더 안에 TCG_Project 폴더 옮겨놨습니다
+
+json 파일 4개도 Assets/Resources/GameData 로 경로 바꿔놨고
+
+카드 이미지 경로는 임시로  다음처럼 설정했습니다 (01 이 캐릭터, 02~11 이 해당 테마 카드)
+
+
+GameDesign/card_image/ELLI/ELLI-01.png
+
+GameDesign/card_image/VERONICA/VERO-01.png 
+
+GameDesign/card_image/DAINA/DAIN-01.png
+
+GameDesign/card_image/SONIA/SONI-01.png
+
+
+## 26.03.28 진행사항
+
+유니티에서 스택이 콜백되지 않아 게임이 무한 대기 상태로 추정, 일정 시간 대기 후 자동으로 콜백이 실행되도록 임시 조치
+
+
+## 26.03.31 진행사항
+
+전반적인 로직에 타임아웃 10초 - 이후 자동 콜백 실행 로직 추가 (스택 발동, 세트 카드 선택 등 유저 입력 대기 상황에서)
+
+모든 용병, 카드 효과의 콜백 대기 상황에 타임아웃 로직 적용 완료, 타임아웃 발생 시 콘솔에 "시간 초과 - 자동으로 선택이 이루어집니다" 메시지 출력
+
+유니티의 C# 9.0 버전 지원 문제로 일부 최신 문법(예: 레코드 타입, 패턴 매칭 등)을 사용하지 않고 호환되는 방식으로 코드 수정 완료
+
+Utils 폴더에 AsyncTimeout.cs 파일 추가 - 비동기 메서드에 타임아웃 기능을 제공하는 유틸리티 클래스
+
+기타 버그 수정 완료

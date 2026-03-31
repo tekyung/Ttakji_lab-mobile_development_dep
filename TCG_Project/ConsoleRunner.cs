@@ -45,22 +45,35 @@ namespace TCG_Project
             EventManager.OnMatchDraw += OnMatchDrawLog;
 
 
-            Console.WriteLine("=== 콘솔 시뮬레이터 (룰북 6페이즈 / 3판 2선승) 시작 ===");
+            Console.WriteLine("=== 콘솔 시뮬레이터 (단판제) 시작 ===");
 
             // 2. 데이터 로드 (매치 전체에서 1회)
-            GameRules.LoadRules("./Data/CommonConfig.json");
+            //GameRules.LoadRules("../Resources/GameData/CommonConfig.json");
+            GameRules.LoadRules("./Data/CommonConfig.json"); // 예비 경로
             _dataManager = new GameDataManager();
-            _dataManager.LoadRulebookCards("../Assets/Resources/GameData");
-            // _dataManager.LoadRulebookCards("./Data"); // 예비 경로
-            _dataManager.LoadCharacterCards("./Data");
-            _dataManager.LoadResourceCards("./Data");
+            //_dataManager.LoadRulebookCards("../Resources/GameData");
+            _dataManager.LoadRulebookCards("./Data"); // 예비 경로
+            //_dataManager.LoadCharacterCards("../Resources/GameData");
+            _dataManager.LoadCharacterCards("./Data"); // 예비 경로
+            //_dataManager.LoadResourceCards("../Resources/GameData");
+            _dataManager.LoadResourceCards("./Data"); // 예비 경로
 
             // 3. 플레이어 객체 생성 (이름만 결정, 게임 간 재사용)
             Player p1 = new Player { Name = "Bot_Red" };
             Player p2 = new Player { Name = "Bot_Blue" };
 
             // 4. 매치 루프
-            var match = new MatchManager(gamesToWin: 2, maxGames: 3);
+            int MaxGame = 3;
+            int PlayToWin = 2;
+
+            if (GameRules.BotSingleGame == 1)
+            {
+                MaxGame = 1;
+                PlayToWin = 1;
+            }
+
+            var match = new MatchManager(gamesToWin: PlayToWin, maxGames: MaxGame);
+            // var match = new MatchManager(gamesToWin: 2, maxGames: 3);
 
             while (!match.IsMatchOver())
             {
@@ -122,35 +135,35 @@ namespace TCG_Project
             // 10개를 적으면 정상적인 20장 덱이 되고, 적게 적으면 미니 덱이 됩니다.
             // ==============================================================
             string[] p1TestIds = // BotRed : 엘리 + 다이나
-            [
+            {
                 "ELLI-02", // 퀵 드로우
-                "ELLI-03", // 수류탄 투척
-                "ELLI-04", // 미니건 난사
+                // "ELLI-03", // 수류탄 투척
+                // "ELLI-04", // 미니건 난사
                 "ELLI-05", // 준비된 방어선
                 "ELLI-06", // 격추 시스템
                 "ELLI-07", // 카모플라쥬
 
-                "DAIN-02", // 함포 준비, 발사
+                // "DAIN-02", // 함포 준비, 발사
                 "DAIN-03", // 미사일 발사
                 "DAIN-07", // 강도 테스트
-                "DAIN-09", // 리벤지
+                "DAIN-10", // 기뢰
                 "DAIN-11", // 조선소
                         // 필요시 여기에 ID를 더 추가하세요.
-            ];
+            };
 
             string[] p2TestIds = // BorBlue : 베로니카 + 소니아
             {
                 "VERO-02", // 숙청
-                "VERO-03", // 계획대로
+                // "VERO-03", // 계획대로
                 "VERO-05", // 요새화
-                "VERO-07", // 시위 해산
+                // "VERO-07", // 시위 해산
                 "VERO-11", // 체크메이트
 
                 "SONI-02", // 빵야!
-                "SONI-03", // 내 선물이야 ♬
+                // "SONI-03", // 내 선물이야 ♬
                 "SONI-05", // 곡예 비행
-                "SONI-06", // 엔진 예열
-                "SONI-07", // 마하 10
+                "SONI-09", // 공격적인 전술
+                "SONI-10", // 신재생에너지
                 "SONI-11", // 노을지는 활주로
                         // 필요시 여기에 ID를 더 추가하세요.
             };
@@ -183,12 +196,12 @@ namespace TCG_Project
             /* ==============================================================
             // ★ QA 인젝션 테스트: 게임 시작하자마자 Bot_Blue 스택존에 방어 카드 3장 수동 장전
             // ==============================================================
-            InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
-            InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
-            InjectTestCard(p2, "VERO-05", ZoneType.StackZone); // 요새화
+            InjectTestCard(p2, "SONI-10", ZoneType.Graveyard); // 신재생에너지
+            InjectTestCard(p2, "SONI-09", ZoneType.Graveyard); // 공격적인 전술
+            // InjectTestCard(p2, "VERO-05", ZoneType.StackZone); // 요새화
             
             // Bot_Red가 바로 함포 준비를 쏠 수 있게 패에 강제 주입
-            InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
+            InjectTestCard(p2, "SONI-10", ZoneType.Hand);      // 신재생에너지
             // ============================================================== */
 
             EventManager.OnLogMessage?.Invoke($"\n[초기 상태]");
@@ -320,7 +333,45 @@ namespace TCG_Project
             EventManager.OnLogMessage?.Invoke($"{p2.Name} 패: {p2.Hand.Count}장 | {string.Join(", ", p2.Hand.Select(c => c.Name))}");
         }
 
-        // 페이즈 3: 세트 페이즈 — 양측 동시에 패에서 카드 1장을 뒷면으로 세트존에 놓음
+        // ─── 페이즈 3: 세트 페이즈 (동시 처리 로직 검증용) ──────────────────────────
+        private static void ExecuteSetPhase(Player p1, Player p2, int turn)
+        {
+            EventManager.OnSetPhase?.Invoke("양측", turn);
+            EventManager.OnLogMessage?.Invoke("[ 세트 페이즈 ]");
+
+            // 1. 세트 전 능력 동시 처리 (소니아 등)
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(p1))
+            {
+                if (ability.CanUse(p1, context)) ability.OnSetPhase(p1, context, _ => { });
+            }
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(p2))
+            {
+                if (ability.CanUse(p2, context)) ability.OnSetPhase(p2, context, _ => { });
+            }
+
+            // 2. 수집(Gather): 무엇을 낼지 '결정'만 하고 아직 필드에 깔지 않음!
+            Card p1Decision = GetBotSetCardDecision(p1);
+            Card p2Decision = GetBotSetCardDecision(p2);
+
+            // 3. 일괄 실행(Execute): 결정된 카드를 동시에 세트존에 배치
+            if (p1Decision != null) p1.SetCard(p1Decision);
+            if (p2Decision != null) p2.SetCard(p2Decision);
+
+            EventManager.OnLogMessage?.Invoke($"{p1.Name} 세트존: {(p1.SetZoneCard != null ? "세트됨" : "없음")}");
+            EventManager.OnLogMessage?.Invoke($"{p2.Name} 세트존: {(p2.SetZoneCard != null ? "세트됨" : "없음")}");
+        }
+
+        // 헬퍼: 봇이 세트할 카드를 고르기만 하고 반환함
+        private static Card GetBotSetCardDecision(Player p)
+        {
+            if (p.Hand.Count == 0) return null;
+
+            var affordableCards = p.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, p) <= p.ResourceZone.Count).ToList();
+            var candidates = affordableCards.Count > 0 ? affordableCards : p.Hand;
+            return candidates.OrderBy(c => System.Guid.NewGuid()).FirstOrDefault();
+        }
+
+        /* 페이즈 3: 세트 페이즈 — 양측 동시에 패에서 카드 1장을 뒷면으로 세트존에 놓음
         private static void ExecuteSetPhase(Player p1, Player p2, int turn)
         {
             EventManager.OnSetPhase?.Invoke("양측", turn);
@@ -398,7 +449,61 @@ namespace TCG_Project
                 p.SetCard(candidate);
         }*/
 
-        // 페이즈 4: 오픈 페이즈 — 양측 동시에 세트 카드를 공개 or 폐기 선택
+        // ─── 페이즈 4: 오픈 페이즈 (동시 처리 로직 검증용) ──────────────────────────
+        private static void ExecuteOpenPhase(Player p1, Player p2, int turn)
+        {
+            EventManager.OnOpenPhase?.Invoke("양측", turn);
+            EventManager.OnLogMessage?.Invoke("[ 오픈 페이즈 ]");
+
+            context.ClearOpenPhaseStates();
+
+            // 1. 수집(Gather): 오픈할지 폐기할지 '결정'만 함
+            OpenPhaseChoice p1Choice = GetBotOpenChoiceDecision(p1);
+            OpenPhaseChoice p2Choice = GetBotOpenChoiceDecision(p2);
+
+            // 2. 일괄 실행(Execute): 결정된 행동을 동시에 적용
+            _p1RevealedCard = ApplyOpenChoice(p1, p1Choice);
+            context.OpenPhaseStates[p1.Name] = new PlayerOpenPhaseState { HasOpened = (_p1RevealedCard != null), RevealedCard = _p1RevealedCard };
+
+            _p2RevealedCard = ApplyOpenChoice(p2, p2Choice);
+            context.OpenPhaseStates[p2.Name] = new PlayerOpenPhaseState { HasOpened = (_p2RevealedCard != null), RevealedCard = _p2RevealedCard };
+        }
+
+        // 헬퍼: 봇이 오픈/폐기 여부를 결정만 함
+        private static OpenPhaseChoice GetBotOpenChoiceDecision(Player p)
+        {
+            if (p.SetZoneCard == null) return OpenPhaseChoice.Abandon;
+
+            int effectiveCost = GameLogicHelpers.GetEffectiveCost(p.SetZoneCard, p);
+            return (effectiveCost == 0 || p.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
+        }
+
+        // 헬퍼: 수집된 결정을 실제로 집행함
+        private static Card ApplyOpenChoice(Player player, OpenPhaseChoice choice)
+        {
+            if (player.SetZoneCard == null) return null;
+
+            if (choice == OpenPhaseChoice.Abandon)
+            {
+                int effectiveCost = GameLogicHelpers.GetEffectiveCost(player.SetZoneCard, player);
+                EventManager.OnLogMessage?.Invoke($"{player.Name}: 카드 [{player.SetZoneCard.Name}] → 폐기 선택 / 코스트 필요: {effectiveCost} / 자원존: {player.GetResourceCount()}");
+
+                player.AbandonSetCard();
+                GameLogicHelpers.DrawCards(player, 1, context);
+
+                foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
+                {
+                    if (ability.CanUse(player, context)) ability.OnOpenPhaseAbandon(player, context, _ => { });
+                }
+                return null;
+            }
+            else
+            {
+                return player.RevealSetCard();
+            }
+        }
+
+        /* 페이즈 4: 오픈 페이즈 — 양측 동시에 세트 카드를 공개 or 폐기 선택
         private static void ExecuteOpenPhase(Player p1, Player p2, int turn)
         {
             EventManager.OnOpenPhase?.Invoke("양측", turn);
@@ -444,7 +549,7 @@ namespace TCG_Project
 
             // 공개 선택
             return p.RevealSetCard();
-        }
+        }*/
 
         // 페이즈 5: 메인 페이즈 — 스피드 순서로 공개된 카드 효과 해결 (SpeedResolver 사용)
         private static void ExecuteMainPhase(Player p1, Player p2, int turn)
@@ -549,14 +654,24 @@ namespace TCG_Project
                         // 카드가 성공적으로 발동한 직후, 엘리 능력 체크
                         foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
                         {
-                            // 캐릭터 능력이 큐에 넣고 싶은 후속 카드를 반환하면
+                            bool abilityDone = false;
+                            ability.OnMainPhaseAfterAttack(player, card, enemy, context, followUpCard =>
+                            {
+                                if (followUpCard != null)
+                                {
+                                    pendingQueue.Add((player, enemy, followUpCard));
+                                }
+                                abilityDone = true;
+                            });
+
+                            /* 캐릭터 능력이 큐에 넣고 싶은 후속 카드를 반환하면
                             Card followUpCard = ability.OnMainPhaseAfterAttack(player, card, enemy, context);
 
                             if (followUpCard != null)
                             {
                                 // 큐에 밀어넣음 -> 다음 while 루프에서 스피드 비교 후 알아서 발동됨
                                 pendingQueue.Add((player, enemy, followUpCard));
-                            }
+                            }*/
                         }
                     }
                 } // -- 동시 그룹 1회 처리 완료 --
@@ -740,6 +855,99 @@ namespace TCG_Project
 
         /// <summary>
         /// 스택 발동: stackOwner가 스택 카드를 보유 중이고 상대 카드에 반응할 수 있으면 봇이 자동 발동.
+        /// (수집 -> 강제 횟수 계산 -> 순차 발동 파이프라인 적용)
+        /// </summary>
+        private static void HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
+        {
+            // 스택 발동 조건: 스택존에 카드가 있고, 무적 상태가 아니어야 함
+            if (stackOwner.StackZone.Count == 0 || stackOwner.IsInvincible) return;
+
+            int incomingHits = 0;
+            bool isPiercingAttack = false;
+
+            // 1. 공격 카드의 타격 횟수 스캔
+            foreach (var effect in playedCard.Effects)
+            {
+                if (effect is DamageEffect dmgEffect)
+                {
+                    // 자해(Self) 데미지는 방어할 필요가 없으므로 타격 횟수에서 제외
+                    if (!dmgEffect.TargetSelf)
+                    {
+                        incomingHits += dmgEffect.Times;
+                        if (dmgEffect.isPiercing) isPiercingAttack = true;
+                    }
+                }
+            }
+
+            // 데미지가 없는 카드라면 스택을 아낍니다.
+            if (incomingHits == 0) return;
+
+            // 2. 발동 "가능한" 방어 카드 모두 추리기 (수집)
+            List<Card> validStackCards = new List<Card>();
+            foreach (var stackCard in stackOwner.StackZone)
+            {
+                bool canBlock = false;
+                if (stackCard.Type == CardType.Defense || stackCard.Type == CardType.Support)
+                {
+                    foreach (var effect in stackCard.Effects)
+                    {
+                        if (effect is BuffEffect buffEffect)
+                        {
+                            if (isPiercingAttack)
+                            {
+                                if (buffEffect.TypeOfBuff == BuffType.SuperArmor || buffEffect.TypeOfBuff == BuffType.Invincible)
+                                    canBlock = true;
+                            }
+                            else
+                            {
+                                if (buffEffect.TypeOfBuff == BuffType.Armor || buffEffect.TypeOfBuff == BuffType.SuperArmor || buffEffect.TypeOfBuff == BuffType.Invincible)
+                                    canBlock = true;
+                            }
+                        }
+                    }
+                }
+                if (canBlock) validStackCards.Add(stackCard);
+            }
+
+            // 막을 수 있는 카드가 하나도 없다면 종료
+            if (validStackCards.Count == 0) return;
+
+            // 3. 강제 발동해야 할 횟수 계산 
+            // (유니티 전용 Mathf.Min 대신 순수 C#의 System.Math.Min 사용)
+            int requiredCount = System.Math.Min(incomingHits, validStackCards.Count);
+
+            // 4. 대상 선택 (ConsoleRunner는 전원 봇이므로 무조건 앞에서부터 강제 선택)
+            List<Card> selectedCards = validStackCards.Take(requiredCount).ToList();
+
+            // 5. 선택된 카드들을 순서대로 발동 (실행)
+            Player originalActive = context.ActivePlayer;
+            Player originalTarget = context.TargetPlayer;
+
+            foreach (var stackCard in selectedCards)
+            {
+                context.ActivePlayer = stackOwner;
+                context.TargetPlayer = cardPlayer;
+
+                stackOwner.PlayingCard = stackCard;
+                EventManager.OnLogMessage?.Invoke($"{stackOwner.Name}: [{stackCard.Name}] 스택 발동! (← 상대: [{playedCard.Name}])");
+
+                bool done = false;
+                context.LastEffectSucceeded = true;
+
+                // 콘솔 환경은 연출 대기가 없으므로 콜백이 즉시 실행됩니다.
+                stackCard.Play(context, () => done = true, isStackTrigger: true);
+
+                stackOwner.PlayingCard = null;
+                stackOwner.UseAndDiscardStack(stackCard);
+            }
+
+            // ★ 상태 복구 (State Restore)
+            context.ActivePlayer = originalActive;
+            context.TargetPlayer = originalTarget;
+        }
+
+        /* <summary>
+        /// 스택 발동: stackOwner가 스택 카드를 보유 중이고 상대 카드에 반응할 수 있으면 봇이 자동 발동.
         /// </summary>
         private static void HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
         {
@@ -753,7 +961,7 @@ namespace TCG_Project
             // 공격 카드의 효과를 분석하여 타격 횟수와 관통 여부를 계산합니다.
             foreach (var effect in playedCard.Effects)
             {
-                
+
                 if (effect is DamageEffect dmgEffect)
                 {
                     // ★ 피아식별 로직 추가!
@@ -834,7 +1042,7 @@ namespace TCG_Project
             // ★ 상태 복구 (State Restore)
             context.ActivePlayer = originalActive;
             context.TargetPlayer = originalTarget;
-        }
+        }*/
 
         /// <summary>
         /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
