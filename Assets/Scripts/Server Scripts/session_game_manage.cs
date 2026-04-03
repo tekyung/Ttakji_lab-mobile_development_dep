@@ -141,16 +141,30 @@ public class session_game_manage : MonoBehaviour
             $"myResZone={myResourceCount}");
     }
 
-    [ContextMenu("Test/Set First Hand Card")]
     public void Test_RequestSetFirstHandCard()
     {
         Test_RequestSetHandCardByIndex(0);
     }
 
-    [ContextMenu("Test/Set Second Hand Card")]
     public void Test_RequestSetSecondHandCard()
     {
         Test_RequestSetHandCardByIndex(1);
+    }
+    public void Test_RequestSetThirdHandCard()
+    {
+        Test_RequestSetHandCardByIndex(2);
+    }
+    public void Test_RequestSetFourthHandCard()
+    {
+        Test_RequestSetHandCardByIndex(3);
+    }
+    public void Test_RequestSetFifthHandCard()
+    {
+        Test_RequestSetHandCardByIndex(4);
+    }
+    public void Test_RequestSetSixthHandCard()
+    {
+        Test_RequestSetHandCardByIndex(5);
     }
 
     public void Test_RequestSetHandCardByIndex(int handIndex)
@@ -635,6 +649,42 @@ public class session_game_manage : MonoBehaviour
         Debug.Log($"[클라:{myRole}] CardPick 응답 전송 완료 requestId={requestId}");
     }
 
+    public RequireCardPickNotification GetPendingCardPickNotification() => pendingCardPickNotification;
+
+    public void SubmitCardPickFromUI(string[] pickedInstanceIds)
+    {
+        if (pendingCardPickNotification == null)
+        {
+            Debug.LogWarning("[session_game_manage] 대기 중인 CardPick이 없습니다.");
+            return;
+        }
+
+        int required = pendingCardPickNotification.RequiredCount;
+        if (pickedInstanceIds == null || pickedInstanceIds.Length != required)
+        {
+            Debug.LogWarning(
+                $"[session_game_manage] 선택 장수 불일치. required={required}, actual={pickedInstanceIds?.Length ?? 0}");
+            return;
+        }
+
+        var allowed = new HashSet<string>(pendingCardPickNotification.PresentedCardInstanceIds ?? Array.Empty<string>());
+        foreach (string id in pickedInstanceIds)
+        {
+            if (string.IsNullOrEmpty(id) || !allowed.Contains(id))
+            {
+                Debug.LogWarning($"[session_game_manage] 후보에 없는 instanceId: {id}");
+                return;
+            }
+        }
+
+        SendCardPickResponse(pendingCardPickNotification.RequestId, pickedInstanceIds);
+    }
+
+    public void OnCardPickConfirmDefaultFromUI()
+    {
+        SendPendingCardPickResponse(0);
+    }
+
     public async void SendCardChoiceResponse(string requestId, string zone, string[] pickedCardInstanceIds)
     {
         Debug.Log(
@@ -784,8 +834,9 @@ public class session_game_manage : MonoBehaviour
         yield return new WaitForSeconds(0.5f); // 덱이 다 올라올 때까지 잠깐 대기
 
         // 서버 로직 키는 고정(HOST/GUEST)이어야 검증/동기화가 안전합니다.
-        Player p1 = new Player { Name = "HOST" };
-        Player p2 = new Player { Name = "GUEST" };
+       
+        Player p1 = new Player { Name = "HOST", Type = UserType.Human };
+        Player p2 = new Player { Name = "GUEST", Type = UserType.Human };
 
         // ConsoleRunner와 동일한 방식으로 카드 데이터를 로드해 덱을 생성합니다.
         GameDataManager dataManager = BuildServerDataManager();

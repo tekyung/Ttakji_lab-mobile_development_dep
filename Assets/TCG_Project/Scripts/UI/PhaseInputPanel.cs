@@ -114,13 +114,13 @@ namespace TCG_Project.Scripts.UI
             if (costText != null)
                 costText.text = canAfford
                     ? $"코스트: {effectiveCost}  (지불 가능)"
-                    : $"코스트: {effectiveCost}  (코스트 부족)";
+                    : $"코스트: {effectiveCost}  (부족 시 메인에서 효과 없이 폐기)";
 
             openButton?.onClick.RemoveAllListeners();
             abandonButton?.onClick.RemoveAllListeners();
 
-            // 코스트 부족하면 공개 버튼 비활성화
-            if (openButton != null) openButton.interactable = canAfford;
+            // 룰: 오픈 선언은 가능. 코스트 미달은 메인 페이즈 지불 단계에서 폐기 처리.
+            if (openButton != null) openButton.interactable = true;
 
             openButton?.onClick.AddListener(() => OnOpenChoice(OpenPhaseChoice.Open));
             abandonButton?.onClick.AddListener(() => OnOpenChoice(OpenPhaseChoice.Abandon));
