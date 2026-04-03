@@ -474,8 +474,8 @@ namespace TCG_Project
         {
             if (p.SetZoneCard == null) return OpenPhaseChoice.Abandon;
 
-            // 룰: 오픈 선언은 코스트와 무관(메인에서 지불 실패 시 폐기).
-            return OpenPhaseChoice.Open;
+            int effectiveCost = GameLogicHelpers.GetEffectiveCost(p.SetZoneCard, p);
+            return (effectiveCost == 0 || p.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
         }
 
         // 헬퍼: 수집된 결정을 실제로 집행함

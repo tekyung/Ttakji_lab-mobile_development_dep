@@ -57,8 +57,6 @@ namespace TCG_Project.Scripts.Systems
         // --- 룰북 신규 룰 ---
         public static int LifeTokens => GetValue("life_tokens", 5);
         public static int ResourceDeckCount => GetValue("resource_deck_count", 15);
-
-        public static int MaxTurnForDrawRule => GetValue("max_turn_for_draw", 20);
     }
     
     // JSON 구조에 맞춘 래퍼 클래스

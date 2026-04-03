@@ -146,19 +146,18 @@ namespace ServerScripts.EventScripts
         {
             if (!PhaseCheck(subject, context, GamePhase.OpenPhase, out error, out Player p)) return false;
 
-            if (p.SetZoneCard == null)
+            else if (p.SetZoneCard == null)
             {
                 error = "세트존에 카드가 없어서 공개/폐기를 선택할 수 없습니다.";
                 return false;
             }
 
-            if (choice != OpenPhaseChoice.Open && choice != OpenPhaseChoice.Abandon)
+            else if (choice != OpenPhaseChoice.Open && choice != OpenPhaseChoice.Abandon)
             {
                 error = "유효하지 않은 선택입니다. (Open 또는 Abandon만 가능)";
                 return false;
             }
 
-            error = null;
             return true;
         }
 
@@ -259,11 +258,11 @@ namespace ServerScripts.EventScripts
                 error = "GameDraw 실패: 이미 종료된 게임에서 다시 GameDraw를 호출했습니다.";
                 return false;
             }
-            // 5) 무승부 조건 검사 (룰 JSON max_turn_for_draw, 기본 GameRules.MaxTurnForDrawRule)
-            int maxTurn = 20;
-            if (turn < maxTurn)
+            // 5) 무승부 조건 검사
+            int MaxTurn = 20;
+            if (turn < MaxTurn)
             {
-                error = $"GameDraw 실패: 무승부 조건(최대 턴 {maxTurn})을 만족하지 않았습니다. 현재 턴: {turn}";
+                error = $"GameDraw 실패: 무승부 조건(최대 턴 {MaxTurn})을 만족하지 않았습니다. 현재 턴: {turn}";
                 return false;
             }
             error = null;
@@ -551,12 +550,6 @@ namespace ServerScripts.EventScripts
             if (context == null || player == null) { error = "게임 상태나 플레이어 정보가 유효하지 않습니다."; return false; }
             if (context.CurrentPhase != GamePhase.OpenPhase) { error = "현재 오픈 페이즈가 아닙니다!"; return false; }
 
-            if (player.SetZoneCard == null)
-            {
-                error = "세트존에 카드가 없습니다.";
-                return false;
-            }
-
             // 유저가 다른 카드를 오픈하겠다고 조작했는지 검사
             if (player.SetZoneCard != setCard)
             {
@@ -564,8 +557,16 @@ namespace ServerScripts.EventScripts
                 return false;
             }
 
-            // 공개(Open)는 코스트와 무관하게 선언 가능. 코스트 부족은 메인 페이즈 지불 단계에서 폐기 처리(룰북).
-            if (choice != OpenPhaseChoice.Open && choice != OpenPhaseChoice.Abandon)
+            if (choice == OpenPhaseChoice.Open)
+            {
+                // 공개하려면 비용(effectiveCost)을 낼 수 있는지 확인
+                if (!player.CanAfford(effectiveCost))
+                {
+                    error = $"자원이 부족하여 카드를 공개할 수 없습니다. (필요: {effectiveCost})";
+                    return false;
+                }
+            }
+            else if (choice != OpenPhaseChoice.Abandon)
             {
                 error = "유효하지 않은 선택입니다. (Open 또는 Abandon만 가능)";
                 return false;
@@ -606,7 +607,6 @@ namespace ServerScripts.EventScripts
         {
             if (context == null || player == null) { error = "게임 상태나 플레이어 정보가 유효하지 않습니다."; return false; }
             if (pickedCards == null) { error = "선택된 카드 목록이 없습니다."; return false; }
-            if (presentedCards == null) { error = "제시된 카드 목록이 없습니다."; return false; }
 
             // 정해진 개수(count)보다 많이 골랐는지 확인 (예외: 제시된 카드가 요구량보다 적을 땐 최대치까지만)
             int maxAllowedPick = Math.Min(count, presentedCards.Count);

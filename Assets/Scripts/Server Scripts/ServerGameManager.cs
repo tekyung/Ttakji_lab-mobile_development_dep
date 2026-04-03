@@ -19,9 +19,10 @@ public class ServerGameManager : MonoBehaviour
 
     public int CurrentTurn = 1;
 
-    // 세트 페이즈: 네트워크 응답을 BattleManager식 콜백으로 연결
-    private readonly Dictionary<string, Action<Card>> _pendingSetPhaseCallbacks = new Dictionary<string, Action<Card>>();
+    // 유저의 입력을 기다리기 위한 대기 상태 보관소
+    private Dictionary<string, Card> setPhaseChoices = new Dictionary<string, Card>();
     private int openPhaseResponseCount = 0;
+    private bool _isFinalizingSetPhase = false;
     private bool _isFinalizingOpenPhase = false;
 
     // 오픈 페이즈에서 공개한 카드를 메인 페이즈까지 전달
@@ -33,6 +34,8 @@ public class ServerGameManager : MonoBehaviour
     private string _pendingStackResponder = null;
     private string _pendingStackCardInstanceId = null;
     private string _pendingOpponentCardInstanceId = null;
+    private bool _pendingStackChoiceReceived = false;
+    private bool _pendingStackChoiceUse = false;
     private MatchManager _matchManager;
     private Player _hostPlayer;
     private Player _guestPlayer;
@@ -40,6 +43,7 @@ public class ServerGameManager : MonoBehaviour
     private List<Card> _hostResourceDeckTemplate = new List<Card>();
     private List<Card> _guestMainDeckTemplate = new List<Card>();
     private List<Card> _guestResourceDeckTemplate = new List<Card>();
+    private bool _isMatchOver = false;
     private bool _isResolvingGameOver = false;
     private bool _hasRecordedCurrentGameResult = false;
     private int _currentGameIndex = 0;
@@ -114,6 +118,7 @@ public class ServerGameManager : MonoBehaviour
         _hostPlayer = host;
         _guestPlayer = guest;
         _matchManager = new MatchManager(gamesToWin: 2, maxGames: 3);
+        _isMatchOver = false;
         _currentGameIndex = 1;
 
         // 첫 게임 시작 전 덱 원본 스냅샷을 저장해 다음 게임 초기화에 재사용합니다.
@@ -151,8 +156,9 @@ public class ServerGameManager : MonoBehaviour
         _winnerRole = null;
         _resultMessage = null;
         _hasRecordedCurrentGameResult = false;
-        _pendingSetPhaseCallbacks.Clear();
+        setPhaseChoices.Clear();
         openPhaseResponseCount = 0;
+        _isFinalizingSetPhase = false;
         _isFinalizingOpenPhase = false;
         _p1RevealedCard = null;
         _p2RevealedCard = null;
@@ -172,41 +178,6 @@ public class ServerGameManager : MonoBehaviour
         // 첫 번째 턴, 자원 페이즈부터 시작!
         StartPhase(GamePhase.ResourcePhase);
     }
-    
-    private bool CheckAndHandleGameOver(Player p1, Player p2)
-    {
-        if (context.IsGameOver) return true;
-
-        bool p1Dead = p1.LifeTokens <= 0;
-        bool p2Dead = p2.LifeTokens <= 0;
-
-        if (p1Dead && p2Dead)
-        {
-            context.IsGameOver = true;
-            _winnerRole = "DRAW";
-            _resultMessage = "양측 라이프가 동시에 0이 되어 무승부입니다.";
-            EventManager.OnGameDraw?.Invoke(p1, p2, CurrentTurn); //  CurrentTurn 적용
-            return true;
-        }
-        else if (p1Dead)
-        {
-            context.IsGameOver = true;
-            _winnerRole = p2.Name;
-            _resultMessage = $"{p2.Name} 승리";
-            EventManager.OnGameSet?.Invoke(p2);
-            return true;
-        }
-        else if (p2Dead)
-        {
-            context.IsGameOver = true;
-            _winnerRole = p1.Name;
-            _resultMessage = $"{p1.Name} 승리";
-            EventManager.OnGameSet?.Invoke(p1);
-            return true;
-        }
-        return false;
-    }
-
 
     private System.Collections.IEnumerator HandleGameOverFlow(Player gameWinner, bool isDraw)
     {
@@ -229,6 +200,7 @@ public class ServerGameManager : MonoBehaviour
 
         if (_matchManager.IsMatchOver())
         {
+            _isMatchOver = true;
             Player matchWinner = _matchManager.GetMatchWinner(_hostPlayer, _guestPlayer);
             if (matchWinner != null)
             {
@@ -273,22 +245,23 @@ public class ServerGameManager : MonoBehaviour
         switch (phase)
         {
             case GamePhase.ResourcePhase:
-                ExecuteResourcePhaseRoutine();
+                ExecuteResourcePhase();
                 // ResourcePhase 결과가 반영된 board_state를 먼저 동기화한 뒤 DrawPhase로 넘어갑니다.
                 StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.DrawPhase));
                 break;
 
             case GamePhase.DrawPhase:
-                // DrawPhase 결과가 완료된 뒤 동기화 후 SetPhase로 이동합니다.
-                StartCoroutine(ExecuteDrawPhaseThenSyncAndStart(GamePhase.SetPhase));
+                ExecuteDrawPhase();
+                // DrawPhase 결과를 동기화한 뒤 SetPhase로 이동합니다.
+                StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.SetPhase));
                 break;
 
             case GamePhase.SetPhase:
-                StartCoroutine(ExecuteSetPhaseRoutine());
+                StartCoroutine(BeginSetPhaseRoutine());
                 break;
 
             case GamePhase.OpenPhase:
-                StartCoroutine(ExecuteOpenPhaseRoutine());
+                StartCoroutine(BeginOpenPhaseRoutine());
                 break;
 
             case GamePhase.MainPhase:
@@ -308,36 +281,11 @@ public class ServerGameManager : MonoBehaviour
     // ==========================================================
     //  클라이언트 응답 수신부 (EventService에서 호출됨)
     // ==========================================================
-        private void ExecuteResourcePhaseRoutine()
+
+    private System.Collections.IEnumerator BeginSetPhaseRoutine()
     {
-        Player p1 = context.Players[0]; 
-        Player p2 = context.Players[1];
-        EventManager.OnResourcePhase?.Invoke("양측", CurrentTurn); // CurrentTurn 적용
-         if (p1.BattlefieldCard != null || p2.BattlefieldCard != null)
-            {
-                EventManager.OnLogMessage?.Invoke("[ 적용 중인 전장 카드 ]");
-                EventManager.OnLogMessage?.Invoke($"  {p1.Name} 전장: {(p1.BattlefieldCard != null ? p1.BattlefieldCard.Name : "없음")}");
-                EventManager.OnLogMessage?.Invoke($"  {p2.Name} 전장: {(p2.BattlefieldCard != null ? p2.BattlefieldCard.Name : "없음")}");
-            }
-
-        p1.ApplyNextTurnBuffs();
-        p2.ApplyNextTurnBuffs();
-
-        context.ActivePlayer = p1; 
-        context.TargetPlayer = p2;
-        p1.TakeResourceCard();
-        
-        bool p1PhaseCut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context);
-        if (p1PhaseCut || context.IsGameOver) return;
-
-        context.ActivePlayer = p2; 
-        context.TargetPlayer = p1;
-        p2.TakeResourceCard();
-        GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context);
-    }
-    private System.Collections.IEnumerator ExecuteSetPhaseRoutine()
-    {
-        _pendingSetPhaseCallbacks.Clear();
+        setPhaseChoices.Clear();
+        _isFinalizingSetPhase = false;
 
         EventManager.OnSetPhase?.Invoke("양측", CurrentTurn);
 
@@ -350,32 +298,44 @@ public class ServerGameManager : MonoBehaviour
         if (context == null || context.IsGameOver || context.CurrentPhase != GamePhase.SetPhase)
             yield break;
 
-        Card p1SetCard = null;
-        Card p2SetCard = null;
-        bool p1SetDone = false;
-        bool p2SetDone = false;
-        StartCoroutine(GetSetCardChoice(context.Players[0], card => { p1SetCard = card; p1SetDone = true; }));
-        StartCoroutine(GetSetCardChoice(context.Players[1], card => { p2SetCard = card; p2SetDone = true; }));
+        EventManager.OnRequireSetPhaseAction?.Invoke(context.Players[0], context, null);
+        EventManager.OnRequireSetPhaseAction?.Invoke(context.Players[1], context, null);
         RequestBoardStateSync();
-        yield return new WaitUntil(() => (p1SetDone && p2SetDone) || context == null || context.IsGameOver);
 
-        if (context == null || context.IsGameOver || context.CurrentPhase != GamePhase.SetPhase)
+        float waitLimit = GameRules.ChooseWaitTime / 100f;
+        float timer = 0f;
+        while (context != null &&
+               !context.IsGameOver &&
+               context.CurrentPhase == GamePhase.SetPhase &&
+               !_isFinalizingSetPhase &&
+               setPhaseChoices.Count < context.Players.Count &&
+               timer < waitLimit)
+        {
+            timer += Time.deltaTime;
+            yield return null;
+        }
+
+        if (context == null || context.IsGameOver || context.CurrentPhase != GamePhase.SetPhase || _isFinalizingSetPhase)
             yield break;
 
-        if (p1SetCard != null && !context.Players[0].SetCard(p1SetCard))
-            yield break;
+        if (setPhaseChoices.Count < context.Players.Count)
+        {
+            foreach (Player player in context.Players)
+            {
+                if (setPhaseChoices.ContainsKey(player.Name)) continue;
 
-        if (p2SetCard != null && !context.Players[1].SetCard(p2SetCard))
-            yield break;
+                Card autoCard = ChooseDefaultSetCard(player);
+                setPhaseChoices[player.Name] = autoCard;
 
-        EventManager.OnLogMessage?.Invoke($"{context.Players[0].Name} 세트존: {(context.Players[0].SetZoneCard != null ? "세트됨" : "없음")}");
-        EventManager.OnLogMessage?.Invoke($"{context.Players[1].Name} 세트존: {(context.Players[1].SetZoneCard != null ? "세트됨" : "없음")}");
-        EventManager.OnLogMessage?.Invoke("[서버] 양측 세트 완료 → board_state 동기화 후 OpenPhase 진입");
-        StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.OpenPhase));
+                EventManager.OnLogMessage?.Invoke(
+                    autoCard != null
+                        ? $"[서버][SetPhase] 응답 시간 초과({waitLimit:0.##}s) player={player.Name} -> 자동 세트 {autoCard.Name}[instance={autoCard.InstanceId},data={autoCard.DataId}]"
+                        : $"[서버][SetPhase] 응답 시간 초과({waitLimit:0.##}s) player={player.Name} -> 세트할 카드 없음");
+            }
+
+            TryFinalizeSetPhase();
+        }
     }
-
-    // BattleManager.GetSetCardChoice와 동일한 이름: 플레이어별 세트 요청·응답(또는 타임아웃 자동 세트)까지.
-
 
     private System.Collections.IEnumerator CheckPreSetAbilities(Player player, Action onDone)
     {
@@ -393,109 +353,53 @@ public class ServerGameManager : MonoBehaviour
 
         onDone?.Invoke();
     }
-    private System.Collections.IEnumerator GetSetCardChoice(Player player, Action<Card> onChosen)
+
+    private Card ChooseDefaultSetCard(Player player)
     {
-        if (player == null)
-        {
-            onChosen?.Invoke(null);
-            yield break;
-        }
+        if (player == null || player.Hand.Count == 0) return null;
 
-        if (player.Hand.Count == 0)
-        {
-            onChosen?.Invoke(null);
-            yield break;
-        }
-
-        if (player.Type == UserType.Bot)
-        {
-            var affordableCards = player.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count).ToList();
-            var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
-            Card cardToSet = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
-
-            onChosen?.Invoke(cardToSet);
-            yield break;
-        }
-
-        bool done = false;
-        Card chosenCard = null;
-        bool timeOutOccurred = false;
-
-        Action<Card> pending = card =>
-        {
-            if (timeOutOccurred) return;
-            chosenCard = card;
-            done = true;
-        };
-
-        _pendingSetPhaseCallbacks[player.Name] = pending;
-        EventManager.OnRequireSetPhaseAction?.Invoke(player, context, null);
-
-        float waitLimit = GameRules.ChooseWaitTime / 100f;
-        float timer = 0f;
-        while (!done && timer < waitLimit && context != null && !context.IsGameOver && context.CurrentPhase == GamePhase.SetPhase)
-        {
-            timer += Time.deltaTime;
-            yield return null;
-        }
-
-        if (context == null || context.IsGameOver || context.CurrentPhase != GamePhase.SetPhase)
-        {
-            _pendingSetPhaseCallbacks.Remove(player.Name);
-            onChosen?.Invoke(null);
-            yield break;
-        }
-
-        if (!done)
-        {
-            timeOutOccurred = true;
-            _pendingSetPhaseCallbacks.Remove(player.Name);
-            EventManager.OnLogMessage?.Invoke("<color=red>⏳ 제한 시간 초과! 시스템이 강제로 세트 카드를 무작위 선택합니다.</color>");
-            var affordableCards = player.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count).ToList();
-            var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
-            chosenCard = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
-        }
-
-        onChosen?.Invoke(chosenCard);
-    }
-    public void OnPlayerSetActionReceived(string playerName, string cardInstanceId)
-    {
-        if (context == null || context.CurrentPhase != GamePhase.SetPhase)
-        {
-            EventManager.OnLogMessage?.Invoke($"[서버] SetPhase가 아닌 상태에서 세트 요청을 무시했습니다. ({playerName})");
-            return;
-        }
-
-        Player p = GetPlayerByName(playerName);
-        if (p == null)
-        {
-            // EventManager.OnLogMessage?.Invoke($"[서버] 세트 요청 실패: 플레이어를 찾을 수 없습니다. ({playerName})");
-            return;
-        }
-
-        if (!_pendingSetPhaseCallbacks.TryGetValue(playerName, out Action<Card> callback))
-        {
-            EventManager.OnLogMessage?.Invoke($"[서버] {playerName}의 중복 세트 요청을 무시했습니다.");
-            return;
-        }
-
-        Card pickedCard = null;
-        if (!string.IsNullOrEmpty(cardInstanceId))
-            pickedCard = p.Hand.Find(c => c.InstanceId == cardInstanceId);
-
-        if (!string.IsNullOrEmpty(cardInstanceId) && pickedCard == null)
-        {
-            EventManager.OnLogMessage?.Invoke($"[서버] 세트 요청 실패: 손패에서 카드를 찾을 수 없습니다. ({playerName}, {cardInstanceId})");
-            _pendingSetPhaseCallbacks.Remove(playerName);
-            callback?.Invoke(null);
-            return;
-        }
-
-        _pendingSetPhaseCallbacks.Remove(playerName);
-        callback?.Invoke(pickedCard);
+        var affordableCards = player.Hand
+            .Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count)
+            .ToList();
+        var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
+        return candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
     }
 
-    private System.Collections.IEnumerator ExecuteOpenPhaseRoutine()
+    private void TryFinalizeSetPhase()
+    {
+        if (context == null || context.CurrentPhase != GamePhase.SetPhase || _isFinalizingSetPhase) return;
+        if (setPhaseChoices.Count < context.Players.Count) return;
+
+        _isFinalizingSetPhase = true;
+
+        foreach (Player player in context.Players)
+        {
+            if (!setPhaseChoices.TryGetValue(player.Name, out Card finalCard))
+            {
+                EventManager.OnLogMessage?.Invoke($"[서버] 세트 확정 실패: {player.Name}의 카드 정보가 없습니다.");
+                _isFinalizingSetPhase = false;
+                return;
+            }
+
+            if (finalCard == null)
+            {
+                EventManager.OnLogMessage?.Invoke($"[서버][SetPhase] {player.Name}은 세트할 카드가 없어 이번 턴 세트를 생략합니다.");
+                continue;
+            }
+
+            bool setSucceeded = player.SetCard(finalCard);
+            if (!setSucceeded)
+            {
+                _isFinalizingSetPhase = false;
+                return;
+            }
+        }
+
+        EventManager.OnLogMessage?.Invoke("[서버] 양측 세트 완료 → board_state 동기화 후 OpenPhase 진입");
+        StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.OpenPhase));
+    }
+
+    private System.Collections.IEnumerator BeginOpenPhaseRoutine()
     {
         openPhaseResponseCount = 0;
         _isFinalizingOpenPhase = false;
@@ -569,49 +473,52 @@ public class ServerGameManager : MonoBehaviour
     }
 
     // [세트 페이즈 응답 도착]
-    
-    // [오픈 페이즈 선택 집행 헬퍼]
-    // 공개는 코스트와 무관; 지불 실패 시 메인 페이즈 ResolveMainPhaseCard에서 세트존→폐기 처리(룰북).
-    private Card ApplyOpenChoice(Player player, string choice, int effectiveCost)
+    public void OnPlayerSetActionReceived(string playerName, string cardInstanceId)
     {
-        if (player.SetZoneCard == null)
+        // EventManager.OnLogMessage?.Invoke(
+        //     $"[서버][SetPhase] 요청 수신 player={playerName}, cardInstanceId={cardInstanceId}, " +
+        //     $"phase={(context != null ? context.CurrentPhase.ToString() : "null")}, collected={setPhaseChoices.Count}/{(context != null ? context.Players.Count : 0)}");
+
+        if (context == null || context.CurrentPhase != GamePhase.SetPhase)
         {
-            EventManager.OnLogMessage?.Invoke($"[서버][OpenPhase] {player.Name}은 세트 카드가 없어 OpenPhase를 생략합니다.");
-            return null;
+            EventManager.OnLogMessage?.Invoke($"[서버] SetPhase가 아닌 상태에서 세트 요청을 무시했습니다. ({playerName})");
+            return;
         }
 
-        if (choice == "Open")
+        Player p = GetPlayerByName(playerName);
+        if (p == null)
         {
-            // OpenPhase에서는 공개 가능 여부만 판단하고,
-            // 실제 코스트 지불은 MainPhase 카드 해결 시점에 수행합니다.
-            Card revealedCard = player.RevealSetCard();
-            EventManager.OnLogMessage?.Invoke(
-                $"[서버][OpenPhase] Open 처리 완료 player={player.Name}, " +
-                $"revealed={(revealedCard != null ? $"{revealedCard.Name}[instance={revealedCard.InstanceId},data={revealedCard.DataId}]" : "null")}, " +
-                $"resourceAfter={player.ResourceZone.Count}, setAfter={(player.SetZoneCard != null ? player.SetZoneCard.InstanceId : "null")}");
-            return revealedCard;
+            // EventManager.OnLogMessage?.Invoke($"[서버] 세트 요청 실패: 플레이어를 찾을 수 없습니다. ({playerName})");
+            return;
         }
-        else
+
+        if (setPhaseChoices.ContainsKey(playerName))
         {
-            player.AbandonSetCard();
-            GameLogicHelpers.DrawCards(player, 1, context);
-
-            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
-            {
-                if (ability.CanUse(player, context))
-                {
-                    ability.OnOpenPhaseAbandon(player, context, _ => { });
-                }
-            }
-
-            EventManager.OnLogMessage?.Invoke(
-                $"[서버][OpenPhase] Abandon 처리 완료 player={player.Name}, " +
-                $"handAfter={player.Hand.Count}, graveAfter={player.Graveyard.Count}, setAfter={(player.SetZoneCard != null ? player.SetZoneCard.InstanceId : "null")}");
-
-            return null;
+            EventManager.OnLogMessage?.Invoke($"[서버] {playerName}의 중복 세트 요청을 무시했습니다.");
+            return;
         }
+
+        Card pickedCard = null;
+        if (!string.IsNullOrEmpty(cardInstanceId))
+            pickedCard = p.Hand.Find(c => c.InstanceId == cardInstanceId);
+
+        if (!string.IsNullOrEmpty(cardInstanceId) && pickedCard == null)
+        {
+            string handList = p.Hand.Count == 0
+                ? "empty"
+                : string.Join(", ", p.Hand.Select(c => $"{c.Name}[instance={c.InstanceId},data={c.DataId}]"));
+            // EventManager.OnLogMessage?.Invoke(
+            //     $"[서버] 세트 요청 실패: 손패에서 카드를 찾을 수 없습니다. ({playerName}, {cardInstanceId}) | hand={handList}");
+            return;
+        }
+
+        setPhaseChoices[playerName] = pickedCard;
+        // EventManager.OnLogMessage?.Invoke(
+        //     $"[서버] {playerName} 세트 제출 저장 완료. picked={cardInstanceId}, cardName={pickedCard.Name}, " +
+        //     $"handBeforeCommit={p.Hand.Count}, setCount={setPhaseChoices.Count}/{context.Players.Count}");
+
+        TryFinalizeSetPhase();
     }
-
     // [오픈 페이즈 응답 도착]
     public void OnPlayerOpenActionReceived(string playerName, string choice, int effectiveCost)
     {
@@ -644,7 +551,38 @@ public class ServerGameManager : MonoBehaviour
             $"setBefore={(p.SetZoneCard != null ? p.SetZoneCard.InstanceId : "null")}, " +
             $"handBefore={p.Hand.Count}, graveBefore={p.Graveyard.Count}, resourceBefore={p.ResourceZone.Count}");
 
-        Card revealedCard = ApplyOpenChoice(p, choice, effectiveCost);
+        Card revealedCard = null;
+
+        if (p.SetZoneCard == null)
+        {
+            EventManager.OnLogMessage?.Invoke($"[서버][OpenPhase] {playerName}은 세트 카드가 없어 OpenPhase를 생략합니다.");
+        }
+        else if (choice == "Open")
+        {
+            // OpenPhase에서는 공개 가능 여부만 판단하고,
+            // 실제 코스트 지불은 MainPhase 카드 해결 시점에 수행합니다.
+
+            revealedCard = p.RevealSetCard();
+            EventManager.OnLogMessage?.Invoke(
+                $"[서버][OpenPhase] Open 처리 완료 player={playerName}, " +
+                $"revealed={(revealedCard != null ? $"{revealedCard.Name}[instance={revealedCard.InstanceId},data={revealedCard.DataId}]" : "null")}, " +
+                $"resourceAfter={p.ResourceZone.Count}, setAfter={(p.SetZoneCard != null ? p.SetZoneCard.InstanceId : "null")}");
+        }
+        else // "Abandon" (폐기)
+        {
+            p.AbandonSetCard();
+            GameLogicHelpers.DrawCards(p, 1, context);
+
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(p))
+            {
+                if (ability.CanUse(p, context)) ability.OnOpenPhaseAbandon(p, context, _ => { });
+            }
+
+            EventManager.OnLogMessage?.Invoke(
+                $"[서버][OpenPhase] Abandon 처리 완료 player={playerName}, " +
+                $"handAfter={p.Hand.Count}, graveAfter={p.Graveyard.Count}, setAfter={(p.SetZoneCard != null ? p.SetZoneCard.InstanceId : "null")}");
+        }
+
         context.OpenPhaseStates[p.Name] = new PlayerOpenPhaseState { HasOpened = (revealedCard != null), RevealedCard = revealedCard };
 
         if (p == context.Players[0]) _p1RevealedCard = revealedCard;
@@ -726,12 +664,34 @@ public class ServerGameManager : MonoBehaviour
         }
     }
 
+    private void ExecuteResourcePhase()
+    {
+        Player p1 = context.Players[0]; 
+        Player p2 = context.Players[1];
+        EventManager.OnResourcePhase?.Invoke("양측", CurrentTurn); // CurrentTurn 적용
+         if (p1.BattlefieldCard != null || p2.BattlefieldCard != null)
+            {
+                EventManager.OnLogMessage?.Invoke("[ 적용 중인 전장 카드 ]");
+                EventManager.OnLogMessage?.Invoke($"  {p1.Name} 전장: {(p1.BattlefieldCard != null ? p1.BattlefieldCard.Name : "없음")}");
+                EventManager.OnLogMessage?.Invoke($"  {p2.Name} 전장: {(p2.BattlefieldCard != null ? p2.BattlefieldCard.Name : "없음")}");
+            }
 
-    // DrawPhase 로직을 코루틴으로 분리:
-    // 1) 능력 OnDrawPhase 콜백이 끝날 때까지 기다린 뒤
-    // 2) 필요한 경우 기본 드로우를 수행한 다음
-    // 3) DrawPhase 전체 완료 후 Sync를 진행하도록 합니다.
-    private System.Collections.IEnumerator ExecuteDrawPhaseRoutine()
+        p1.ApplyNextTurnBuffs();
+        p2.ApplyNextTurnBuffs();
+
+        context.ActivePlayer = p1; 
+        context.TargetPlayer = p2;
+        p1.TakeResourceCard();
+        
+        bool p1PhaseCut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context);
+        if (p1PhaseCut || context.IsGameOver) return;
+
+        context.ActivePlayer = p2; context.TargetPlayer = p1;
+        p2.TakeResourceCard();
+        GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context);
+    }
+
+    private void ExecuteDrawPhase()
     {
         Player p1 = context.Players[0];
         Player p2 = context.Players[1];
@@ -740,60 +700,39 @@ public class ServerGameManager : MonoBehaviour
         EventManager.OnLogMessage?.Invoke("[ 드로우 페이즈 ]");
 
             // 전장 주기 효과 적용 — 매 드로우 페이즈 (VERO-11 체크메이트, DAIN-11 조선소, SONI-11 노을지는 활주로)
-            context.ActivePlayer = p1; 
-            context.TargetPlayer = p2;
-            if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p1, context)) yield break;
+            context.ActivePlayer = p1; context.TargetPlayer = p2;
+            if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p1, context)) return;
 
             context.ActivePlayer = p2; context.TargetPlayer = p1;
-            if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p2, context)) yield break;
+            if (GameLogicHelpers.ApplyBattlefieldTurnEffects(p2, context)) return;
 
             // 캐릭터 능력: VERONICA(VERO-01) — 드로우 대신 덱 탑 3장 보기 → 1장 패로
-            yield return StartCoroutine(ExecuteDrawForPlayerParallel(p1, p2, () => { }));
-            yield return StartCoroutine(ExecuteDrawForPlayerParallel(p2, p1, () => { }));
+            // p1 드로우 처리
+            bool p1DrawHandled = false;
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(p1))
+            {
+                if (ability.CanUse(p1, context))
+                {
+                    ability.OnDrawPhase(p1, context, used => p1DrawHandled = used);
+                    if (p1DrawHandled) break;
+                }
+            }
+            if (!p1DrawHandled) GameLogicHelpers.DrawCards(p1, GameRules.DrawPerTurn, context); // 기본 드로우 처리
+
+            // p2 드로우 처리
+            bool p2DrawHandled = false;
+            foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(p2))
+            {
+                if (ability.CanUse(p2, context))
+                {
+                    ability.OnDrawPhase(p2, context, used => p2DrawHandled = used);
+                    if (p2DrawHandled) break;
+                }
+            }
+            if (!p2DrawHandled) GameLogicHelpers.DrawCards(p2, GameRules.DrawPerTurn, context);
 
             EventManager.OnLogMessage?.Invoke($"{p1.Name} 패: {p1.Hand.Count}장 | {string.Join(", ", p1.Hand.Select(c => c.Name))}");
             EventManager.OnLogMessage?.Invoke($"{p2.Name} 패: {p2.Hand.Count}장 | {string.Join(", ", p2.Hand.Select(c => c.Name))}");
-    }
-
-    // BattleManager의 ExecuteDrawForPlayerParallel과 같은 형태로 분리(이름만 동일).
-    // 서버에서는 context를 동시에 건드릴 위험이 있어 순차 호출로 안전하게 사용합니다.
-    private System.Collections.IEnumerator ExecuteDrawForPlayerParallel(Player player, Player enemy, Action onDone)
-    {
-        bool drawHandledByAbility = false;
-
-        foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
-        {
-            if (!ability.CanUse(player, context)) continue;
-
-            bool abilityDone = false;
-
-            context.ActivePlayer = player;
-            context.TargetPlayer = enemy;
-
-            ability.OnDrawPhase(player, context, used =>
-            {
-                drawHandledByAbility = used;
-                abilityDone = true;
-            });
-
-            yield return new WaitUntil(() => abilityDone || context == null || context.IsGameOver);
-            if (context == null || context.IsGameOver) yield break;
-            if (drawHandledByAbility) break;
-        }
-
-        if (!drawHandledByAbility)
-        {
-            GameLogicHelpers.DrawCards(player, GameRules.DrawPerTurn, context); // 기본 드로우 처리
-        }
-
-        onDone?.Invoke();
-    }
-
-    private System.Collections.IEnumerator ExecuteDrawPhaseThenSyncAndStart(GamePhase nextPhase)
-    {
-        yield return StartCoroutine(ExecuteDrawPhaseRoutine());
-        // DrawPhase 결과를 동기화한 뒤 다음 페이즈로 이동합니다.
-        yield return StartCoroutine(SyncBoardStateThenStartPhase(nextPhase));
     }
 
     private System.Collections.IEnumerator ExecuteMainPhaseRoutine()
@@ -820,8 +759,7 @@ public class ServerGameManager : MonoBehaviour
             var groups = SpeedResolver.GroupByResolutionOrder(pendingQueue);
             var currentGroup = groups[0];
 
-            foreach (var item in currentGroup) 
-                pendingQueue.Remove(item);
+            foreach (var item in currentGroup) pendingQueue.Remove(item);
 
             foreach (var (player, enemy, card) in currentGroup)
             {
@@ -851,24 +789,25 @@ public class ServerGameManager : MonoBehaviour
             $"enemyLife={enemy.LifeTokens}, enemyArmor={enemy.ArmorBonus}, enemySuperArmor={enemy.SuperArmorBonus}, " +
             $"enemyInvincible={enemy.IsInvincible}, enemyStackArmor={enemy.StackArmors.Count}, " +
             $"enemyStackSuperArmor={enemy.StackSuperArmors.Count}, enemyStackInvincible={enemy.StackInvincibilities.Count}");
-        
-        
-        if (card.Cost > 0)
-                {
-                    int effectiveCost = GameLogicHelpers.GetEffectiveCost(card, player);
-                    if (effectiveCost > 0 && !player.PayCost(effectiveCost))
-                    {
-                        EventManager.OnLogMessage?.Invoke($"{player.Name}: [{card.Name}] 코스트 지불 실패 → 효과 취소");
-                        player.ExtractCard(ZoneType.SetZone, card);
-                        player.InsertCard(ZoneType.Graveyard, card);
-                        EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
-                        yield break;
-                    }
-                    else if (effectiveCost == 0 && card.Cost > 0)
-                    {
-                        EventManager.OnLogMessage?.Invoke($"  ✨ [{card.Name}] 전장 효과로 코스트 무료 발동!");
-                    }
-                }
+
+        int effectiveCost = GameLogicHelpers.GetEffectiveCost(card, player);
+        if (effectiveCost > 0 && !player.PayCost(effectiveCost))
+        {
+            EventManager.OnLogMessage?.Invoke(
+                $"[서버][MainPhase] 코스트 지불 실패 player={player.Name}, " +
+                $"card={card.Name}[instance={card.InstanceId},data={card.DataId}], cost={effectiveCost}");
+
+            player.ExtractCard(ZoneType.SetZone, card);
+            player.InsertCard(ZoneType.Graveyard, card);
+            EventManager.OnCardMove?.Invoke(card, player, ZoneType.SetZone, player, ZoneType.Graveyard);
+            yield break;
+        }
+        else if (effectiveCost == 0 && card.Cost > 0)
+        {
+            EventManager.OnLogMessage?.Invoke(
+                $"[서버][MainPhase] 무료 발동 player={player.Name}, " +
+                $"card={card.Name}[instance={card.InstanceId},data={card.DataId}]");
+        }
 
         yield return StartCoroutine(HandleStackActivation(enemy, player, card));
 
@@ -880,7 +819,6 @@ public class ServerGameManager : MonoBehaviour
 
         card.Play(context, () => effectDone = true, isStackTrigger: false);
         yield return new WaitUntil(() => effectDone || context == null || context.IsGameOver);
-        
         player.PlayingCard = null;
 
         EventManager.OnLogMessage?.Invoke(
@@ -965,6 +903,8 @@ public class ServerGameManager : MonoBehaviour
 
         if (incomingHits == 0) yield break;
 
+        Player originalActive = context.ActivePlayer;
+        Player originalTarget = context.TargetPlayer;
         List<Card> validStackCards = new List<Card>();
         foreach (var stackCard in stackOwner.StackZone)
         {
@@ -1037,9 +977,6 @@ public class ServerGameManager : MonoBehaviour
             }
         }
 
-        Player originalActive = context.ActivePlayer;
-        Player originalTarget = context.TargetPlayer;
-
         foreach (var stackCard in selectedCards)
         {
             if (stackCard == null || !stackOwner.StackZone.Contains(stackCard)) continue;
@@ -1048,19 +985,17 @@ public class ServerGameManager : MonoBehaviour
             context.TargetPlayer = cardPlayer;
 
             stackOwner.PlayingCard = stackCard;
+            context.LastEffectSucceeded = true;
 
             EventManager.OnLogMessage?.Invoke(
                 $"[서버][Stack] {stackOwner.Name}: [{stackCard.Name}] 스택 발동! (<= [{playedCard.Name}])");
 
             bool done = false;
-            context.LastEffectSucceeded = true;
-
             stackCard.Play(context, () => done = true, isStackTrigger: true);
             yield return new WaitUntil(() => done || context == null || context.IsGameOver);
-            
             stackOwner.PlayingCard = null;
+
             stackOwner.UseAndDiscardStack(stackCard);
-            
             EventManager.OnCardMove?.Invoke(stackCard, stackOwner, ZoneType.StackZone, stackOwner, ZoneType.Graveyard);
             yield return StartCoroutine(SyncBoardStateAndWait());
         }
@@ -1096,6 +1031,9 @@ public class ServerGameManager : MonoBehaviour
                 $"actualStack={stackCardInstanceId}, expectedOpponent={_pendingOpponentCardInstanceId}, actualOpponent={opponentCardInstanceId}");
             return;
         }
+
+        _pendingStackChoiceUse = isUsingStack;
+        _pendingStackChoiceReceived = true;
     }
 
     private void ClearPendingStackResponse()
@@ -1104,6 +1042,8 @@ public class ServerGameManager : MonoBehaviour
         _pendingStackResponder = null;
         _pendingStackCardInstanceId = null;
         _pendingOpponentCardInstanceId = null;
+        _pendingStackChoiceReceived = false;
+        _pendingStackChoiceUse = false;
     }
 
     private void ExecuteEndPhase()
@@ -1165,7 +1105,39 @@ public class ServerGameManager : MonoBehaviour
     // ==========================================================
     // 유틸리티 도구들
     // ==========================================================
-    
+    private bool CheckAndHandleGameOver(Player p1, Player p2)
+    {
+        if (context.IsGameOver) return true;
+
+        bool p1Dead = p1.LifeTokens <= 0;
+        bool p2Dead = p2.LifeTokens <= 0;
+
+        if (p1Dead && p2Dead)
+        {
+            context.IsGameOver = true;
+            _winnerRole = "DRAW";
+            _resultMessage = "양측 라이프가 동시에 0이 되어 무승부입니다.";
+            EventManager.OnGameDraw?.Invoke(p1, p2, CurrentTurn); //  CurrentTurn 적용
+            return true;
+        }
+        else if (p1Dead)
+        {
+            context.IsGameOver = true;
+            _winnerRole = p2.Name;
+            _resultMessage = $"{p2.Name} 승리";
+            EventManager.OnGameSet?.Invoke(p2);
+            return true;
+        }
+        else if (p2Dead)
+        {
+            context.IsGameOver = true;
+            _winnerRole = p1.Name;
+            _resultMessage = $"{p1.Name} 승리";
+            EventManager.OnGameSet?.Invoke(p1);
+            return true;
+        }
+        return false;
+    }
 
     private void ResolveSimultaneousDeckout(Player p1, Player p2, int turn)
     {
