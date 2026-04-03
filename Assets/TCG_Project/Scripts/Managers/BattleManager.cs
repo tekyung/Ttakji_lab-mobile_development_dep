@@ -686,8 +686,8 @@ public class BattleManager : MonoBehaviour
 
         if (player.Type == UserType.Bot)
         {
-            // 룰: 오픈 선언은 코스트와 무관. 지불 실패는 메인 페이즈에서 폐기(기존엔 부족 시 폐기 선택이었음).
-            OpenPhaseChoice choice = OpenPhaseChoice.Open;
+            // 봇 로직: 코스트 가능하면 오픈, 아니면 폐기
+            OpenPhaseChoice choice = (effectiveCost == 0 || player.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
             onChosen(choice);
         }
         else
@@ -787,10 +787,10 @@ public class BattleManager : MonoBehaviour
 
         OpenPhaseChoice choice = OpenPhaseChoice.Abandon;
 
-        // 룰: 오픈 선언은 코스트와 무관(메인에서 지불 실패 시 폐기).
+        // [팀원 공유용] 봇 로직 동기화: 코스트를 낼 수 있으면 무조건 오픈, 아니면 폐기
         if (player.Type == UserType.Bot)
         {
-            choice = OpenPhaseChoice.Open;
+            choice = (effectiveCost == 0 || player.CanAfford(effectiveCost)) ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon;
         }
         else
         {
