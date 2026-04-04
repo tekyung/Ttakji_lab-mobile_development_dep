@@ -51,6 +51,10 @@
     {
         "Name": "card_zoom_hold_duration_time",
         "Value": "550"
+    },
+    {
+      "Name": "Random_Matching_With_Bot",
+      "Value": "3000"
     }
   ]
 }
