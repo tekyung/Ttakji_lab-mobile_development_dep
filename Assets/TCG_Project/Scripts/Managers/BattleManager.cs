@@ -1,4 +1,4 @@
-// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
+﻿// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
 // [팀원 공유용] ConsoleRunner의 최신 아키텍처(Phase 18+)를 100% 반영한 유니티 매니저입니다.
 using System;
 using System.Collections;
@@ -71,7 +71,7 @@ public class BattleManager : MonoBehaviour
         // 구독 해제 (메모리 누수 및 중복 실행 완벽 방지)
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
-        
+
         EventManager.OnLogMessage -= HandleLogMessage;
         EventManager.OnRequireCardPick -= HandleQA_CardPick;
         EventManager.OnRequireOptionalAction -= HandleQA_OptionalAction;
@@ -118,7 +118,7 @@ public class BattleManager : MonoBehaviour
         // Player 객체 생성 (매치 전체 재사용)
         p1 = new Player { Name = "Player1", Type = UserType.Human, CharacterCardId = P1_CHAR1, SecondaryCharacterId = P1_CHAR2 };
         p2 = new Player { Name = "Bot_AI", Type = UserType.Bot, CharacterCardId = P2_CHAR1, SecondaryCharacterId = P2_CHAR2 };
-        
+
         p1.InitializeBrain();
         p2.InitializeBrain();
 

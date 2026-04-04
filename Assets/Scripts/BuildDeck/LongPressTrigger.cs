@@ -1,30 +1,34 @@
-using UnityEngine;
-using UnityEngine.EventSystems; // [ÇÊ¼ö] ÅÍÄ¡/Å¬¸¯ °¨Áö¿ë
+ï»¿using UnityEngine;
+using UnityEngine.EventSystems; // [í•„ìˆ˜] í„°ì¹˜/í´ë¦­ ê°ì§€ìš©
 
-// IPointerDownHandler: ´­·¶À» ¶§
-// IPointerUpHandler: ¶ÃÀ» ¶§
-public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+// IPointerDownHandler: ëˆŒë €ì„ ë•Œ
+// IPointerUpHandler: ë—ì„ ë•Œ
+public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
 {
-    public string cardId; // ÀÌ Ä«µåÀÇ ID (¸Å´ÏÀú°¡ ³Ö¾îÁà¾ß ÇÔ)
+    public string cardId; // ì´ ì¹´ë“œì˜ ID (ë§¤ë‹ˆì €ê°€ ë„£ì–´ì¤˜ì•¼ í•¨)
 
     private bool isPressed = false;
     private float pressTimer = 0f;
-    private float holdDuration = 1f; // 1.5ÃÊ µ¿¾È ´­·¯¾ß ÇÔ
-    private bool isZoomOpened = false; // ÀÌ¹Ì ¿­·È´ÂÁö Ã¼Å©
+    private bool isZoomOpened = false; // ì´ë¯¸ ì—´ë ¸ëŠ”ì§€ ì²´í¬
+
+    void Start()
+    {
+        // ê²Œì„ì´ ì¼œì§€ê±°ë‚˜ ì´ ì¹´ë“œê°€ ìƒê¸¸ ë•Œ, JSON íŒŒì¼ì´ ë¡œë“œë˜ì–´ ìˆëŠ”ì§€ í™•ì‹¤í•˜ê²Œ í™•ì¸!
+        CommonConfigManager.LoadConfig();
+    }
 
     void Update()
     {
-        // ´©¸£°í ÀÖ´Â µ¿¾È ½Ã°£À» Àì´Ï´Ù.
+        // ëˆ„ë¥´ê³  ìˆëŠ” ë™ì•ˆ ì‹œê°„ì„ ì½ë‹ˆë‹¤.
         if (isPressed)
         {
             pressTimer += Time.deltaTime;
 
-            // 1.5ÃÊ°¡ ³Ñ¾ú°í, ¾ÆÁ÷ ÆË¾÷ÀÌ ¾È ¿­·È´Ù¸é?
-            if (pressTimer >= holdDuration && isZoomOpened == false)
+            if (pressTimer >= CommonConfigManager.card_zoom_hold_duration_time && isZoomOpened == false)
             {
-                isZoomOpened = true; // Áßº¹ ½ÇÇà ¹æÁö
+                isZoomOpened = true; // ì¤‘ë³µ ì‹¤í–‰ ë°©ì§€
 
-                // ¸Å´ÏÀú¸¦ Ã£¾Æ¼­ ÆË¾÷ ¿­±â ½ÇÇà!
+                // ë§¤ë‹ˆì €ë¥¼ ì°¾ì•„ì„œ íŒì—… ì—´ê¸° ì‹¤í–‰!
                 DeckBuilderManager manager = FindAnyObjectByType<DeckBuilderManager>();
                 if (manager != null)
                 {
@@ -34,7 +38,7 @@ public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHa
         }
     }
 
-    // ´­·¶À» ¶§ (Å¸ÀÌ¸Ó ½ÃÀÛ)
+    // ëˆŒë €ì„ ë•Œ (íƒ€ì´ë¨¸ ì‹œì‘)
     public void OnPointerDown(PointerEventData eventData)
     {
         isPressed = true;
@@ -42,14 +46,14 @@ public class LongPressTrigger : MonoBehaviour, IPointerDownHandler, IPointerUpHa
         isZoomOpened = false;
     }
 
-    // ¼ÕÀ» ¶ÃÀ» ¶§ (Å¸ÀÌ¸Ó ÃÊ±âÈ­)
+    // ì†ì„ ë—ì„ ë•Œ (íƒ€ì´ë¨¸ ì´ˆê¸°í™”)
     public void OnPointerUp(PointerEventData eventData)
     {
         isPressed = false;
         pressTimer = 0f;
     }
 
-    // ´©¸£´Ù°¡ Ä«µå ¹ÛÀ¸·Î ¼Õ ³ª°¡¸é Ãë¼Ò
+    // ëˆ„ë¥´ë‹¤ê°€ ì¹´ë“œ ë°–ìœ¼ë¡œ ì† ë‚˜ê°€ë©´ ì·¨ì†Œ
     public void OnPointerExit(PointerEventData eventData)
     {
         isPressed = false;

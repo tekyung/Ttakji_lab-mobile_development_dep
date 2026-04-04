@@ -203,7 +203,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: -3231450121086365199, guid: 03a0187c3a39b174ab2de9205e3e83fb, type: 3}
+  m_Sprite: {fileID: -762025275845539323, guid: c792b78b95971524898fd8c32541ad6b, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -2733,6 +2733,7 @@ MonoBehaviour:
   playZoneThreshold: 0.4
   focusScaleFactor: 1.2
   actionButtonPanel: {fileID: 6110807297296745524}
+  isInSetZone: 0
   actionButtonPanelBottom: {fileID: 4784519629084513224}
   dragUpThreshold: 100
 --- !u!114 &2982722102331041709

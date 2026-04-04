@@ -302,7 +302,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c0d3cf4e625cfd4eba256e11b4bab84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardUI
-  cardImage: {fileID: 0}
+  cardImage: {fileID: 56531980}
   nameText: {fileID: 0}
   descText: {fileID: 0}
   countText: {fileID: 0}
@@ -312,6 +312,7 @@ MonoBehaviour:
   removeAllButton: {fileID: 0}
   deckCount: {fileID: 0}
   deckCountText: {fileID: 0}
+  cardBackObj: {fileID: 0}
 --- !u!114 &56531980
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1888,7 +1889,6 @@ GameObject:
   - component: {fileID: 389109976}
   - component: {fileID: 389109975}
   - component: {fileID: 389109977}
-  - component: {fileID: 389109974}
   - component: {fileID: 389109973}
   m_Layer: 5
   m_Name: CardSlot
@@ -1896,7 +1896,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &389109972
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1932,21 +1932,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LongPressTrigger
   cardId: 0
---- !u!114 &389109974
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 389109971}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a6d2ed44e44f95439862897b5371ec5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CheckCard
-  onLongPress:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!114 &389109975
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2007,6 +1992,7 @@ MonoBehaviour:
   removeAllButton: {fileID: 0}
   deckCount: {fileID: 0}
   deckCountText: {fileID: 0}
+  cardBackObj: {fileID: 0}
 --- !u!1 &407872719
 GameObject:
   m_ObjectHideFlags: 0
@@ -7698,6 +7684,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1664573078}
   m_CullTransparentMesh: 1
+--- !u!1 &1726511921
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1726511922}
+  - component: {fileID: 1726511923}
+  m_Layer: 0
+  m_Name: CommonConfigManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1726511922
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1726511921}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 111.15959, y: 1013.65857, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1726511923
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1726511921}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 097c3a37a0cd752488443f907d361d4b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CommonConfigManager
 --- !u!1 &1800723083
 GameObject:
   m_ObjectHideFlags: 0
@@ -9113,7 +9143,7 @@ MonoBehaviour:
   deleteConfirmText: {fileID: 273159361}
   newDeckPopup: {fileID: 696148718}
   cardZoomPopup: {fileID: 1507641154}
-  zoomedCardUI: {fileID: 389109977}
+  zoomedCardUI: {fileID: 56531979}
   deckNameInput: {fileID: 2101644914}
   deckListDropdown: {fileID: 1424367661}
 --- !u!4 &2057074459
@@ -9661,3 +9691,4 @@ SceneRoots:
   - {fileID: 1442358554}
   - {fileID: 2057074459}
   - {fileID: 407872722}
+  - {fileID: 1726511922}
