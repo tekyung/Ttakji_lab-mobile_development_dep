@@ -55,6 +55,10 @@
     {
       "Name": "Random_Matching_With_Bot_Waiting_Time",
       "Value": "30000"
+    },
+    {
+      "Name": "default_card_back",
+      "Value": "GameDesign/card_image/Back_Common.png"
     }
   ]
 }
