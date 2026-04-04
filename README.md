@@ -67,6 +67,7 @@ UI 연출을 위해 `EventManager`에서 제공하는 핵심 이벤트 목록입
 | `OnGameSet` | `Player winner` | 누군가의 HP가 0이 되어 게임 종료. 승리/패배 결과창 팝업 |
 | `OnGameDraw` | `Player p1, Player p2, int turn` | 동시 타격 등으로 무승부 처리 시 호출. 무승부 연출 |
 | `OnLifeChange` | `Player p, int newValue` | 체력 변동 시 호출. HP바 애니메이션 및 피격 화면 이펙트 재생 |
+| `OnTiebreaker` | `Player p1, Player p2` | 타이브레이커 상황 진입 시 호출. 타이브레이커 연출 (예: 카드 카운트) |
 
 ### 🎴 B. 카드 이동 및 액션 (가장 중요)
 
@@ -76,6 +77,16 @@ UI 연출을 위해 `EventManager`에서 제공하는 핵심 이벤트 목록입
 | `OnCardMove` | `Card c, Player p1, Zone z1, Player p2, Zone z2` | 카드가 존을 이동할 때. (예: 세트존 -> 전장존). 궤적 이동 애니메이션 |
 | `OnCardDraw` | `Card c, Player p, Zone z` | 덱에서 카드를 뽑을 때 호출. 덱에서 카드가 튀어나와 패로 들어가는 연출 |
 | `OnPlayCard` | `Player p, Card c` | 메인 페이즈나 스택 반응으로 카드가 '발동'될 때. 카드 일러스트 컷인 및 타격 이펙트 |
+| `OnCardStateChange` | `Card c` | 카드의 상태가 변할 때. (앞뒷면 변경) |
+| `OnPlayFailed` | `Card c` | 카드 발동 실패 시. (자원 부족, 조건 불만족 등) |
+| `OnCardDiscard` | `Card c, Player p`, `Zone z` | 카드가 버려질 때 호출. 카드가 Zone에서 버려지는 연출(아직은 사용 X) |
+| `OnCardSet` | `Player p, Card c` | 카드가 세트 존에 놓일 때. 카드가 세트 존에 안착하는 연출(OnCardMove 선행) |
+| `OnCardStacked` | `Player p, Card c` | 카드가 스택으로 쌓일 때. 카드가 스택 존에 추가되는 연출(OnCardMove 선행) |
+| `OnCardUnstacked` | `Player p, Card c` | 카드가 스택에서 제거될 때. 카드의 효과가 다하는 연출(OnCardMove 후행) |
+| `OnCardBattlefield` | `Player p, Card c` | 카드가 전장에 배치될 때. 필드가 펼쳐지는 연출(OnCardMove 선행) |
+| `OnCardUnbattlefield` | `Player p, Card c` | 카드가 전장에서 제거될 때. 필드가 사라지는 연출(OnCardMove 후행) |
+| `OnCardResourceAdded` | `Player p, Card c` | 카드가 자원으로 추가될 때. 자원 코인/에너지 UI 갱신 준비(OnCardMove 선행) |
+
 
 ### 🔄 C. 페이즈 전환 알림
 
@@ -339,3 +350,5 @@ DeckValidator.cs 에서 타이브레어커 로직을 TieBreakerChecker.cs 라는
 카드의 "뒷면 상태(default_card_back)" 를 CommonConfig.json 에 뒷면 이미지 경로로(GameDesign/card_image/Back_Common.png) 추가, 뒷면 카드는 별개의 카드가 아니라 카드의 상태로 관리하도록 설계 변경 (카드가 뒤집힐 때마다 카드 데이터의 default_card_back 필드를 참조하여 이미지 변경)
 
 카드는 이제 뒷면 상태(isFaceUp) 을 bool 값으로 가짐, 기본값은 True(앞면)
+
+각종 이벤트 추가(구현 우선순위 낮음)
