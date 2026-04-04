@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
-using System.IO;
+//using System.IO;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;
 using TCG_Project.Scripts.Interfaces;
@@ -12,6 +12,13 @@ namespace TCG_Project.Scripts.Systems
     public class GameDataManager
     {
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
+        public readonly IJsonLoader _jsonLoader; // JSON 로딩 담당
+
+        // 생성자에서 심부름꾼을 강제로 받도록 설정
+        public GameDataManager(IJsonLoader jsonLoader)
+        {
+            _jsonLoader = jsonLoader;
+        }
 
         // ─── 룰북 카드 로더 ───────────────────────────────────────────────────
 
@@ -73,9 +80,10 @@ namespace TCG_Project.Scripts.Systems
             = new Dictionary<string, RawCharacterCard>();
 
         /// <summary>Data/Character.json 을 읽어 캐릭터 카드 데이터를 로드한다.</summary>
-        public void LoadCharacterCards(string basePath)
+        public void LoadCharacterCards()
         {
-            var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
+            var wrapper = ReadJson<CharacterCardWrapper>("Character");
+            //var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
             if (wrapper?.Characters == null)
             {
                 Console.WriteLine("[System] Character.json 없음, 캐릭터 카드 로드 생략.");
@@ -105,9 +113,10 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// Data/ResourceCards.json 을 읽어 AllCards에 추가한다.
-        public void LoadResourceCards(string basePath)
+        public void LoadResourceCards()
         {
-            var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
+            var wrapper = ReadJson<ResourceCardWrapper>("ResourceCards");
+            // var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
             if (wrapper?.ResourceCards == null)
             {
                 Console.WriteLine("[System] ResourceCards.json 없음, 자원 카드 로드 생략.");
@@ -149,9 +158,10 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// <summary>Data/RulebookCards.json 을 읽어 AllCards에 추가한다.</summary>
-        public void LoadRulebookCards(string basePath)
+        public void LoadRulebookCards()
         {
-            var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
+            var wrapper = ReadJson<RulebookCardWrapper>("RulebookCards");
+            // var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
             if (wrapper?.Card == null)
             {
                 Console.WriteLine("[System] RulebookCards.json 없음, 룰북 카드 로드 생략.");
@@ -521,11 +531,16 @@ namespace TCG_Project.Scripts.Systems
                 ? s
                 : char.ToUpper(s[0]) + s.Substring(1);
 
-        private T ReadJson<T>(string path)
+        private T ReadJson<T>(string fileName)
         {
+            string json = _jsonLoader.LoadJson(fileName);
+            if (string.IsNullOrEmpty(json)) return default;
+            
+            return JsonConvert.DeserializeObject<T>(json);
+            /* ★ 기존 File.ReadAllText 방식에서 IJsonLoader 인터페이스로 변경하여, Unity 리소스 로딩과 콘솔 파일 로딩을 모두 지원합니다.
             if (!File.Exists(path)) return default;
             string json = File.ReadAllText(path, System.Text.Encoding.UTF8);
-            return JsonConvert.DeserializeObject<T>(json);
+            return JsonConvert.DeserializeObject<T>(json);*/
         }
     }
 }
