@@ -47,6 +47,10 @@
     {
         "Name": "Bot_single_game",
         "Value": "1"
+    },
+    {
+        "Name": "card_zoom_hold_duration_time",
+        "Value": "550"
     }
   ]
 }
