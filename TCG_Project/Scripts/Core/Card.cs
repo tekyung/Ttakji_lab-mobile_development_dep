@@ -45,6 +45,9 @@ namespace TCG_Project.Scripts.Core
         public bool IsStack { get; set; } = false;
         public bool IsBattlefield { get; set; } = false; // 전장 카드 여부 (전장 효과 처리용)
 
+        // ★ 앞뒷면 상태 플래그 (기본값은 앞면 true)
+        public bool IsFaceUp { get; set; } = true;
+
         // 불변 스탯(초기화용 원본 데이터)
         public int OriginalCost { get; set; } // 원래 코스트 기억
 
@@ -79,23 +82,11 @@ namespace TCG_Project.Scripts.Core
         // 카드를 사용할 때 호출 (Action 콜백 추가)
         public void Play(GameContext context, Action onPlayComplete = null, bool isStackTrigger = false)
         {
+            EventManager.OnPlayCard?.Invoke(Controller, this);
             // 새 카드를 발동할 때 컨텍스트 변수 초기화
             context.ClearVariables();
             // 스택 트리거 여부에 따라 로그 분리
             string triggerType = isStackTrigger ? "[스택 발동]" : "[오픈 즉발]"; // 로그 메시지에 트리거 유형 명시
-            EventManager.OnLogMessage?.Invoke($"--- {triggerType} {Name} / Cost:{Cost} / {Description} ---");
-
-            ExecuteEffectsSequentially(0, context, onPlayComplete, isStackTrigger);
-        }
-
-        // 카드를 사용할 때 호출 (Action 콜백 추가)
-        public void Play(GameContext context, Action onPlayComplete = null)
-        {
-            bool isStackTrigger = false; // 스택 트리거 여부를 명시적으로 false로 설정
-            // 새 카드를 발동할 때 컨텍스트 변수 초기화
-            context.ClearVariables();
-            // 스택 트리거 여부에 따라 로그 분리
-            string triggerType = "[오픈 즉발]"; // 로그 메시지에 트리거 유형 명시
             EventManager.OnLogMessage?.Invoke($"--- {triggerType} {Name} / Cost:{Cost} / {Description} ---");
 
             ExecuteEffectsSequentially(0, context, onPlayComplete, isStackTrigger);
@@ -173,7 +164,8 @@ namespace TCG_Project.Scripts.Core
                 IsStack = this.IsStack,
                 IsBattlefield = this.IsBattlefield,
                 CannotBePlayedByEffect = this.CannotBePlayedByEffect,
-                ImagePath = this.ImagePath
+                ImagePath = this.ImagePath,
+                IsFaceUp = this.IsFaceUp // 상태도 복사
             };
 
             // ★ 효과 리스트 깊은 복사(Deep Copy) 적용

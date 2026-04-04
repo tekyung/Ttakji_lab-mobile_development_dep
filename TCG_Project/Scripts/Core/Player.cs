@@ -267,8 +267,10 @@ namespace TCG_Project.Scripts.Core
                 InsertCard(ZoneType.Hand, oldSet); // 기존 카드는 패로 복귀
             }
             ExtractCard(ZoneType.Hand, card); // 패에서 제거
+            card.IsFaceUp = false; // 카드를 뒷면 상태로 전환
             InsertCard(ZoneType.SetZone, card); // 세트존으로 이동
             EventManager.OnLogMessage?.Invoke($"[{Name}] 세트존에 카드('{SetZoneCard.Name}')를 뒷면으로 세트했습니다.");
+            EventManager.OnCardMove?.Invoke(card, this, ZoneType.Hand, this, ZoneType.SetZone);
             return true;
         }
 
@@ -278,8 +280,14 @@ namespace TCG_Project.Scripts.Core
             if (SetZoneCard == null) return;
             Card abandoned = SetZoneCard;
             ExtractCard(ZoneType.SetZone, SetZoneCard); // 세트존에서 제거
+            if (!abandoned.IsFaceUp)
+            {
+                abandoned.IsFaceUp = true; // 폐기 전에 카드를 앞면으로 전환하여 로그에 보이도록 함
+                EventManager.OnCardStateChanged?.Invoke(abandoned); // 상태 변경 이벤트 발행
+            }
             InsertCard(ZoneType.Graveyard, abandoned); // 폐기존으로 이동
             EventManager.OnLogMessage?.Invoke($"[{Name}] 세트 카드('{abandoned.Name}')를 폐기했습니다. 메인덱에서 1장 드로우.");
+            EventManager.OnCardMove?.Invoke(abandoned, this, ZoneType.SetZone, this, ZoneType.Graveyard);
             // 드로우는 호출자(GameRunner)에서 처리
         }
 
@@ -288,7 +296,9 @@ namespace TCG_Project.Scripts.Core
         {
             if (SetZoneCard == null) return null;
             Card revealed = SetZoneCard;
+            revealed.IsFaceUp = true; // 카드를 앞면 상태로 전환
             EventManager.OnLogMessage?.Invoke($"[{Name}] '{revealed.Name}' 공개! (Speed: {revealed.Speed}, Type: {revealed.Type})");
+            EventManager.OnCardStateChanged?.Invoke(revealed);
             return revealed;
         }
 
@@ -303,6 +313,8 @@ namespace TCG_Project.Scripts.Core
         public void UseAndDiscardStack(Card card)
         {
             if (!StackZone.Contains(card)) return;
+            EventManager.OnCardUnstacked?.Invoke(card, this);
+            EventManager.OnCardMove?.Invoke(card, this, ZoneType.StackZone, this, ZoneType.Graveyard);
             ExtractCard(ZoneType.StackZone, card); // 스택존에서 제거
             InsertCard(ZoneType.Graveyard, card); // 폐기존으로 이동
             EventManager.OnLogMessage?.Invoke($"[{Name}] 스택 카드 '{card.Name}' 효과 사용 → 폐기존.");

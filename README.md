@@ -323,4 +323,19 @@ GameDesign/card_image/SONIA/SONI-01.png
 
 Utils 폴더에 AsyncTimeout.cs 파일 추가 - 비동기 메서드에 타임아웃 기능을 제공하는 유틸리티 클래스
 
+세트/오픈 페이즈의 처리 순서 동시 처리로 변경
+
 기타 버그 수정 완료
+
+
+## 26.04.04 진행사항
+
+BattleManager 내부의 테스트용 하드코딩 덱/용병 설정 완전 제거. 외부 로비 및 매치메이킹 시스템에서 조립된 명세서(PlayerSetupData DTO)를 주입받아 매치를 시작하도록 의존성 주입(DI) 구조로 개편
+
+DeckValidator.cs 에서 타이브레어커 로직을 TieBreakerChecker.cs 라는 별도의 클래스로 분리, 기존 타이브레이커 버그 수정
+
+유니티 작업과 배포 간의 파일 입출력(System.IO) 경로 충돌 방지를 위해 IJsonLoader 인터페이스 도입, 모든 JSON 로딩이 이 인터페이스를 통해 이루어지도록 리펙토링. UnityJsonLoader와 FileJsonLoader 두 가지 구현체 생성
+
+카드의 "뒷면 상태(default_card_back)" 를 CommonConfig.json 에 뒷면 이미지 경로로(GameDesign/card_image/Back_Common.png) 추가, 뒷면 카드는 별개의 카드가 아니라 카드의 상태로 관리하도록 설계 변경 (카드가 뒤집힐 때마다 카드 데이터의 default_card_back 필드를 참조하여 이미지 변경)
+
+카드는 이제 뒷면 상태(isFaceUp) 을 bool 값으로 가짐, 기본값은 True(앞면)
