@@ -1,8 +1,10 @@
+using System;
 using System.Collections; 
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Random = UnityEngine.Random;
 
 public class session_manage : MonoBehaviour
 {
@@ -14,8 +16,26 @@ public class session_manage : MonoBehaviour
     private bool amIHost = false;
     private Coroutine DestroySessionTimer;
 
+    [SerializeField] private string nextSceneName = "TestGameScene";
+
     public float session_time_limit = 50f; // 세션 제한시간
     private Coroutine turnTimer;
+
+    public Action<string> onStatusUpdate;
+    public Action onMatchedAndReady;
+
+    private void NotifyStatus(string msg)
+    {
+        uiManager?.UpdateStatus(msg);
+        onStatusUpdate?.Invoke(msg);
+    }
+
+    private string GetOrGenerateID()
+    {
+        if (uiManager != null)
+            return uiManager.GetID();
+        return Random.Range(0, 1000000).ToString();
+    }
 
     async void Start()
     {
@@ -23,11 +43,11 @@ public class session_manage : MonoBehaviour
 
         if (isConnected)
         {
-            uiManager.UpdateStatus("Firebase Connected");
+            NotifyStatus("Firebase Connected");
         }
         else
         {
-            uiManager.UpdateStatus("Firebase Connect Failed");
+            NotifyStatus("Firebase Connect Failed");
         }
 
         networkService.OnGuestJoined += HandleGuestJoined;
@@ -43,16 +63,15 @@ public class session_manage : MonoBehaviour
     //랜덤 매칭 함수
     public async void OnClickRandomMatch()
     {
-
-        myID = uiManager.GetID();
+        myID = GetOrGenerateID();
         if (string.IsNullOrEmpty(myID))
         {
-            uiManager.UpdateStatus("Enter ID");
+            NotifyStatus("Enter ID");
             return;
         }
 
-        uiManager.UpdateStatus("Searching...");
-        uiManager.ToggleUI(false);
+        NotifyStatus("Searching...");
+        uiManager?.ToggleUI(false);
 
         // 대기 중인 방 목록 가져오기
         List<string> publicRooms = await networkService.GetPublicSession();
@@ -75,47 +94,46 @@ public class session_manage : MonoBehaviour
 
     public async void OnClickJoin() // 세션 참가 함수
     {
+        if (uiManager == null) return;
         string inputCode = uiManager.GetSessionCode();
         if (string.IsNullOrEmpty(inputCode)) return;
 
         await JoinSessionProcess(inputCode);
     }
+
     public async void OnClickExitSession() //세션에서 나가는 함수
     {
-    if (string.IsNullOrEmpty(currentSessionCode)) // 세션에 들어가 있지 않다면 무시
+        if (string.IsNullOrEmpty(currentSessionCode))
         {
-        uiManager.UpdateStatus("No session to exit");
-        return;
-    }
+            NotifyStatus("No session to exit");
+            return;
+        }
     
-    // myID가 비어 있으면 UI에서 다시 가져오기
-    if (string.IsNullOrEmpty(myID))
-    {
-        myID = uiManager.GetID();
-    }
+        if (string.IsNullOrEmpty(myID))
+        {
+            myID = GetOrGenerateID();
+        }
 
-    bool success = await networkService.ExitSession(currentSessionCode, myID); 
-    //세션 나가기를 성공했는지 
+        bool success = await networkService.ExitSession(currentSessionCode, myID); 
 
-    if (success)
-    {
+        if (success)
+        {
             if (DestroySessionTimer != null)
             {
                 StopCoroutine(DestroySessionTimer);
-                uiManager.DestroySessionTimer(0);
+                uiManager?.DestroySessionTimer(0);
             }
-            uiManager.UpdateStatus("session exit");
-        uiManager.ToggleHost(true);
-        uiManager.ToggleUI(true);          // 로비 UI 다시 열기
-        currentSessionCode = null;         // 현재 세션 코드 초기화
-        amIHost = false;
-        if (turnTimer != null) StopCoroutine(turnTimer);
-            
-    }
-    else
-    {
-        uiManager.UpdateStatus("session exit failed");
-    }
+            NotifyStatus("session exit");
+            uiManager?.ToggleHost(true);
+            uiManager?.ToggleUI(true);
+            currentSessionCode = null;
+            amIHost = false;
+            if (turnTimer != null) StopCoroutine(turnTimer);
+        }
+        else
+        {
+            NotifyStatus("session exit failed");
+        }
     }
 
     private IEnumerator AutoDestroySession(string roomCode)
@@ -124,22 +142,18 @@ public class session_manage : MonoBehaviour
 
         while (timer > 0)
         {
-            timer -= Time.deltaTime; // 시간 감소
-            uiManager.DestroySessionTimer(timer); 
+            timer -= Time.deltaTime;
+            uiManager?.DestroySessionTimer(timer); 
             yield return null; 
         }
 
-        // 세션 시간이 다 되었을 경우
         if (currentSessionCode == roomCode && amIHost)
         {
-            // 방 삭제 요청
             var task = networkService.ExitSession(roomCode, myID);
 
-            // UI 초기화
-            uiManager.UpdateStatus("Session Timeout Deleted");
-            uiManager.ToggleHost(true);
-            uiManager.ToggleUI(true);
-            //uiManager.SetActionButtonsState(false);
+            NotifyStatus("Session Timeout Deleted");
+            uiManager?.ToggleHost(true);
+            uiManager?.ToggleUI(true);
 
             currentSessionCode = null;
             amIHost = false;
@@ -149,107 +163,105 @@ public class session_manage : MonoBehaviour
             Debug.Log("session not deleted");
         }
     }
+
     public async void OnClickSessionStart() //세션 시작 함수
     {
-        if (string.IsNullOrEmpty(currentSessionCode)) //세션 코드가 없을 경우 시작 x
+        if (string.IsNullOrEmpty(currentSessionCode))
         {
-            uiManager.UpdateStatus("No Session Code");
+            NotifyStatus("No Session Code");
             return;
         }
 
-        await networkService.SetGameStart(currentSessionCode);  //게임 상태를 playing으로 변경
+        await networkService.SetGameStart(currentSessionCode);
     }
 
     private async Task CreateSession(bool isPublic) //세션 생성 함수
     {
-        
-        myID = uiManager.GetID();
-        if (string.IsNullOrEmpty(myID)) //id가 비어있을 경우 세션 생성x
+        myID = GetOrGenerateID();
+        if (string.IsNullOrEmpty(myID))
         {
-            uiManager.UpdateStatus("Enter ID");
+            NotifyStatus("Enter ID");
             return;
         }
 
-        uiManager.ToggleUI(false); // UI 잠금
-        uiManager.UpdateStatus("Creating Room...");
+        uiManager?.ToggleUI(false);
+        NotifyStatus("Creating Room...");
 
-        string sessionCode = Random.Range(1000, 9999).ToString();  // 세션 코드는 1000~9999 랜덤 생성
-        string currentTime = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");   // 세션 생성 시간
-        string secretState = isPublic ? SessionStatus.STATE_PUBLIC : SessionStatus.STATE_PRIVATE;   // 공개방 여부에 따라 state가 PUBLIC 또는 PRIVATE로 나뉨
+        string sessionCode = Random.Range(1000, 9999).ToString();
+        string currentTime = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        string secretState = isPublic ? SessionStatus.STATE_PUBLIC : SessionStatus.STATE_PRIVATE;
 
-        session_data newSession = new session_data(myID, "", SessionStatus.STATE_WAITING, currentTime, secretState,"HOST"); // 세션 데이터를 생성
+        session_data newSession = new session_data(myID, "", SessionStatus.STATE_WAITING, currentTime, secretState, "HOST");
 
         bool success = await networkService.CreateSession(sessionCode, newSession); 
 
-        if (success) //세션 생성에 성공한 경우
+        if (success)
         {
             amIHost = true;
             currentSessionCode = sessionCode;
-            uiManager.UpdateStatus($"Room Created: {sessionCode}");
-            uiManager.ToggleHost(true);
+            NotifyStatus($"Room Created: {sessionCode}");
+            uiManager?.ToggleHost(true);
             networkService.ListenForGuest(currentSessionCode);
             DestroySessionTimer = StartCoroutine(AutoDestroySession(sessionCode));
-            
         }
-        else //세션 생성에 실패한 경우
+        else
         {
-            uiManager.UpdateStatus("Create Failed");
-            uiManager.ToggleUI(true); 
+            NotifyStatus("Create Failed");
+            uiManager?.ToggleUI(true); 
         }
     }
 
     // 방 입장 공통 로직
     private async Task JoinSessionProcess(string sessionCode)
     {
-        myID = uiManager.GetID();
-        if (string.IsNullOrEmpty(myID)) //id가 비어있을 경우 세션 입장x
+        myID = GetOrGenerateID();
+        if (string.IsNullOrEmpty(myID))
         {
-            uiManager.UpdateStatus("Enter ID");
+            NotifyStatus("Enter ID");
             return;
         }
 
-        uiManager.ToggleUI(false);
+        uiManager?.ToggleUI(false);
 
         bool success = await networkService.JoinSession(sessionCode, myID);
 
         if (success)
         {
-            amIHost =  false;
+            amIHost = false;
             currentSessionCode = sessionCode;
-            uiManager.UpdateStatus($"Joined: {sessionCode}");
-            uiManager.ToggleHost(false);
-            // 게스트 게임이 시작 감지
+            NotifyStatus($"Joined: {sessionCode}");
+            uiManager?.ToggleHost(false);
+            onMatchedAndReady?.Invoke();
             networkService.ListenForGameStart(currentSessionCode);
             networkService.ListenForSessionExit(currentSessionCode, () =>
             {
-                uiManager.UpdateStatus("Session Ended by Host");
-                uiManager.ToggleHost(true); // 로비 버튼 보이기
-                uiManager.ToggleUI(true);   // 입력창 활성화       
-                //uiManager.SetActionButtonsState(false); // 게임 버튼 잠금
+                NotifyStatus("Session Ended by Host");
+                uiManager?.ToggleHost(true);
+                uiManager?.ToggleUI(true);
 
                 currentSessionCode = null;
                 amIHost = false;
 
-                // 각종 리스너 및 타이머 정리
                 networkService.StopListeningEvents();
                 if (DestroySessionTimer != null) StopCoroutine(DestroySessionTimer);
             });
         }
         else
         {
-            uiManager.UpdateStatus("Join Failed / Room Not Found");
-            uiManager.ToggleUI(true);
+            NotifyStatus("Join Failed / Room Not Found");
+            uiManager?.ToggleUI(true);
         }
     }
 
     // 게스트가 들어왔을 경우
     private async void HandleGuestJoined(string guestID)
     {
-        uiManager.UpdateStatus($"{guestID} Joined!");
-        await networkService.SetGameReady(currentSessionCode); //게임 상태를 READY로 변경
-        // 게임 시작 신호를 감지
+        NotifyStatus($"{guestID} Joined!");
+        onMatchedAndReady?.Invoke();
+        await networkService.SetGameReady(currentSessionCode);
         networkService.ListenForGameStart(currentSessionCode);
     }
+
     private void HandleGameReady() 
     {
         StartCoroutine(HandleGameStarted());
@@ -257,14 +269,13 @@ public class session_manage : MonoBehaviour
 
     private IEnumerator HandleGameStarted()
     {
-        //uiManager.SetActionButtonsState(false);
-        uiManager.UpdateStatus("3...");
+        NotifyStatus("3...");
         yield return new WaitForSeconds(1f);
-        uiManager.UpdateStatus("2...");
+        NotifyStatus("2...");
         yield return new WaitForSeconds(1f);
-        uiManager.UpdateStatus("1...");
+        NotifyStatus("1...");
         yield return new WaitForSeconds(1f);
-        uiManager.UpdateStatus("Game Start!");
+        NotifyStatus("Game Start!");
         yield return new WaitForSeconds(1f);
 
         GameData.SessionCode = currentSessionCode;
@@ -293,7 +304,7 @@ public class session_manage : MonoBehaviour
             Debug.LogError("선택된 덱 이름이 비어있거나 유효하지 않습니다!");
         }
 
-        SceneManager.LoadScene("TestServerConnect");
+        SceneManager.LoadScene(nextSceneName);
     }
 
     void OnApplicationQuit()

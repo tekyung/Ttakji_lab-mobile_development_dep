@@ -8,7 +8,7 @@ public class LobbyUI : MonoBehaviour
     public void OnClickMatch()
     {
         Debug.Log("Match Start (TODO)");
-        // TODO: ╦ед╙ ╬ю/╦ед╙ ╥наВ ©╛╟А
+        // TODO: О©╫О©╫? О©╫О©╫/О©╫О©╫? О©╫О©╫О©╫О©╫ О©╫О©╫О©╫О©╫
     }
 
     public void OnClickDeckEdit()
