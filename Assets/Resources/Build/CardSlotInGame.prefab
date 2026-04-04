@@ -2733,6 +2733,7 @@ MonoBehaviour:
   playZoneThreshold: 0.4
   focusScaleFactor: 1.2
   actionButtonPanel: {fileID: 6110807297296745524}
+  isInSetZone: 0
   actionButtonPanelBottom: {fileID: 4784519629084513224}
   dragUpThreshold: 100
 --- !u!114 &2982722102331041709

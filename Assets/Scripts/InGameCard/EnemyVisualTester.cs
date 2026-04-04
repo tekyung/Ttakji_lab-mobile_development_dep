@@ -3,6 +3,7 @@ using UnityEngine.UI; // UI 레이아웃 조절용
 using UnityEngine;
 using TCG_Project.Scripts.Managers;
 using System.Collections;
+using TMPro;
 
 public class EnemyVisualTester : MonoBehaviour
 {
@@ -12,6 +13,10 @@ public class EnemyVisualTester : MonoBehaviour
     public Transform enemyGraveyardTransform;
     public Transform enemyStackZoneTransform;
     public Transform enemyBattlefieldTransform;
+
+    [Header("Enemy Status UI")]
+    public TextMeshProUGUI enemyLifeText;  
+    public TextMeshProUGUI enemyResourceText; 
 
     [Header("Prefabs")]
     public GameObject cardBackPrefab; // 적군 카드는 뒷면만 보이면 되니 뒷면 프리팹!
@@ -46,12 +51,34 @@ public class EnemyVisualTester : MonoBehaviour
         // (주의: EventManager에 OnCardMove 이벤트가 정의되어 있다고 가정한 코드입니다)
         EventManager.OnCardMove += HandleEnemyCardMove;
         EventManager.OnPlayCard += HandleEnemyPlayCard;
+        EventManager.OnLifeChange += HandleEnemyLifeChange;
+        EventManager.OnResourceChange += HandleEnemyResourceChange;
     }
 
     private void OnDisable()
     {
         EventManager.OnCardMove -= HandleEnemyCardMove;
         EventManager.OnPlayCard -= HandleEnemyPlayCard;
+        EventManager.OnLifeChange -= HandleEnemyLifeChange;
+        EventManager.OnResourceChange -= HandleEnemyResourceChange;
+    }
+
+    private void HandleEnemyLifeChange(Player player, int currentLife)
+    {
+        // 적(Bot)의 라이프가 변했을 때만 UI 갱신
+        if (player.Type == UserType.Bot && enemyLifeText != null)
+        {
+            enemyLifeText.text = $"♥ : {currentLife}";
+        }
+    }
+
+    private void HandleEnemyResourceChange(Player player, int currentResource)
+    {
+        // 적(Bot)의 자원이 변했을 때만 UI 갱신
+        if (player.Type == UserType.Bot && enemyResourceText != null)
+        {
+            enemyResourceText.text = $"♣ : {currentResource}";
+        }
     }
 
     // 카드 피벗, 앵커, 위치 등

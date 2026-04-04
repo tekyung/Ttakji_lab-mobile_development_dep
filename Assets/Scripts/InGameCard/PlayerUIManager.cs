@@ -2,6 +2,8 @@
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 
 public class PlayerUIManager : MonoBehaviour
 {
@@ -12,7 +14,11 @@ public class PlayerUIManager : MonoBehaviour
     public Transform mySetZoneTransform; // 세트 존 (set)
     public Transform myGraveyardTransform; // 무덤(폐기)
     public Transform myStackZoneTransform; // 스택
-    public Transform myBattlefieldTransform; // 전장
+    public Transform myBattlefieldTransform; // 전장    
+
+    [Header("Player Status UI")]
+    public TextMeshProUGUI myLifeText; // ⭐ Text -> TextMeshProUGUI 로 변경!
+    public TextMeshProUGUI myResourceText; // ⭐ Text -> TextMeshProUGUI 로 변경!
 
     [Header("Prefabs")]
     public GameObject myCardPrefab;     // 앞면이 보이는 진짜 카드 프리팹 (CardUI 달린 것!)
@@ -38,6 +44,8 @@ public class PlayerUIManager : MonoBehaviour
         EventManager.OnCardMove += HandleCardMove;
         EventManager.OnRequireSetPhaseAction += HandleRequireSet; // 🌟 핵심! 심판의 요청 듣기
         EventManager.OnRequireOpenPhaseAction += HandleRequireOpen;
+        EventManager.OnLifeChange += HandleLifeChange;
+        EventManager.OnResourceChange += HandleResourceChange;
     }
 
     private void OnDisable()
@@ -45,6 +53,27 @@ public class PlayerUIManager : MonoBehaviour
         EventManager.OnCardMove -= HandleCardMove;
         EventManager.OnRequireSetPhaseAction -= HandleRequireSet;
         EventManager.OnRequireOpenPhaseAction -= HandleRequireOpen;
+        EventManager.OnLifeChange -= HandleLifeChange;
+        EventManager.OnResourceChange -= HandleResourceChange;
+    }
+
+    private void HandleLifeChange(Player player, int currentLife)
+    {
+        // 내(Human) 라이프가 변했을 때만 내 UI를 갱신
+        if (player.Type == UserType.Human && myLifeText != null)
+        {
+            myLifeText.text = $"♥ : {currentLife}";
+        }
+    }
+
+    private void HandleResourceChange(Player player, int currentResource)
+    {
+        Debug.Log($"📡 [자원 방송 수신] {player.Name}의 자원이 {currentResource}개로 변했습니다!");
+        // 내(Human) 자원이 변했을 때만 내 UI를 갱신
+        if (player.Type == UserType.Human && myResourceText != null)
+        {
+            myResourceText.text = $"♣ : {currentResource}";
+        }
     }
 
     // 1. 내 패에 카드가 들어오면 화면에 진짜로 그려줍니다!
