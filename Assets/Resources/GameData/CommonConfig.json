@@ -54,7 +54,7 @@
     },
     {
       "Name": "Random_Matching_With_Bot_Waiting_Time",
-      "Value": "3000"
+      "Value": "30000"
     }
   ]
 }
