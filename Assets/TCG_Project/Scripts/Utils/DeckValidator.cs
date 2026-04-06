@@ -9,40 +9,40 @@ namespace TCG_Project.Scripts.Utils
     public static class DeckValidator
     {
         /// <summary>
-        /// [ì „íˆ¬! ìš©ë³‘ì˜ ì‹œëŒ€] ë± ë¹Œë”© ë£°ì„ ê²€ì‚¬í•©ë‹ˆë‹¤.
-        /// 1. ì„ íƒ ìš©ë³‘ì€ ì„œë¡œ ë‹¤ë¥¸ 2ì¢…ë¥˜
-        /// 2. ë±ì€ ì´ 20ì¥, ê°ê° 2ì¥ì”© 10ì¢…ë¥˜
-        /// 3. ëª¨ë“  ì¹´ë“œëŠ” ì„ íƒí•œ ìš©ë³‘ í…Œë§ˆ ì¹´ë“œ
+        /// [ÀüÅõ! ¿ëº´ÀÇ ½Ã´ë] µ¦ ºôµù ·êÀ» °Ë»çÇÕ´Ï´Ù.
+        /// 1. ¼±ÅÃ ¿ëº´Àº ¼­·Î ´Ù¸¥ 2Á¾·ù
+        /// 2. µ¦Àº ÃÑ 20Àå, °¢°¢ 2Àå¾¿ 10Á¾·ù
+        /// 3. ¸ğµç Ä«µå´Â ¼±ÅÃÇÑ ¿ëº´ Å×¸¶ Ä«µå
         /// </summary>
         public static DeckValidationResult ValidateFullDeckSet(List<Card> mainDeck, List<Card> resourceDeck, string char1Id, string char2Id)
         {
-            // â”€â”€ 1. ìš©ë³‘ ì„ íƒ ê²€ì¦ (ì„œë¡œ ë‹¤ë¥¸ 2ì¢…ë¥˜) â”€â”€
+            // ¦¡¦¡ 1. ¿ëº´ ¼±ÅÃ °ËÁõ (¼­·Î ´Ù¸¥ 2Á¾·ù) ¦¡¦¡
             if (string.IsNullOrEmpty(char1Id) || string.IsNullOrEmpty(char2Id))
             {
-                return DeckValidationResult.Fail("ë‘ ëª…ì˜ ìš©ë³‘(ìºë¦­í„°)ì„ ëª¨ë‘ ì„ íƒí•´ì•¼ í•©ë‹ˆë‹¤.");
+                return DeckValidationResult.Fail("µÎ ¸íÀÇ ¿ëº´(Ä³¸¯ÅÍ)À» ¸ğµÎ ¼±ÅÃÇØ¾ß ÇÕ´Ï´Ù.");
             }
 
             if (char1Id == char2Id)
             {
-                return DeckValidationResult.Fail("ì„œë¡œ ë‹¤ë¥¸ ë‘ ëª…ì˜ ìš©ë³‘ì„ ì„ íƒí•´ì•¼ í•©ë‹ˆë‹¤.");
+                return DeckValidationResult.Fail("¼­·Î ´Ù¸¥ µÎ ¸íÀÇ ¿ëº´À» ¼±ÅÃÇØ¾ß ÇÕ´Ï´Ù.");
             }
 
-            // ìºë¦­í„° IDì—ì„œ ì ‘ë‘ì‚¬(Prefix) ì¶”ì¶œ (ì˜ˆ: "ELLI-01" -> "ELLI")
+            // Ä³¸¯ÅÍ ID¿¡¼­ Á¢µÎ»ç(Prefix) ÃßÃâ (¿¹: "ELLI-01" -> "ELLI")
             string prefix1 = char1Id.Contains("-") ? char1Id.Split('-')[0] : char1Id;
             string prefix2 = char2Id.Contains("-") ? char2Id.Split('-')[0] : char2Id;
 
-            // â”€â”€ 2. ë©”ì¸ ë± ì´ ë§¤ìˆ˜ ê²€ì¦ (20ì¥) â”€â”€
+            // ¦¡¦¡ 2. ¸ŞÀÎ µ¦ ÃÑ ¸Å¼ö °ËÁõ (20Àå) ¦¡¦¡
             if (mainDeck.Count != 20)
             {
-                return DeckValidationResult.Fail($"ë©”ì¸ ë±ì€ ì •í™•íˆ 20ì¥ì´ì–´ì•¼ í•©ë‹ˆë‹¤. (í˜„ì¬ {mainDeck.Count}ì¥)");
+                return DeckValidationResult.Fail($"¸ŞÀÎ µ¦Àº Á¤È®È÷ 20ÀåÀÌ¾î¾ß ÇÕ´Ï´Ù. (ÇöÀç {mainDeck.Count}Àå)");
             }
 
-            // â”€â”€ 3. ì¹´ë“œ ì¢…ë¥˜ ë° ë§¤ìˆ˜ ê²€ì¦ (10ì¢…ë¥˜, ê°ê° 2ì¥ì”©) â”€â”€
+            // ¦¡¦¡ 3. Ä«µå Á¾·ù ¹× ¸Å¼ö °ËÁõ (10Á¾·ù, °¢°¢ 2Àå¾¿) ¦¡¦¡
             var groupedCards = mainDeck.GroupBy(c => c.Id).ToList();
 
             if (groupedCards.Count != 10)
             {
-                //return DeckValidationResult.Fail($"ë©”ì¸ ë±ì€ ì •í™•íˆ 10ì¢…ë¥˜ì˜ ì¹´ë“œë¡œ êµ¬ì„±ë˜ì–´ì•¼ í•©ë‹ˆë‹¤. (í˜„ì¬ {groupedCards.Count}ì¢…ë¥˜)");
+                //return DeckValidationResult.Fail($"¸ŞÀÎ µ¦Àº Á¤È®È÷ 10Á¾·ùÀÇ Ä«µå·Î ±¸¼ºµÇ¾î¾ß ÇÕ´Ï´Ù. (ÇöÀç {groupedCards.Count}Á¾·ù)");
             }
 
             foreach (var group in groupedCards)
@@ -50,39 +50,39 @@ namespace TCG_Project.Scripts.Utils
                 if (group.Count() != 2)
                 {
                     Card sample = group.First();
-                    //return DeckValidationResult.Fail($"'{sample.Name}' ì¹´ë“œê°€ {group.Count()}ì¥ ìˆìŠµë‹ˆë‹¤. ëª¨ë“  ì¹´ë“œëŠ” ì •í™•íˆ 2ì¥ì”© ë„£ì–´ì•¼ í•©ë‹ˆë‹¤.");
+                    //return DeckValidationResult.Fail($"'{sample.Name}' Ä«µå°¡ {group.Count()}Àå ÀÖ½À´Ï´Ù. ¸ğµç Ä«µå´Â Á¤È®È÷ 2Àå¾¿ ³Ö¾î¾ß ÇÕ´Ï´Ù.");
                 }
 
-                // â”€â”€ 4. ì„ íƒí•œ ìš©ë³‘ í…Œë§ˆ ì¼ì¹˜ ì—¬ë¶€ ê²€ì¦ â”€â”€
+                // ¦¡¦¡ 4. ¼±ÅÃÇÑ ¿ëº´ Å×¸¶ ÀÏÄ¡ ¿©ºÎ °ËÁõ ¦¡¦¡
                 Card card = group.First();
 
-                // â˜… ìˆ˜ì •: "ELLIE" == "ELLI" ê°™ì€ í•˜ë“œì½”ë”© ë¶ˆì¼ì¹˜ ë¬¸ì œë¥¼ í•´ê²°í•˜ê¸° ìœ„í•´,
-                // Card.Id("ELLI-05") ê°€ ì ‘ë‘ì‚¬ë¡œ ì‹œì‘í•˜ê±°ë‚˜, CharacterId("ELLIE") ê°€ ì ‘ë‘ì‚¬ë¡œ ì‹œì‘í•˜ë©´ í†µê³¼ì‹œí‚µë‹ˆë‹¤.
-                
-                bool isTheme1 = card.Id.StartsWith(prefix1) || 
+                // ¡Ú ¼öÁ¤: "ELLIE" == "ELLI" °°Àº ÇÏµåÄÚµù ºÒÀÏÄ¡ ¹®Á¦¸¦ ÇØ°áÇÏ±â À§ÇØ,
+                // Card.Id("ELLI-05") °¡ Á¢µÎ»ç·Î ½ÃÀÛÇÏ°Å³ª, CharacterId("ELLIE") °¡ Á¢µÎ»ç·Î ½ÃÀÛÇÏ¸é Åë°ú½ÃÅµ´Ï´Ù.
+
+                bool isTheme1 = card.Id.StartsWith(prefix1) ||
                                 (!string.IsNullOrEmpty(card.CharacterId) && card.CharacterId.StartsWith(prefix1));
-                                
-                bool isTheme2 = card.Id.StartsWith(prefix2) || 
+
+                bool isTheme2 = card.Id.StartsWith(prefix2) ||
                                 (!string.IsNullOrEmpty(card.CharacterId) && card.CharacterId.StartsWith(prefix2));
 
                 if (!isTheme1 && !isTheme2)
                 {
-                    return DeckValidationResult.Fail($"'{card.Name}' ì¹´ë“œëŠ” ì„ íƒí•˜ì‹  ìš©ë³‘({prefix1}, {prefix2})ì˜ í…Œë§ˆ ì¹´ë“œê°€ ì•„ë‹™ë‹ˆë‹¤.");
+                    return DeckValidationResult.Fail($"'{card.Name}' Ä«µå´Â ¼±ÅÃÇÏ½Å ¿ëº´({prefix1}, {prefix2})ÀÇ Å×¸¶ Ä«µå°¡ ¾Æ´Õ´Ï´Ù.");
                 }
             }
 
-            // â”€â”€ 5. ìì› ë± ê²€ì¦ (15ì¥) â”€â”€
+            // ¦¡¦¡ 5. ÀÚ¿ø µ¦ °ËÁõ (15Àå) ¦¡¦¡
             if (resourceDeck != null && resourceDeck.Count != GameRules.ResourceDeckCount)
             {
-                return DeckValidationResult.Fail($"ìì› ë±ì€ ì •í™•íˆ {GameRules.ResourceDeckCount}ì¥ì´ì–´ì•¼ í•©ë‹ˆë‹¤. (í˜„ì¬ {resourceDeck.Count}ì¥)");
+                return DeckValidationResult.Fail($"ÀÚ¿ø µ¦Àº Á¤È®È÷ {GameRules.ResourceDeckCount}ÀåÀÌ¾î¾ß ÇÕ´Ï´Ù. (ÇöÀç {resourceDeck.Count}Àå)");
             }
 
-            // ëª¨ë“  ê²€ì‚¬ í†µê³¼
+            // ¸ğµç °Ë»ç Åë°ú
             return DeckValidationResult.Success();
         }
-        
+
         /// <summary>
-        /// ë± ê²€ì¦ ê²°ê³¼ë¥¼ ë‹´ëŠ” êµ¬ì¡°ì²´ì…ë‹ˆë‹¤. UI íŒì—…ì—ì„œ ErrorMessageë¥¼ ê·¸ëŒ€ë¡œ ë„ì›Œì£¼ë©´ ë©ë‹ˆë‹¤.
+        /// µ¦ °ËÁõ °á°ú¸¦ ´ã´Â ±¸Á¶Ã¼ÀÔ´Ï´Ù. UI ÆË¾÷¿¡¼­ ErrorMessage¸¦ ±×´ë·Î ¶ç¿öÁÖ¸é µË´Ï´Ù.
         /// </summary>
         public class DeckValidationResult
         {
@@ -93,5 +93,39 @@ namespace TCG_Project.Scripts.Utils
             public static DeckValidationResult Fail(string msg) => new DeckValidationResult { IsValid = false, ErrorMessage = msg };
         }
 
+        /// <summary>
+        /// µ¿½Ã µ¦¾Æ¿ô ¹ß»ı ½Ã ·êºÏ¿¡ ¸í½ÃµÈ 6´Ü°è Å¸ÀÌºê·¹ÀÌÄ¿ ÆÇÁ¤À» ¼öÇàÇÕ´Ï´Ù.
+        /// ¹İÈ¯°ª: ¾ç¼ö(p1 ½Â¸®), À½¼ö(p2 ½Â¸®), 0(¹«½ÂºÎ·Î ÄÚÀÎÅä½º ÇÊ¿ä)
+        /// </summary>
+        public static int ResolveTiebreaker(Player p1, Player p2)
+        {
+            // 1´Ü°è: ³²Àº ¶óÀÌÇÁ (¸¹Àº ÂÊ ½Â)
+            if (p1.LifeTokens != p2.LifeTokens)
+                return p1.LifeTokens.CompareTo(p2.LifeTokens);
+
+            // 2´Ü°è: ÀüÀå Ä«µå À¯¹« (ÀÖ´Â ÂÊ ½Â)
+            int p1Field = p1.BattlefieldCard != null ? 1 : 0;
+            int p2Field = p2.BattlefieldCard != null ? 1 : 0;
+            if (p1Field != p2Field)
+                return p1Field.CompareTo(p2Field);
+
+            // 3´Ü°è: ½ºÅÃ Á¸ Ä«µå ¼ö (¸¹Àº ÂÊ ½Â)
+            if (p1.StackZone.Count != p2.StackZone.Count)
+                return p1.StackZone.Count.CompareTo(p2.StackZone.Count);
+
+            // 4´Ü°è: ÆĞ(Hand) Àå¼ö (¸¹Àº ÂÊ ½Â)
+            if (p1.Hand.Count != p2.Hand.Count)
+                return p1.Hand.Count.CompareTo(p2.Hand.Count);
+
+            // 5´Ü°è: ÀÚ¿ø Á¸(Resource) °³¼ö (¸¹Àº ÂÊ ½Â)
+            if (p1.ResourceZone.Count != p2.ResourceZone.Count)
+                return p1.ResourceZone.Count.CompareTo(p2.ResourceZone.Count);
+
+            // 6´Ü°è: ¿©±â±îÁö ¸ğµÎ °°À¸¸é 0À» ¹İÈ¯ (ConsoleRunner°¡ ÄÚÀÎ Åä½º ÁøÇà)
+            return 0;
+        }
+
+
     }
+
 }

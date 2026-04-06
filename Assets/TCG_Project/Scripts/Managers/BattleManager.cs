@@ -1,4 +1,4 @@
-// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
+﻿// BattleManager.cs — 최신 엔진 코어 동기화 (SBA + 동적 큐 + 스마트 스택 AI + QA 난수 봇)
 // [팀원 공유용] ConsoleRunner의 최신 아키텍처(Phase 18+)를 100% 반영한 유니티 매니저입니다.
 using System;
 using System.Collections;
@@ -68,7 +68,7 @@ public class BattleManager : MonoBehaviour
         // 구독 해제 (메모리 누수 및 중복 실행 완벽 방지)
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
-        
+
         EventManager.OnLogMessage -= HandleLogMessage;
         EventManager.OnRequireCardPick -= HandleQA_CardPick;
         EventManager.OnRequireOptionalAction -= HandleQA_OptionalAction;
@@ -122,17 +122,19 @@ public class BattleManager : MonoBehaviour
         _p2Setup = p2Data;
 
         // 1. 전달받은 데이터를 바탕으로 Player 객체 뼈대 생성
-        p1 = new Player { 
-            Name = _p1Setup.PlayerName, 
-            Type = _p1Setup.Type, 
-            CharacterCardId = _p1Setup.MainCharacterId, 
-            SecondaryCharacterId = _p1Setup.SubCharacterId 
+        p1 = new Player
+        {
+            Name = _p1Setup.PlayerName,
+            Type = _p1Setup.Type,
+            CharacterCardId = _p1Setup.MainCharacterId,
+            SecondaryCharacterId = _p1Setup.SubCharacterId
         };
-        p2 = new Player { 
-            Name = _p2Setup.PlayerName, 
-            Type = _p2Setup.Type, 
-            CharacterCardId = _p2Setup.MainCharacterId, 
-            SecondaryCharacterId = _p2Setup.SubCharacterId 
+        p2 = new Player
+        {
+            Name = _p2Setup.PlayerName,
+            Type = _p2Setup.Type,
+            CharacterCardId = _p2Setup.MainCharacterId,
+            SecondaryCharacterId = _p2Setup.SubCharacterId
         };
 
         DeckValidator.DeckValidationResult validation1 = DeckValidator.ValidateFullDeckSet(p1.Deck, p1.ResourceDeck, p1.CharacterCardId, p1.SecondaryCharacterId);
@@ -165,11 +167,11 @@ public class BattleManager : MonoBehaviour
     {
 
         // 유니티 Resources 폴더 안의 "GameData" 폴더를 바라보는 로더 생성
-        IJsonLoader loader = new UnityResourceLoader("GameData"); 
-        
+        IJsonLoader loader = new UnityResourceLoader("GameData");
+
         _dataManager = new GameDataManager(loader);
         GameRules.LoadRules(loader, "CommonConfig"); // 룰북 로드 (경로 대신 로더 전달)
-        
+
         // 경로 전달 없이 깔끔하게 메서드만 호출
         _dataManager.LoadRulebookCards();
         _dataManager.LoadCharacterCards();
@@ -715,7 +717,7 @@ public class BattleManager : MonoBehaviour
         if (choice == OpenPhaseChoice.Abandon)
         {
             int effectiveCost = GameLogicHelpers.GetEffectiveCost(player.SetZoneCard, player);
-            
+
             EventManager.OnLogMessage?.Invoke($"{player.Name}: 세트 카드 [{player.SetZoneCard.Name}] 폐기 선택 (코스트 필요: {effectiveCost} / 자원존: {player.GetResourceCount()})");
 
             player.AbandonSetCard();
@@ -1204,7 +1206,7 @@ public class BattleManager : MonoBehaviour
         }
         return deck;
     }
-    
+
     // 기존 랜덤 방식 덱 생성 헬퍼
     private List<Card> CreateDualCharacterDeck(string charId1, string charId2, int count1, int count2)
     {
