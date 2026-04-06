@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 
 namespace TCG_Project.Scripts.Core
