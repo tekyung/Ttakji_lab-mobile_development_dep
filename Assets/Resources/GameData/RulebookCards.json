@@ -734,7 +734,6 @@
         },
         {
           "type": "DiscardFromHandEffect",
-          "count": 0,
           "mode": "all"
         }
       ],
