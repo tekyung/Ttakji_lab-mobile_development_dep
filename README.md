@@ -2,7 +2,7 @@
 
 - 빌드: `dotnet build`, 실행: `dotnet run --project ./TCG_Project.csproj`
 
-日本人の方はこの[文書](https://github.com/tekyung/Ttakji_lab-mobile_development_dep/tree/gabriel/md/introduce_JP.md)を開いてください
+日本人の方はこの[文書](https://github.com/tekyung/Ttakji_lab-mobile_development_dep/tree/gabriel/md/introduce_Jp.md)を開いてください
 ---
 
 # 🎮 TCG 프로젝트: Core 로직 연동 가이드 (UI 개발팀용)
