@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
 using TCG_Project.Scripts.Managers;
+using TCG_Project.Scripts.Systems;
+using TCG_Project.Scripts.Utils;
 
 namespace TCG_Project.Scripts.Effects
 {
@@ -98,6 +102,104 @@ namespace TCG_Project.Scripts.Effects
             }
         }
 
+        // ★ 비동기(async void)로 전환하여 유저 선택 대기 지원
+        public async void Execute(GameContext context, Action onComplete)
+        {
+            Player self = context.ActivePlayer;
+            Player opponent = context.TargetPlayer;
+            if (self == null) { onComplete?.Invoke(); return; }
+
+            Card exclude = _excludeSelf ? self.PlayingCard : null;
+
+            // 1. 후보군 추출 (필터가 적용된 전체 리스트)
+            var selector = new CardSelector
+            {
+                From = _from,
+                Owner = "Self",
+                Filter = _filter,
+                Count = _count,
+                Mode = SelectMode.All // 일단 필터에 맞는 모든 카드를 가져옴
+            };
+            List<Card> candidates = selector.SelectCards(self, opponent, exclude);
+
+            List<Card> finalSelected = new List<Card>();
+
+            // 2. 선택 로직 수행
+            if (_mode == SelectMode.Choose)
+            {
+                if (candidates.Count == 0)
+                {
+                    // 선택할 카드가 아예 없음
+                }
+                else if (self.Type == UserType.Bot)
+                {
+                    // 🤖 봇: 랜덤하게 N장 즉시 선택
+                    finalSelected = candidates.OrderBy(c => Guid.NewGuid()).Take(_count).ToList();
+                    EventManager.OnLogMessage?.Invoke($" 🤖 [Bot AI] {self.Name}: {_from}에서 {finalSelected.Count}장 자동 선택");
+                }
+                else
+                {
+                    // 👤 사람: 비동기 타임아웃 선택
+                    var result = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<List<Card>>(
+                        cb => EventManager.OnRequireCardPick?.Invoke(self, candidates, _count, cb),
+                        () => candidates.OrderBy(c => Guid.NewGuid()).Take(_count).ToList(), // 타임아웃 시 랜덤
+                        GameLogicHelpers.GetChooseTimeoutMs(self)
+                    );
+                    finalSelected = result ?? new List<Card>();
+                }
+            }
+            else
+            {
+                // 기존 자동 모드 (Top, Bottom, Random 등)
+                selector.Mode = _mode;
+                selector.Count = _count;
+                finalSelected = selector.SelectCards(self, opponent, exclude);
+            }
+
+            // 3. 엄격성 검사
+            bool isAllMode = _mode == SelectMode.All;
+            if (!isAllMode)
+            {
+                if (_isStrict && finalSelected.Count < _count)
+                {
+                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에 카드가 부족합니다. (요구: {_count}, 현재: {finalSelected.Count})");
+                    context.LastEffectSucceeded = false;
+                    onComplete?.Invoke();
+                    return;
+                }
+                else if (finalSelected.Count == 0 && _count > 0)
+                {
+                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에서 이동할 카드가 없습니다.");
+                    context.LastEffectSucceeded = false;
+                    onComplete?.Invoke();
+                    return;
+                }
+            }
+
+            // 4. 실제 이동 처리
+            foreach (var card in finalSelected)
+            {
+                RemoveFromZone(self, _from, card);
+                AddToZone(self, _to, card);
+                
+                EventManager.OnLogMessage?.Invoke($"  [카드 이동] {self.Name}: '{card.Name}' {_from}→{_to}");
+                EventManager.OnCardMove?.Invoke(card, self, _from, self, _to);
+
+                if (_from == ZoneType.Deck && _to == ZoneType.Hand)
+                    EventManager.OnCardDraw?.Invoke(card, self, ZoneType.Deck);
+            }
+
+            if (_shuffleAfter && finalSelected.Count > 0)
+            {
+                self.ShuffleDeck();
+                EventManager.OnLogMessage?.Invoke($"  [덱 섞기] {self.Name} 이동 후 메인덱 섞음 (덱: {self.Deck.Count}장)");
+            }
+
+            context.LastEffectSucceeded = true;
+            onComplete?.Invoke();
+        }
+
+        /* 이전 버전 백업 코드(자동 선택 random 모드 기준)
         public void Execute(GameContext context, Action onComplete)
         {
             Player self = context.ActivePlayer;
@@ -165,36 +267,7 @@ namespace TCG_Project.Scripts.Effects
             // 여기까지 도달했다면 효과 처리에 성공한 것임
             context.LastEffectSucceeded = true;
             onComplete?.Invoke();
-
-            /*
-            if (selected.Count == 0 || selected.Count < _count)
-            {
-                string filterHint = string.IsNullOrEmpty(_filter) ? "" : $" (필터: {_filter})";
-                EventManager.OnLogMessage?.Invoke(
-                    $"  [카드 이동] {self.Name}: 대상 없음 — {_from}→{_to}{filterHint}");
-                context.LastEffectSucceeded = false; // Phase 18: "그 후" 효과 불발
-                onComplete?.Invoke();
-                return;
-            }
-
-            foreach (var card in selected)
-            {
-                RemoveFromZone(self, _from, card);
-                AddToZone(self, _to, card);
-                EventManager.OnLogMessage?.Invoke(
-                    $"  [카드 이동] {self.Name}: '{card.Name}' {_from}→{_to}");
-            }
-
-            if (_shuffleAfter)
-            {
-                self.ShuffleDeck();
-                EventManager.OnLogMessage?.Invoke(
-                    $"  [덱 섞기] {self.Name} 이동 후 메인덱 섞음 (덱: {self.Deck.Count}장)");
-            }
-
-            onComplete?.Invoke();
-            */
-        }
+        }*/
 
         private void RemoveFromZone(Player p, ZoneType zone, Card card)
         {

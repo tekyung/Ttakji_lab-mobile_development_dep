@@ -154,6 +154,8 @@ namespace TCG_Project.Scripts.Core
             if (gained > 0)
                 EventManager.OnLogMessage?.Invoke(
                     $"💚 [{Name}] 라이프 +{gained} 회복 (현재: {LifeTokens}/{GameRules.LifeTokens})");
+
+            EventManager.OnLifeChange?.Invoke(this, LifeTokens);
         }
 
         // 새 게임 시작 시 플레이어 상태를 완전 초기화한다 (MatchManager에서 호출).
@@ -209,6 +211,7 @@ namespace TCG_Project.Scripts.Core
         public void InitializeLifeTokens()
         {
             LifeTokens = GameRules.LifeTokens;
+            EventManager.OnLifeChange?.Invoke(this, LifeTokens);
         }
 
         // --- 자원덱 초기화 ---
@@ -229,8 +232,8 @@ namespace TCG_Project.Scripts.Core
             Card resource = ResourceDeck[0];
             ExtractCard(ZoneType.ResourceDeck, ResourceDeck[0]); // 자원덱에서 제거
             InsertCard(ZoneType.ResourceZone, resource); // 자원존으로 이동
-            EventManager.OnLogMessage?.Invoke($"[{Name}] 자원 획득 (자원존: {ResourceZone.Count}개 / 자원덱 잔여: {ResourceDeck.Count}장)");
             EventManager.OnResourceChange?.Invoke(this, GetResourceCount());
+            EventManager.OnLogMessage?.Invoke($"[{Name}] 자원 획득 (자원존: {ResourceZone.Count}개 / 자원덱 잔여: {ResourceDeck.Count}장)");
             return true;
         }
 
@@ -240,7 +243,7 @@ namespace TCG_Project.Scripts.Core
         // --- 코스트 지불 가능 여부 ---
         public bool CanAfford(int cost) => ResourceZone.Count >= cost;
 
-        // --- 코스트 지불: 자원존 → 폐기존 ---
+        // --- 코스트 지불: 자원존[0]부터 FIFO → 폐기존 ---
         public bool PayCost(int cost)
         {
             if (!CanAfford(cost))
@@ -250,9 +253,11 @@ namespace TCG_Project.Scripts.Core
             }
             for (int i = 0; i < cost; i++)
             {
-                Card resource = ResourceZone[ResourceZone.Count - 1];
-                ExtractCard(ZoneType.ResourceZone, ResourceZone[ResourceZone.Count - 1]); // 자원존에서 제거
+                Card resource = ResourceZone[0];
+                ExtractCard(ZoneType.ResourceZone, resource);
+                resource.IsFaceUp = true;
                 InsertCard(ZoneType.Graveyard, resource);
+                EventManager.OnCardMove?.Invoke(resource, this, ZoneType.ResourceZone, this, ZoneType.Graveyard);
             }
             EventManager.OnLogMessage?.Invoke($"[{Name}] 코스트 {cost} 지불 (자원존 잔여: {ResourceZone.Count}개)");
             EventManager.OnResourceChange?.Invoke(this, GetResourceCount());
@@ -273,8 +278,11 @@ namespace TCG_Project.Scripts.Core
                 InsertCard(ZoneType.Hand, oldSet); // 기존 카드는 패로 복귀
             }
             ExtractCard(ZoneType.Hand, card); // 패에서 제거
+            card.IsFaceUp = false; // 카드를 뒷면 상태로 전환
             InsertCard(ZoneType.SetZone, card); // 세트존으로 이동
             EventManager.OnLogMessage?.Invoke($"[{Name}] 세트존에 카드('{SetZoneCard.Name}')를 뒷면으로 세트했습니다.");
+            EventManager.OnCardMove?.Invoke(card, this, ZoneType.Hand, this, ZoneType.SetZone);
+            EventManager.OnCardSet?.Invoke(card, this);
             return true;
         }
 
@@ -284,8 +292,14 @@ namespace TCG_Project.Scripts.Core
             if (SetZoneCard == null) return;
             Card abandoned = SetZoneCard;
             ExtractCard(ZoneType.SetZone, SetZoneCard); // 세트존에서 제거
+            if (!abandoned.IsFaceUp)
+            {
+                abandoned.IsFaceUp = true; // 폐기 전에 카드를 앞면으로 전환하여 로그에 보이도록 함
+                EventManager.OnCardStateChanged?.Invoke(abandoned); // 상태 변경 이벤트 발행
+            }
             InsertCard(ZoneType.Graveyard, abandoned); // 폐기존으로 이동
             EventManager.OnLogMessage?.Invoke($"[{Name}] 세트 카드('{abandoned.Name}')를 폐기했습니다. 메인덱에서 1장 드로우.");
+            EventManager.OnCardMove?.Invoke(abandoned, this, ZoneType.SetZone, this, ZoneType.Graveyard);
             // 드로우는 호출자(GameRunner)에서 처리
         }
 
@@ -294,7 +308,9 @@ namespace TCG_Project.Scripts.Core
         {
             if (SetZoneCard == null) return null;
             Card revealed = SetZoneCard;
+            revealed.IsFaceUp = true; // 카드를 앞면 상태로 전환
             EventManager.OnLogMessage?.Invoke($"[{Name}] '{revealed.Name}' 공개! (Speed: {revealed.Speed}, Type: {revealed.Type})");
+            EventManager.OnCardStateChanged?.Invoke(revealed);
             return revealed;
         }
 
@@ -309,8 +325,10 @@ namespace TCG_Project.Scripts.Core
         public void UseAndDiscardStack(Card card)
         {
             if (!StackZone.Contains(card)) return;
-            ExtractCard(ZoneType.StackZone, card); // 스택존에서 제거
-            InsertCard(ZoneType.Graveyard, card); // 폐기존으로 이동
+            EventManager.OnCardUnstacked?.Invoke(card, this);
+            ExtractCard(ZoneType.StackZone, card);
+            InsertCard(ZoneType.Graveyard, card);
+            EventManager.OnCardMove?.Invoke(card, this, ZoneType.StackZone, this, ZoneType.Graveyard);
             EventManager.OnLogMessage?.Invoke($"[{Name}] 스택 카드 '{card.Name}' 효과 사용 → 폐기존.");
         }
 
@@ -323,8 +341,11 @@ namespace TCG_Project.Scripts.Core
 
                 // 1. 기존 전장 카드를 묘지(폐기존)로 이동
                 Card oldCard = BattlefieldCard;
-                BattlefieldCard = null; // 안전을 위해 일단 비움
+                BattlefieldCard = null;
+                oldCard.IsFaceUp = true;
                 InsertCard(ZoneType.Graveyard, oldCard);
+                EventManager.OnCardMove?.Invoke(oldCard, this, ZoneType.BattlefieldZone, this, ZoneType.Graveyard);
+                EventManager.OnCardUnbattlefield?.Invoke(oldCard, this);
 
                 // 2. ★ 중요: 기존 전장이 부여했던 1회성 전장 버프를 완전히 날려버립니다.
                 BattlefieldArmor = 0;
@@ -337,7 +358,7 @@ namespace TCG_Project.Scripts.Core
             return true;
         }
 
-        // --- 전장존: 전장 카드 파괴 ---
+        // --- 전장존: 전장 카드 파괴 --- (260328 현재 미사용 중)
         public void DestroyBattlefield()
         {
             if (BattlefieldCard == null) return;
@@ -345,8 +366,11 @@ namespace TCG_Project.Scripts.Core
 
             // 1. 기존 전장 카드를 묘지(폐기존)로 이동
             Card oldCard = BattlefieldCard;
-            BattlefieldCard = null; // 안전을 위해 일단 비움
+            BattlefieldCard = null;
+            oldCard.IsFaceUp = true;
             InsertCard(ZoneType.Graveyard, oldCard);
+            EventManager.OnCardMove?.Invoke(oldCard, this, ZoneType.BattlefieldZone, this, ZoneType.Graveyard);
+            EventManager.OnCardUnbattlefield?.Invoke(oldCard, this);
 
             // 2. ★ 중요: 기존 전장이 부여했던 1회성 전장 버프를 완전히 날려버립니다.
             BattlefieldArmor = 0;
@@ -384,7 +408,7 @@ namespace TCG_Project.Scripts.Core
             ShuffleDeck();
         }
 
-        // 패에 있는 모든 카드의 사용 가능 여부를 검사하고 리스트 갱신
+        // 패에 있는 모든 카드의 사용 가능 여부를 검사하고 리스트 갱신 (안 씀)
         public void UpdatePlayableCards(GameContext context)
         {
             EnableCardList.Clear();
@@ -524,8 +548,8 @@ namespace TCG_Project.Scripts.Core
                     break;
 
                 case ZoneType.ResourceZone:
-                    // 자원존은 가장 나중에 쌓인 것(맨 뒤)에서 소비
-                    if (ResourceZone.Count > 0) target = ResourceZone[ResourceZone.Count - 1];
+                    // 자원존은 가장 먼저 들어온 것(맨 앞)부터 FIFO 소비
+                    if (ResourceZone.Count > 0) target = ResourceZone[0];
                     break;
 
                 case ZoneType.StackZone:

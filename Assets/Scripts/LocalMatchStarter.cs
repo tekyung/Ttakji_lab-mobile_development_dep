@@ -15,6 +15,10 @@ public class LocalMatchStarter : MonoBehaviour
     [SerializeField] private LocalMatchMode mode = LocalMatchMode.BotVsBot;
     [SerializeField] private bool autoStart = true;
 
+    [Header("BotVsBot Spectator")]
+    [SerializeField] private bool revealAllHandsInBotVsBot = true;
+    [SerializeField] private EnemyVisualTester enemyVisualTester;
+
     private bool _started;
 
     private static readonly string[] P1UniqueCardIds =
@@ -73,6 +77,16 @@ public class LocalMatchStarter : MonoBehaviour
             mainCharacterId: "VERO-01",
             subCharacterId: "SONI-01",
             uniqueCardIds: P2UniqueCardIds);
+
+        EnemyVisualTester visualTester = enemyVisualTester != null
+            ? enemyVisualTester
+            : FindFirstObjectByType<EnemyVisualTester>();
+
+        if (visualTester != null)
+        {
+            visualTester.ConfigureBotVsBotSpectator(
+                mode == LocalMatchMode.BotVsBot && revealAllHandsInBotVsBot);
+        }
 
         Debug.Log($"[LocalMatchStarter] Starting local match ({mode}).");
         BattleManager.Instance.StartMatch(p1Setup, p2Setup);

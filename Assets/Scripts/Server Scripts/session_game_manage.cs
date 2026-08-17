@@ -42,10 +42,10 @@ public class session_game_manage : MonoBehaviour
             DeckSaveData myData = new DeckSaveData();
             myData.cardIdList = GameData.MyDeck;
 
-            // 2. JSON ¹®ÀÚ¿­·Î º¯È¯
+            // 2. JSON ë¬¸ìì—´ë¡œ ë³€í™˜
             string jsonDeck = JsonUtility.ToJson(myData);
 
-            // 3. ÆÄÀÌ¾îº£ÀÌ½º·Î Àü¼Û
+            // 3. íŒŒì´ì–´ë² ì´ìŠ¤ë¡œ ì „ì†¡
             await networkService.UploadDeck(sessionRoom, myRole, jsonDeck);
         }
         else
@@ -54,9 +54,9 @@ public class session_game_manage : MonoBehaviour
         }
         networkService.ListenForEventDTO(sessionRoom, HandleActionEvent);
 
-        // B. ¹æÀåÀÌ ÃÖ½Å Àü±¤ÆÇ(BoardState)À» Ä¥ÆÇ¿¡ µ¤¾î¾º¿üÀ» ¶§ (È­¸é °»½Å¿ë)
+        // B. ë°©ì¥ì´ ìµœì‹  ì „ê´‘íŒ(BoardState)ì„ ì¹ íŒì— ë®ì–´ì”Œì› ì„ ë•Œ (í™”ë©´ ê°±ì‹ ìš©)
         networkService.ListenForBoardState(sessionRoom, HandleBoardStateChange);
-        // A/B/C ¹öÆ°°ú ¼öµ¿ ÅÏ ³Ñ±â±â UI´Â ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾ÊÀ¸¹Ç·Î ºñÈ°¼ºÈ­ÇÕ´Ï´Ù.
+        // A/B/C ë²„íŠ¼ê³¼ ìˆ˜ë™ í„´ ë„˜ê¸°ê¸° UIëŠ” í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ ë¹„í™œì„±í™”í•©ë‹ˆë‹¤.
         // networkService.ListenForTurn(sessionRoom, HandleTurnChange);
         // if (myRole == "HOST")
         // {
@@ -82,31 +82,31 @@ public class session_game_manage : MonoBehaviour
             actionType == "VisualEventNotification" ||
             actionType.EndsWith("Notification");
 
-        // ÀÓ½Ã: Pass Turn ÀÌº¥Æ®´Â »óÅÂÃ¢ ·Î±×°¡ ³Ê¹« ½Ã²ô·¯¿ö¼­ ¼û±é´Ï´Ù.
+        // ì„ì‹œ: Pass Turn ì´ë²¤íŠ¸ëŠ” ìƒíƒœì°½ ë¡œê·¸ê°€ ë„ˆë¬´ ì‹œë„ëŸ¬ì›Œì„œ ìˆ¨ê¹ë‹ˆë‹¤.
         if (shouldLogAction)
-            pendingStatus = ($"[{sender}] {actionType} ¼ö½Å");
+            pendingStatus = ($"[{sender}] {actionType} ìˆ˜ì‹ ");
         if (shouldLogAction)
-            Debug.Log($"[Å¬¶ó:{myRole}] ÀÌº¥Æ® ¼ö½Å action={actionType}, sender={sender}, hasJson={!string.IsNullOrEmpty(jsonData)}");
+            Debug.Log($"[í´ë¼:{myRole}] ì´ë²¤íŠ¸ ìˆ˜ì‹  action={actionType}, sender={sender}, hasJson={!string.IsNullOrEmpty(jsonData)}");
 
-        // ³»°¡ ¹æÀåÀÌ¶ó¸é Å¬¶óÀÌ¾ğÆ®ÀÇ ¿äÃ»¸¸ Áß¾Ó Ã³¸®¼Ò·Î ³Ñ±é´Ï´Ù.
+        // ë‚´ê°€ ë°©ì¥ì´ë¼ë©´ í´ë¼ì´ì–¸íŠ¸ì˜ ìš”ì²­ë§Œ ì¤‘ì•™ ì²˜ë¦¬ì†Œë¡œ ë„˜ê¹ë‹ˆë‹¤.
         if (myRole == "HOST" && sender != "ALL" && !isServerNotification)
         {
             if (shouldLogAction)
-                Debug.Log($"[Å¬¶ó:{myRole}] HOST ¶ó¿ìÅÍ°¡ ÀÌº¥Æ®¸¦ ¼­¹ö Ã³¸®±â·Î Àü´ŞÇÕ´Ï´Ù. action={actionType}, sender={sender}");
+                Debug.Log($"[í´ë¼:{myRole}] HOST ë¼ìš°í„°ê°€ ì´ë²¤íŠ¸ë¥¼ ì„œë²„ ì²˜ë¦¬ê¸°ë¡œ ì „ë‹¬í•©ë‹ˆë‹¤. action={actionType}, sender={sender}");
             await EventService.Instance.ProcessEvent(sessionRoom, actionType, sender, jsonData);
         }
 
-        // NotificationÀÇ sender¿¡´Â ´ë»ó ÇÃ·¹ÀÌ¾î ÀÌ¸§ÀÌ ´ã±â¹Ç·Î ³» ¾Ë¸²¸¸ Ã³¸®ÇÕ´Ï´Ù.
+        // Notificationì˜ senderì—ëŠ” ëŒ€ìƒ í”Œë ˆì´ì–´ ì´ë¦„ì´ ë‹´ê¸°ë¯€ë¡œ ë‚´ ì•Œë¦¼ë§Œ ì²˜ë¦¬í•©ë‹ˆë‹¤.
         if (isServerNotification && (sender == myRole || sender == "ALL"))
         {
             HandleServerNotification(actionType, jsonData);
         }
     }
 
-    // ÅÏ º¯°æ ¼ö½Å Ã³¸®
+    // í„´ ë³€ê²½ ìˆ˜ì‹  ì²˜ë¦¬
     private void HandleTurnChange(string newTurn)
     {
-        // A/B/C ¹öÆ° ±â¹İ ÅÏ UI´Â ÇöÀç »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.
+        // A/B/C ë²„íŠ¼ ê¸°ë°˜ í„´ UIëŠ” í˜„ì¬ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
         // uiManager.ResetButtons();
         // bool isMyTurn = (myRole == newTurn);
         // if (isMyTurn) StartMyTurn();
@@ -114,12 +114,12 @@ public class session_game_manage : MonoBehaviour
     }
     private void HandleBoardStateChange(string jsonState)
     {
-        // 1. ¹æÀåÀÌ ÆÄÀÌ¾îº£ÀÌ½º¿¡ ¿Ã¸° JSON ¹®ÀÚ¿­À» ÁøÂ¥ BoardState °´Ã¼·Î º¯È¯
+        // 1. ë°©ì¥ì´ íŒŒì´ì–´ë² ì´ìŠ¤ì— ì˜¬ë¦° JSON ë¬¸ìì—´ì„ ì§„ì§œ BoardState ê°ì²´ë¡œ ë³€í™˜
         BoardState latestState = JsonUtility.FromJson<BoardState>(jsonState);
         latestBoardState = latestState;
 
-        // 2. ÇöÀç ÅÏÀÎ »ç¶÷ÀÌ '³ª'ÀÎÁö È®ÀÎÇØ¼­ UI ¹öÆ°(Á¶ÀÛ) ÄÑ°í ²ô±â
-        // Set/Open ÆäÀÌÁî´Â ¾çÃøÀÌ µ¿½Ã¿¡ ¼±ÅÃÇØ¾ß ÇÏ¹Ç·Î ActivePlayer ±â¹İ °ÔÀÌÆÃÀ» ÇØÁ¦ÇÕ´Ï´Ù.
+        // 2. í˜„ì¬ í„´ì¸ ì‚¬ëŒì´ 'ë‚˜'ì¸ì§€ í™•ì¸í•´ì„œ UI ë²„íŠ¼(ì¡°ì‘) ì¼œê³  ë„ê¸°
+        // Set/Open í˜ì´ì¦ˆëŠ” ì–‘ì¸¡ì´ ë™ì‹œì— ì„ íƒí•´ì•¼ í•˜ë¯€ë¡œ ActivePlayer ê¸°ë°˜ ê²Œì´íŒ…ì„ í•´ì œí•©ë‹ˆë‹¤.
         bool isSetOrOpenPhase =
             latestState.CurrentPhase == GamePhase.SetPhase.ToString() ||
             latestState.CurrentPhase == GamePhase.OpenPhase.ToString();
@@ -130,7 +130,7 @@ public class session_game_manage : MonoBehaviour
 
         int myResourceCount = (myRole == "HOST") ? latestState.HostState.ResourceZoneCount : latestState.GuestState.ResourceZoneCount;
 
-        pendingStatus = $"[ÆäÀÌÁî °»½Å] ÅÏ: {latestState.CurrentTurn} / ÇöÀç ÅÏ: {latestState.ActivePlayer}";
+        pendingStatus = $"[í˜ì´ì¦ˆ ê°±ì‹ ] í„´: {latestState.CurrentTurn} / í˜„ì¬ í„´: {latestState.ActivePlayer}";
 
         Debug.Log(
             $"[BoardSync][{myRole}] turn={latestState.CurrentTurn}, phase={latestState.CurrentPhase}, active={latestState.ActivePlayer}, myTurn={isMyTurn}");
@@ -172,26 +172,26 @@ public class session_game_manage : MonoBehaviour
     {
         if (latestBoardState == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ¾ÆÁ÷ board_state¸¦ ¹ŞÁö ¸øÇß½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì•„ì§ board_stateë¥¼ ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (latestBoardState.CurrentPhase != GamePhase.SetPhase.ToString())
         {
-            Debug.LogWarning($"[Å×½ºÆ®] ÇöÀç ÆäÀÌÁî°¡ SetPhase°¡ ¾Æ´Õ´Ï´Ù. ({latestBoardState.CurrentPhase})");
+            Debug.LogWarning($"[í…ŒìŠ¤íŠ¸] í˜„ì¬ í˜ì´ì¦ˆê°€ SetPhaseê°€ ì•„ë‹™ë‹ˆë‹¤. ({latestBoardState.CurrentPhase})");
             return;
         }
 
         PlayerState myState = GetMyPlayerState();
         if (myState == null || myState.HandCardInstanceIds == null || myState.HandCardInstanceIds.Length == 0)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ¼ÕÆĞ Á¤º¸°¡ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ì†íŒ¨ ì •ë³´ê°€ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (handIndex < 0 || handIndex >= myState.HandCardInstanceIds.Length)
         {
-            Debug.LogWarning($"[Å×½ºÆ®] ¼ÕÆĞ ÀÎµ¦½º°¡ ¹üÀ§¸¦ ¹ş¾î³µ½À´Ï´Ù. index={handIndex}, handCount={myState.HandCardInstanceIds.Length}");
+            Debug.LogWarning($"[í…ŒìŠ¤íŠ¸] ì†íŒ¨ ì¸ë±ìŠ¤ê°€ ë²”ìœ„ë¥¼ ë²—ì–´ë‚¬ìŠµë‹ˆë‹¤. index={handIndex}, handCount={myState.HandCardInstanceIds.Length}");
             return;
         }
 
@@ -201,7 +201,7 @@ public class session_game_manage : MonoBehaviour
                 ? myState.HandCardDataIds[handIndex]
                 : "UNKNOWN";
 
-        Debug.Log($"[Å×½ºÆ®] SetPhase Ä«µå Á¦Ãâ: role={myRole}, index={handIndex}, dataId={selectedDataId}, instanceId={selectedInstanceId}");
+        Debug.Log($"[í…ŒìŠ¤íŠ¸] SetPhase ì¹´ë“œ ì œì¶œ: role={myRole}, index={handIndex}, dataId={selectedDataId}, instanceId={selectedInstanceId}");
         SendSetPhaseChoice(selectedInstanceId, true);
     }
 
@@ -221,25 +221,25 @@ public class session_game_manage : MonoBehaviour
     {
         if (latestBoardState == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ¾ÆÁ÷ board_state¸¦ ¹ŞÁö ¸øÇß½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì•„ì§ board_stateë¥¼ ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (latestBoardState.CurrentPhase != GamePhase.OpenPhase.ToString())
         {
-            Debug.LogWarning($"[Å×½ºÆ®] ÇöÀç ÆäÀÌÁî°¡ OpenPhase°¡ ¾Æ´Õ´Ï´Ù. ({latestBoardState.CurrentPhase})");
+            Debug.LogWarning($"[í…ŒìŠ¤íŠ¸] í˜„ì¬ í˜ì´ì¦ˆê°€ OpenPhaseê°€ ì•„ë‹™ë‹ˆë‹¤. ({latestBoardState.CurrentPhase})");
             return;
         }
 
         CardState mySetCard = GetMySetZoneCardState();
         if (mySetCard == null || string.IsNullOrEmpty(mySetCard.InstanceId))
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ³» SetZone Ä«µå Á¤º¸¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ë‚´ SetZone ì¹´ë“œ ì •ë³´ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
         Debug.Log(
-            $"[Å×½ºÆ®] OpenPhase ¼±ÅÃ Àü¼Û: role={myRole}, choice={choiceString}, " +
+            $"[í…ŒìŠ¤íŠ¸] OpenPhase ì„ íƒ ì „ì†¡: role={myRole}, choice={choiceString}, " +
             $"setInstanceId={mySetCard.InstanceId}, dataId={mySetCard.CardDataId}");
 
         SendOpenPhaseChoice(mySetCard.InstanceId, choiceString);
@@ -268,15 +268,15 @@ public class session_game_manage : MonoBehaviour
 
     private void StartMyTurn()
     {
-        // A/B/C ¹öÆ°°ú ÅÏ Å¸ÀÌ¸Ó´Â ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.
+        // A/B/C ë²„íŠ¼ê³¼ í„´ íƒ€ì´ë¨¸ëŠ” í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
         // uiManager.SetActionButtonsState(true);
         // turnTimer = StartCoroutine(TurnTimeoutRoutine());
     }
 
-    // ³» ÅÏ Á¾·á
+    // ë‚´ í„´ ì¢…ë£Œ
     private void EndMyTurn()
     {
-        // A/B/C ¹öÆ°°ú ÅÏ Å¸ÀÌ¸Ó´Â ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.
+        // A/B/C ë²„íŠ¼ê³¼ í„´ íƒ€ì´ë¨¸ëŠ” í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
         // uiManager.SetActionButtonsState(false);
         // if (turnTimer != null)
         // {
@@ -285,7 +285,7 @@ public class session_game_manage : MonoBehaviour
     }
     private IEnumerator TurnTimeoutRoutine()
     {
-        // A/B/C ¹öÆ° ±â¹İ Å¸ÀÌ¸Ó ÅÏ Á¾·á´Â ÇöÀç »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.
+        // A/B/C ë²„íŠ¼ ê¸°ë°˜ íƒ€ì´ë¨¸ í„´ ì¢…ë£ŒëŠ” í˜„ì¬ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
         // float timer = turn_time_limit;
         // while (timer > 0)
         // {
@@ -304,10 +304,10 @@ public class session_game_manage : MonoBehaviour
             CardInstanceId = cardId         //
         };
 
-        //  °´Ã¼¸¦ ÅØ½ºÆ®(JSON)·Î º¯È¯
+        //  ê°ì²´ë¥¼ í…ìŠ¤íŠ¸(JSON)ë¡œ ë³€í™˜
         string json = JsonUtility.ToJson(req);
 
-        // ÆÄÀÌ¾îº£ÀÌ½º ¿£ÁøÀ» ÅëÇØ Àü¼Û
+        // íŒŒì´ì–´ë² ì´ìŠ¤ ì—”ì§„ì„ í†µí•´ ì „ì†¡
         await networkService.SendAction(GameData.SessionCode, "PlayCardRequest", json);
     }
 
@@ -320,7 +320,7 @@ public class session_game_manage : MonoBehaviour
         // if (turnTimer != null) StopCoroutine(turnTimer);
         // turnTimer = StartCoroutine(TurnTimeoutRoutine());
         // await networkService.SendAction(sessionRoom, ActionType.A.ToString(), myRole);
-        Debug.Log("[¼¼¼Ç] A ¹öÆ°Àº ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.");
+        Debug.Log("[ì„¸ì…˜] A ë²„íŠ¼ì€ í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.");
     }
 
     public void OnBtnClick_B()
@@ -332,10 +332,10 @@ public class session_game_manage : MonoBehaviour
         // if (turnTimer != null) StopCoroutine(turnTimer);
         // turnTimer = StartCoroutine(TurnTimeoutRoutine());
         // await networkService.SendAction(sessionRoom, ActionType.B.ToString(), myRole);
-        Debug.Log("[¼¼¼Ç] B ¹öÆ°Àº ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.");
+        Debug.Log("[ì„¸ì…˜] B ë²„íŠ¼ì€ í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.");
     }
 
-    public void OnBtnClick_C() // ÅÏ ³Ñ±â±â
+    public void OnBtnClick_C() // í„´ ë„˜ê¸°ê¸°
     {
         // if (string.IsNullOrEmpty(sessionRoom))
         // {
@@ -346,7 +346,7 @@ public class session_game_manage : MonoBehaviour
         // string nextTurn = (myRole == "HOST") ? "GUEST" : "HOST";
         // await networkService.SendAction(sessionRoom, "Pass Turn", myRole);
         // await networkService.ChangeTurn(sessionRoom, nextTurn);
-        Debug.Log("[¼¼¼Ç] ¼öµ¿ ÅÏ ³Ñ±â±â´Â ÇöÀç ·ê Èå¸§¿¡¼­ »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.");
+        Debug.Log("[ì„¸ì…˜] ìˆ˜ë™ í„´ ë„˜ê¸°ê¸°ëŠ” í˜„ì¬ ë£° íë¦„ì—ì„œ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.");
     }
     void Update()
     {
@@ -358,28 +358,28 @@ public class session_game_manage : MonoBehaviour
 
         if (pendingAction.HasValue)
         {
-            // A/B/C ¹öÆ° °­Á¶ Ç¥½Ã´Â ÇöÀç »ç¿ëÇÏÁö ¾Ê½À´Ï´Ù.
+            // A/B/C ë²„íŠ¼ ê°•ì¡° í‘œì‹œëŠ” í˜„ì¬ ì‚¬ìš©í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.
             // uiManager.CheckButton(pendingAction.Value);
             pendingAction = null;
         }
     }
 
 
-    /// <summary>Å×½ºÆ® 2: ÅÏ Á¾·á ¿äÃ» (ÇÕ¹ıÀûÀÎ ÀıÂ÷)</summary>
+    /// <summary>í…ŒìŠ¤íŠ¸ 2: í„´ ì¢…ë£Œ ìš”ì²­ (í•©ë²•ì ì¸ ì ˆì°¨)</summary>
     public async void Test_RequestTurnEnd()
     {
-        // 1. ÆíÁö(DTO) ÀÛ¼º
+        // 1. í¸ì§€(DTO) ì‘ì„±
         TurnEndRequest req = new TurnEndRequest
         {
             MatchId = sessionRoom,
             PlayerName = myRole
         };
 
-        // 2. JSON ¾ĞÃà ¹× Àü¼Û
+        // 2. JSON ì••ì¶• ë° ì „ì†¡
         string json = JsonUtility.ToJson(req);
         await networkService.SendAction(sessionRoom, "TurnEndRequest", json);
 
-        Debug.Log($"[Å¬¶óÀÌ¾ğÆ®] ÅÏ Á¾·á ¿äÃ» º¸³¿: {json}");
+        Debug.Log($"[í´ë¼ì´ì–¸íŠ¸] í„´ ì¢…ë£Œ ìš”ì²­ ë³´ëƒ„: {json}");
     }
     private void HandleServerNotification(string actionType, string jsonData)
     {
@@ -387,24 +387,24 @@ public class session_game_manage : MonoBehaviour
         {
             case "RequireSetPhaseNotification":
                 var setNoti = JsonUtility.FromJson<RequireSetPhaseNotification>(jsonData);
-                uiManager.UpdateStatus(setNoti.Message); // "¼¼Æ®ÇÒ Ä«µå¸¦ °í¸£¼¼¿ä"
-                // ÇÁ·ÎÅäÅ¸ÀÔ: À¯Àú°¡ Ä«µå¸¦ ´©¸¦ ¼ö ÀÖ°Ô ³» ¼ÕÆĞ Á¶ÀÛ È°¼ºÈ­
+                uiManager.UpdateStatus(setNoti.Message); // "ì„¸íŠ¸í•  ì¹´ë“œë¥¼ ê³ ë¥´ì„¸ìš”"
+                // í”„ë¡œí† íƒ€ì…: ìœ ì €ê°€ ì¹´ë“œë¥¼ ëˆ„ë¥¼ ìˆ˜ ìˆê²Œ ë‚´ ì†íŒ¨ ì¡°ì‘ í™œì„±í™”
                 //uiManager.SetActionButtonsState(true);
                 break;
 
             case "RequireOpenPhaseNotification":
                 var openNoti = JsonUtility.FromJson<RequireOpenPhaseNotification>(jsonData);
-                uiManager.UpdateStatus(openNoti.Message); // "°ø°³ÇÏ½Ã°Ú½À´Ï±î?"
-                // TODO: À¯´ÏÆ¼ ¾À¿¡ ´ëÃæ ¸¸µç [°ø°³] / [Æó±â] ¹öÆ° 2°³¸¦ È­¸é¿¡ º¸ÀÌ°Ô ÄÑÁİ´Ï´Ù.
-                // ¿¹: OpenPhasePanel.SetActive(true);
+                uiManager.UpdateStatus(openNoti.Message); // "ê³µê°œí•˜ì‹œê² ìŠµë‹ˆê¹Œ?"
+                // TODO: ìœ ë‹ˆí‹° ì”¬ì— ëŒ€ì¶© ë§Œë“  [ê³µê°œ] / [íê¸°] ë²„íŠ¼ 2ê°œë¥¼ í™”ë©´ì— ë³´ì´ê²Œ ì¼œì¤ë‹ˆë‹¤.
+                // ì˜ˆ: OpenPhasePanel.SetActive(true);
                 break;
 
             case "RequireStackNotification":
                 var stackNoti = JsonUtility.FromJson<RequireStackNotification>(jsonData);
                 pendingStackNotification = stackNoti;
-                uiManager.UpdateStatus(stackNoti.Message); // "½ºÅÃ ¹æ¾î ¹ßµ¿ÇÒ±î¿ä?"
+                uiManager.UpdateStatus(stackNoti.Message); // "ìŠ¤íƒ ë°©ì–´ ë°œë™í• ê¹Œìš”?"
                 Debug.Log(
-                    $"[Å¬¶ó:{myRole}] Stack ¾Ë¸² ¼ö½Å stackCardId={stackNoti.StackCardInstanceId}, " +
+                    $"[í´ë¼:{myRole}] Stack ì•Œë¦¼ ìˆ˜ì‹  stackCardId={stackNoti.StackCardInstanceId}, " +
                     $"stackDataId={stackNoti.StackCardDataId}, opponentCardId={stackNoti.OpponentCardInstanceId}");
 
                 break;
@@ -414,7 +414,7 @@ public class session_game_manage : MonoBehaviour
                 pendingOptionalNotification = optionalNoti;
                 uiManager.UpdateStatus(optionalNoti.Message);
                 Debug.Log(
-                    $"[Å¬¶ó:{myRole}] Optional ¾Ë¸² ¼ö½Å actionId={optionalNoti.ActionId}, message={optionalNoti.Message}");
+                    $"[í´ë¼:{myRole}] Optional ì•Œë¦¼ ìˆ˜ì‹  actionId={optionalNoti.ActionId}, message={optionalNoti.Message}");
                 break;
 
             case "RequireCardPickNotification":
@@ -422,7 +422,7 @@ public class session_game_manage : MonoBehaviour
                 pendingCardPickNotification = pickNoti;
                 uiManager.UpdateStatus(pickNoti.Message);
                 Debug.Log(
-                    $"[Å¬¶ó:{myRole}] CardPick ¾Ë¸² ¼ö½Å requestId={pickNoti.RequestId}, required={pickNoti.RequiredCount}, " +
+                    $"[í´ë¼:{myRole}] CardPick ì•Œë¦¼ ìˆ˜ì‹  requestId={pickNoti.RequestId}, required={pickNoti.RequiredCount}, " +
                     $"candidates={(pickNoti.PresentedCardInstanceIds != null ? string.Join(", ", pickNoti.PresentedCardInstanceIds) : "none")}");
                 break;
 
@@ -431,7 +431,7 @@ public class session_game_manage : MonoBehaviour
                 pendingCardChoiceNotification = choiceNoti;
                 uiManager.UpdateStatus(choiceNoti.Message);
                 Debug.Log(
-                    $"[Å¬¶ó:{myRole}] CardChoice ¾Ë¸² ¼ö½Å requestId={choiceNoti.RequestId}, zone={choiceNoti.Zone}, required={choiceNoti.RequiredCount}, " +
+                    $"[í´ë¼:{myRole}] CardChoice ì•Œë¦¼ ìˆ˜ì‹  requestId={choiceNoti.RequestId}, zone={choiceNoti.Zone}, required={choiceNoti.RequiredCount}, " +
                     $"candidates={(choiceNoti.PresentedCardInstanceIds != null ? string.Join(", ", choiceNoti.PresentedCardInstanceIds) : "none")}");
                 break;
 
@@ -451,7 +451,7 @@ public class session_game_manage : MonoBehaviour
     {
         if (lifeNoti == null)
         {
-            Debug.LogWarning($"[Å¬¶ó:{myRole}] LifeChangeNotification ÆÄ½Ì ½ÇÆĞ");
+            Debug.LogWarning($"[í´ë¼:{myRole}] LifeChangeNotification íŒŒì‹± ì‹¤íŒ¨");
             return;
         }
 
@@ -463,22 +463,22 @@ public class session_game_manage : MonoBehaviour
 
         string statusText = $"[Life] {lifeNoti.TargetPlayerName} -> {lifeNoti.NewLife} ({deltaText})";
         pendingStatus = statusText;
-        Debug.Log($"[Å¬¶ó:{myRole}] {statusText}, reason={lifeNoti.Reason}");
+        Debug.Log($"[í´ë¼:{myRole}] {statusText}, reason={lifeNoti.Reason}");
     }
 
     private void HandleVisualEventNotification(VisualEventNotification visualNoti)
     {
         if (visualNoti == null)
         {
-            Debug.LogWarning($"[Å¬¶ó:{myRole}] VisualEventNotification ÆÄ½Ì ½ÇÆĞ");
+            Debug.LogWarning($"[í´ë¼:{myRole}] VisualEventNotification íŒŒì‹± ì‹¤íŒ¨");
             return;
         }
 
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] ¿¬Ãâ ¼ö½Å type={visualNoti.EventType}, owner={visualNoti.OwnerRole}, " +
+            $"[í´ë¼:{myRole}] ì—°ì¶œ ìˆ˜ì‹  type={visualNoti.EventType}, owner={visualNoti.OwnerRole}, " +
             $"instance={visualNoti.CardInstanceId}, data={visualNoti.CardDataId}, from={visualNoti.FromZone}, to={visualNoti.ToZone}");
 
-        // HOST´Â °°Àº ÇÁ·Î¼¼½ºÀÇ ¼­¹ö EventManager ÀÌº¥Æ®¸¦ Á÷Á¢ ¹ŞÀ¸¹Ç·Î Áßº¹ Àç»ıÀ» ¸·½À´Ï´Ù.
+        // HOSTëŠ” ê°™ì€ í”„ë¡œì„¸ìŠ¤ì˜ ì„œë²„ EventManager ì´ë²¤íŠ¸ë¥¼ ì§ì ‘ ë°›ìœ¼ë¯€ë¡œ ì¤‘ë³µ ì¬ìƒì„ ë§‰ìŠµë‹ˆë‹¤.
         if (myRole == "HOST")
             return;
 
@@ -507,7 +507,7 @@ public class session_game_manage : MonoBehaviour
                 break;
 
             default:
-                Debug.Log($"[Å¬¶ó:{myRole}] ¹ÌÃ³¸® ¿¬Ãâ Å¸ÀÔ: {visualNoti.EventType}");
+                Debug.Log($"[í´ë¼:{myRole}] ë¯¸ì²˜ë¦¬ ì—°ì¶œ íƒ€ì…: {visualNoti.EventType}");
                 break;
         }
     }
@@ -546,14 +546,14 @@ public class session_game_manage : MonoBehaviour
     }
 
     // =======================================================
-    // 3. UI ¹öÆ° Å¬¸¯ ½Ã ¼­¹ö·Î ´ë´ä ¹ß¼Û (À¯´ÏÆ¼ ¹öÆ°ÀÇ OnClick¿¡ ¿¬°á)
+    // 3. UI ë²„íŠ¼ í´ë¦­ ì‹œ ì„œë²„ë¡œ ëŒ€ë‹µ ë°œì†¡ (ìœ ë‹ˆí‹° ë²„íŠ¼ì˜ OnClickì— ì—°ê²°)
     // =======================================================
 
-    // ¼¼Æ®ÇÒ Ä«µå¸¦ ´­·¶À» ¶§ È£Ãâ
+    // ì„¸íŠ¸í•  ì¹´ë“œë¥¼ ëˆŒë €ì„ ë•Œ í˜¸ì¶œ
     public async void SendSetPhaseChoice(string selectedCardId, bool isConfirmed)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] Set ¿äÃ» Àü¼Û ½ÃÀÛ session={sessionRoom}, " +
+            $"[í´ë¼:{myRole}] Set ìš”ì²­ ì „ì†¡ ì‹œì‘ session={sessionRoom}, " +
             $"instanceId={selectedCardId}, confirmed={isConfirmed}, " +
             $"phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
@@ -565,14 +565,14 @@ public class session_game_manage : MonoBehaviour
             IsConfirmed = isConfirmed
         };
         await networkService.SendRequestDTO(sessionRoom, "SetPhaseActionRequest", req);
-        Debug.Log($"[Å¬¶ó:{myRole}] Set ¿äÃ» Àü¼Û ¿Ï·á instanceId={selectedCardId}");
+        Debug.Log($"[í´ë¼:{myRole}] Set ìš”ì²­ ì „ì†¡ ì™„ë£Œ instanceId={selectedCardId}");
     }
 
-    // [°ø°³] ¶Ç´Â [Æó±â] ¹öÆ°À» ´­·¶À» ¶§ È£Ãâ (choiceString: "Open" ¶Ç´Â "Abandon")
+    // [ê³µê°œ] ë˜ëŠ” [íê¸°] ë²„íŠ¼ì„ ëˆŒë €ì„ ë•Œ í˜¸ì¶œ (choiceString: "Open" ë˜ëŠ” "Abandon")
     public async void SendOpenPhaseChoice(string setCardId, string choiceString)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] Open ¿äÃ» Àü¼Û ½ÃÀÛ session={sessionRoom}, " +
+            $"[í´ë¼:{myRole}] Open ìš”ì²­ ì „ì†¡ ì‹œì‘ session={sessionRoom}, " +
             $"setCardId={setCardId}, choice={choiceString}, " +
             $"phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
@@ -584,17 +584,17 @@ public class session_game_manage : MonoBehaviour
             Choice = choiceString
         };
         await networkService.SendRequestDTO(sessionRoom, "OpenPhaseActionRequest", req);
-        Debug.Log($"[Å¬¶ó:{myRole}] Open ¿äÃ» Àü¼Û ¿Ï·á setCardId={setCardId}, choice={choiceString}");
+        Debug.Log($"[í´ë¼:{myRole}] Open ìš”ì²­ ì „ì†¡ ì™„ë£Œ setCardId={setCardId}, choice={choiceString}");
 
-        // ¹öÆ° ´©¸¥ µÚ¿£ ÆË¾÷Ã¢ ´İ±â
-        // ¿¹: OpenPhasePanel.SetActive(false);
+        // ë²„íŠ¼ ëˆ„ë¥¸ ë’¤ì—” íŒì—…ì°½ ë‹«ê¸°
+        // ì˜ˆ: OpenPhasePanel.SetActive(false);
     }
 
-    // ½ºÅÃ [¹ßµ¿] ¶Ç´Â [Ãë¼Ò] ¹öÆ°À» ´­·¶À» ¶§ È£Ãâ (isUsing: true/false)
+    // ìŠ¤íƒ [ë°œë™] ë˜ëŠ” [ì·¨ì†Œ] ë²„íŠ¼ì„ ëˆŒë €ì„ ë•Œ í˜¸ì¶œ (isUsing: true/false)
     public async void SendStackResponse(string myStackCardId, string opponentCardId, bool isUsing)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] Stack ÀÀ´ä Àü¼Û ½ÃÀÛ session={sessionRoom}, " +
+            $"[í´ë¼:{myRole}] Stack ì‘ë‹µ ì „ì†¡ ì‹œì‘ session={sessionRoom}, " +
             $"stackCardId={myStackCardId}, opponentCardId={opponentCardId}, use={isUsing}, " +
             $"phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
@@ -608,13 +608,13 @@ public class session_game_manage : MonoBehaviour
         };
         await networkService.SendRequestDTO(sessionRoom, "StackResponseRequest", req);
         pendingStackNotification = null;
-        Debug.Log($"[Å¬¶ó:{myRole}] Stack ÀÀ´ä Àü¼Û ¿Ï·á use={isUsing}");
+        Debug.Log($"[í´ë¼:{myRole}] Stack ì‘ë‹µ ì „ì†¡ ì™„ë£Œ use={isUsing}");
     }
 
     public async void SendOptionalActionResponse(string actionId, bool choice)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] Optional ÀÀ´ä Àü¼Û ½ÃÀÛ session={sessionRoom}, " +
+            $"[í´ë¼:{myRole}] Optional ì‘ë‹µ ì „ì†¡ ì‹œì‘ session={sessionRoom}, " +
             $"actionId={actionId}, choice={choice}, phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
         var req = new OptionalActionRequest
@@ -627,13 +627,13 @@ public class session_game_manage : MonoBehaviour
 
         await networkService.SendRequestDTO(sessionRoom, "OptionalActionRequest", req);
         pendingOptionalNotification = null;
-        Debug.Log($"[Å¬¶ó:{myRole}] Optional ÀÀ´ä Àü¼Û ¿Ï·á choice={choice}");
+        Debug.Log($"[í´ë¼:{myRole}] Optional ì‘ë‹µ ì „ì†¡ ì™„ë£Œ choice={choice}");
     }
 
     public async void SendCardPickResponse(string requestId, string[] pickedCardInstanceIds)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] CardPick ÀÀ´ä Àü¼Û ½ÃÀÛ session={sessionRoom}, requestId={requestId}, " +
+            $"[í´ë¼:{myRole}] CardPick ì‘ë‹µ ì „ì†¡ ì‹œì‘ session={sessionRoom}, requestId={requestId}, " +
             $"picked={(pickedCardInstanceIds != null ? string.Join(", ", pickedCardInstanceIds) : "none")}, " +
             $"phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
@@ -647,7 +647,7 @@ public class session_game_manage : MonoBehaviour
 
         await networkService.SendRequestDTO(sessionRoom, "CardPickRequest", req);
         pendingCardPickNotification = null;
-        Debug.Log($"[Å¬¶ó:{myRole}] CardPick ÀÀ´ä Àü¼Û ¿Ï·á requestId={requestId}");
+        Debug.Log($"[í´ë¼:{myRole}] CardPick ì‘ë‹µ ì „ì†¡ ì™„ë£Œ requestId={requestId}");
     }
 
     public RequireCardPickNotification GetPendingCardPickNotification() => pendingCardPickNotification;
@@ -656,7 +656,7 @@ public class session_game_manage : MonoBehaviour
     {
         if (pendingCardPickNotification == null)
         {
-            Debug.LogWarning("[session_game_manage] ´ë±â ÁßÀÎ CardPickÀÌ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[session_game_manage] ëŒ€ê¸° ì¤‘ì¸ CardPickì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -664,7 +664,7 @@ public class session_game_manage : MonoBehaviour
         if (pickedInstanceIds == null || pickedInstanceIds.Length != required)
         {
             Debug.LogWarning(
-                $"[session_game_manage] ¼±ÅÃ Àå¼ö ºÒÀÏÄ¡. required={required}, actual={pickedInstanceIds?.Length ?? 0}");
+                $"[session_game_manage] ì„ íƒ ì¥ìˆ˜ ë¶ˆì¼ì¹˜. required={required}, actual={pickedInstanceIds?.Length ?? 0}");
             return;
         }
 
@@ -673,7 +673,7 @@ public class session_game_manage : MonoBehaviour
         {
             if (string.IsNullOrEmpty(id) || !allowed.Contains(id))
             {
-                Debug.LogWarning($"[session_game_manage] ÈÄº¸¿¡ ¾ø´Â instanceId: {id}");
+                Debug.LogWarning($"[session_game_manage] í›„ë³´ì— ì—†ëŠ” instanceId: {id}");
                 return;
             }
         }
@@ -689,7 +689,7 @@ public class session_game_manage : MonoBehaviour
     public async void SendCardChoiceResponse(string requestId, string zone, string[] pickedCardInstanceIds)
     {
         Debug.Log(
-            $"[Å¬¶ó:{myRole}] CardChoice ÀÀ´ä Àü¼Û ½ÃÀÛ session={sessionRoom}, requestId={requestId}, zone={zone}, " +
+            $"[í´ë¼:{myRole}] CardChoice ì‘ë‹µ ì „ì†¡ ì‹œì‘ session={sessionRoom}, requestId={requestId}, zone={zone}, " +
             $"picked={(pickedCardInstanceIds != null ? string.Join(", ", pickedCardInstanceIds) : "none")}, " +
             $"phase={(latestBoardState != null ? latestBoardState.CurrentPhase : "unknown")}");
 
@@ -704,7 +704,7 @@ public class session_game_manage : MonoBehaviour
 
         await networkService.SendRequestDTO(sessionRoom, "CardChoiceRequest", req);
         pendingCardChoiceNotification = null;
-        Debug.Log($"[Å¬¶ó:{myRole}] CardChoice ÀÀ´ä Àü¼Û ¿Ï·á requestId={requestId}");
+        Debug.Log($"[í´ë¼:{myRole}] CardChoice ì‘ë‹µ ì „ì†¡ ì™„ë£Œ requestId={requestId}");
     }
 
     [ContextMenu("Test/Accept Pending Optional Action")]
@@ -723,7 +723,7 @@ public class session_game_manage : MonoBehaviour
     {
         if (pendingOptionalNotification == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ´ë±â ÁßÀÎ ¼±ÅÃÀû Çàµ¿ ¾Ë¸²ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ëŒ€ê¸° ì¤‘ì¸ ì„ íƒì  í–‰ë™ ì•Œë¦¼ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -740,14 +740,14 @@ public class session_game_manage : MonoBehaviour
     {
         if (pendingCardPickNotification == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ´ë±â ÁßÀÎ Ä«µå ÇÈ ¾Ë¸²ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ëŒ€ê¸° ì¤‘ì¸ ì¹´ë“œ í”½ ì•Œë¦¼ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (pendingCardPickNotification.PresentedCardInstanceIds == null ||
             pendingCardPickNotification.PresentedCardInstanceIds.Length == 0)
         {
-            Debug.LogWarning("[Å×½ºÆ®] Ä«µå ÇÈ ÈÄº¸°¡ ºñ¾î ÀÖ½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì¹´ë“œ í”½ í›„ë³´ê°€ ë¹„ì–´ ìˆìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -759,7 +759,7 @@ public class session_game_manage : MonoBehaviour
 
         if (pickedIds.Length == 0)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ¼±ÅÃ °¡´ÉÇÑ Ä«µå°¡ ºÎÁ·ÇÕ´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì„ íƒ ê°€ëŠ¥í•œ ì¹´ë“œê°€ ë¶€ì¡±í•©ë‹ˆë‹¤.");
             return;
         }
 
@@ -776,14 +776,14 @@ public class session_game_manage : MonoBehaviour
     {
         if (pendingCardChoiceNotification == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ´ë±â ÁßÀÎ Ä«µå ÃÊÀÌ½º ¾Ë¸²ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ëŒ€ê¸° ì¤‘ì¸ ì¹´ë“œ ì´ˆì´ìŠ¤ ì•Œë¦¼ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
         if (pendingCardChoiceNotification.PresentedCardInstanceIds == null ||
             pendingCardChoiceNotification.PresentedCardInstanceIds.Length == 0)
         {
-            Debug.LogWarning("[Å×½ºÆ®] Ä«µå ÃÊÀÌ½º ÈÄº¸°¡ ºñ¾î ÀÖ½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì¹´ë“œ ì´ˆì´ìŠ¤ í›„ë³´ê°€ ë¹„ì–´ ìˆìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -795,7 +795,7 @@ public class session_game_manage : MonoBehaviour
 
         if (pickedIds.Length == 0)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ¼±ÅÃ °¡´ÉÇÑ Ä«µå°¡ ºÎÁ·ÇÕ´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] ì„ íƒ ê°€ëŠ¥í•œ ì¹´ë“œê°€ ë¶€ì¡±í•©ë‹ˆë‹¤.");
             return;
         }
 
@@ -821,7 +821,7 @@ public class session_game_manage : MonoBehaviour
     {
         if (pendingStackNotification == null)
         {
-            Debug.LogWarning("[Å×½ºÆ®] ÇöÀç ´ë±â ÁßÀÎ ½ºÅÃ ¾Ë¸²ÀÌ ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[í…ŒìŠ¤íŠ¸] í˜„ì¬ ëŒ€ê¸° ì¤‘ì¸ ìŠ¤íƒ ì•Œë¦¼ì´ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
@@ -832,17 +832,17 @@ public class session_game_manage : MonoBehaviour
     }
     private IEnumerator HostGameSetupRoutine()
     {
-        yield return new WaitForSeconds(0.5f); // µ¦ÀÌ ´Ù ¿Ã¶ó¿Ã ¶§±îÁö Àá±ñ ´ë±â
+        yield return new WaitForSeconds(0.5f); // ë±ì´ ë‹¤ ì˜¬ë¼ì˜¬ ë•Œê¹Œì§€ ì ê¹ ëŒ€ê¸°
 
-        // ¼­¹ö ·ÎÁ÷ Å°´Â °íÁ¤(HOST/GUEST)ÀÌ¾î¾ß °ËÁõ/µ¿±âÈ­°¡ ¾ÈÀüÇÕ´Ï´Ù.
+        // ì„œë²„ ë¡œì§ í‚¤ëŠ” ê³ ì •(HOST/GUEST)ì´ì–´ì•¼ ê²€ì¦/ë™ê¸°í™”ê°€ ì•ˆì „í•©ë‹ˆë‹¤.
 
         Player p1 = new Player { Name = "HOST", Type = UserType.Human };
         Player p2 = new Player { Name = "GUEST", Type = UserType.Human };
 
-        // ConsoleRunner¿Í µ¿ÀÏÇÑ ¹æ½ÄÀ¸·Î Ä«µå µ¥ÀÌÅÍ¸¦ ·ÎµåÇØ µ¦À» »ı¼ºÇÕ´Ï´Ù.
+        // ConsoleRunnerì™€ ë™ì¼í•œ ë°©ì‹ìœ¼ë¡œ ì¹´ë“œ ë°ì´í„°ë¥¼ ë¡œë“œí•´ ë±ì„ ìƒì„±í•©ë‹ˆë‹¤.
         GameDataManager dataManager = BuildServerDataManager();
 
-        // ÀÓ½Ã: ConsoleRunner Å×½ºÆ® Ç®°ú µ¿ÀÏÇÑ ID ¼¼Æ®
+        // ì„ì‹œ: ConsoleRunner í…ŒìŠ¤íŠ¸ í’€ê³¼ ë™ì¼í•œ ID ì„¸íŠ¸
         string[] p1Ids =
         {
             "ELLI-02","ELLI-03","ELLI-04","ELLI-05","ELLI-06","ELLI-07",
@@ -862,25 +862,25 @@ public class session_game_manage : MonoBehaviour
         p1.ResetForNewGame(p1MainDeck, p1ResourceDeck);
         p2.ResetForNewGame(p2MainDeck, p2ResourceDeck);
 
-        Debug.Log($"[¼­¹ö ÃÊ±âÈ­] HOST main={p1.Deck.Count}, resource={p1.ResourceDeck.Count}");
-        Debug.Log($"[¼­¹ö ÃÊ±âÈ­] GUEST main={p2.Deck.Count}, resource={p2.ResourceDeck.Count}");
+        Debug.Log($"[ì„œë²„ ì´ˆê¸°í™”] HOST main={p1.Deck.Count}, resource={p1.ResourceDeck.Count}");
+        Debug.Log($"[ì„œë²„ ì´ˆê¸°í™”] GUEST main={p2.Deck.Count}, resource={p2.ResourceDeck.Count}");
 
         if (ServerGameManager.Instance != null && EventService.Instance != null)
         {
-            // 2. °ÔÀÓÆÇ(GameContext) »ı¼º!
+            // 2. ê²Œì„íŒ(GameContext) ìƒì„±!
             ServerGameManager.Instance.StartMultiplayerGame(p1, p2);
 
-            // 3. EventService¿¡ °ÔÀÓÆÇ(context) µî·Ï! (ÀÌÁ¦ nullÀÌ ¾Æ´Õ´Ï´Ù)
+            // 3. EventServiceì— ê²Œì„íŒ(context) ë“±ë¡! (ì´ì œ nullì´ ì•„ë‹™ë‹ˆë‹¤)
             EventService.Instance.InitializeGame(ServerGameManager.Instance.context, p1, p2);
 
-            //  4. ÆÄÀÌ¾îº£ÀÌ½º¿¡ Ã¹ Àü±¤ÆÇ(board_state) µ¤¾î¾²±â! 
+            //  4. íŒŒì´ì–´ë² ì´ìŠ¤ì— ì²« ì „ê´‘íŒ(board_state) ë®ì–´ì“°ê¸°! 
             _ = EventService.Instance.SyncGameStateToFirebase(sessionRoom);
 
-            Debug.Log("[¼­¹ö] ¼¼ÆÃ ¿Ï·á! ÆÄÀÌ¾îº£ÀÌ½º¿¡ board_state°¡ »ı¼ºµË´Ï´Ù!");
+            Debug.Log("[ì„œë²„] ì„¸íŒ… ì™„ë£Œ! íŒŒì´ì–´ë² ì´ìŠ¤ì— board_stateê°€ ìƒì„±ë©ë‹ˆë‹¤!");
         }
         else
         {
-            Debug.LogError(" ServerGameManager ¶Ç´Â EventService°¡ ¾À¿¡ ¾ø½À´Ï´Ù!");
+            Debug.LogError(" ServerGameManager ë˜ëŠ” EventServiceê°€ ì”¬ì— ì—†ìŠµë‹ˆë‹¤!");
         }
     }
 
@@ -899,13 +899,13 @@ public class session_game_manage : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[¼­¹ö ÃÊ±âÈ­] Ä«µå µ¥ÀÌÅÍ ·Îµå ½ÇÆĞ: {e.Message}");
+            Debug.LogError($"[ì„œë²„ ì´ˆê¸°í™”] ì¹´ë“œ ë°ì´í„° ë¡œë“œ ì‹¤íŒ¨: {e.Message}");
         }
 
         return manager;
     }
 
-    // ConsoleRunnerÀÇ CreateDeckFromIds ·ÎÁ÷°ú µ¿ÀÏ: ID´ç 2Àå º¹Á¦
+    // ConsoleRunnerì˜ CreateDeckFromIds ë¡œì§ê³¼ ë™ì¼: IDë‹¹ 2ì¥ ë³µì œ
     private List<Card> CreateDeckFromIds(GameDataManager manager, IEnumerable<string> ids)
     {
         var deck = new List<Card>();
@@ -923,7 +923,7 @@ public class session_game_manage : MonoBehaviour
         return deck;
     }
 
-    // ConsoleRunnerÀÇ CreateResourceDeck ·ÎÁ÷°ú µ¿ÀÏ
+    // ConsoleRunnerì˜ CreateResourceDeck ë¡œì§ê³¼ ë™ì¼
     private List<Card> CreateResourceDeckFromDataManager(GameDataManager manager)
     {
         var deck = new List<Card>();
@@ -934,14 +934,14 @@ public class session_game_manage : MonoBehaviour
             return deck;
         }
 
-        // µ¥ÀÌÅÍ ·Îµå ½ÇÆĞ ½Ã Æú¹é
+        // ë°ì´í„° ë¡œë“œ ì‹¤íŒ¨ ì‹œ í´ë°±
         for (int i = 0; i < GameRules.ResourceDeckCount; i++)
         {
             deck.Add(new Card
             {
                 Id = $"res_{i:000}",
                 DataId = "RES-01",
-                Name = "ÀÚ¿ø Ä«µå",
+                Name = "ìì› ì¹´ë“œ",
                 Type = CardType.Resource,
                 Cost = 0,
                 OriginalCost = 0,

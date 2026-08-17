@@ -1,14 +1,14 @@
 using System.Collections.Generic;
-using System.IO; // ÆÄÀÏ ÀĞ±â¿ë
-using TMPro; // µå·Ó´Ù¿î¿ë
+using System.IO; // íŒŒì¼ ì½ê¸°ìš©
+using TMPro; // ë“œë¡­ë‹¤ìš´ìš©
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class DeckSelector : MonoBehaviour
 {
-    public TMP_Dropdown mainDeckDropdown; // ¸ŞÀÎ È­¸é¿¡ ÀÖ´Â ±× µå·Ó´Ù¿î ¿¬°á
+    public TMP_Dropdown mainDeckDropdown; // ë©”ì¸ í™”ë©´ì— ìˆëŠ” ê·¸ ë“œë¡­ë‹¤ìš´ ì—°ê²°
 
-    private const string PREF_KEY = "SelectedDeckName"; // ÀúÀåÇÒ ¶§ ¾µ ÀÌ¸§Ç¥
+    private const string PREF_KEY = "SelectedDeckName"; // ì €ì¥í•  ë•Œ ì“¸ ì´ë¦„í‘œ
 
     void Start()
     {
@@ -16,7 +16,7 @@ public class DeckSelector : MonoBehaviour
 
         if (mainDeckDropdown != null)
         {
-            mainDeckDropdown.onValueChanged.RemoveAllListeners(); // ²¿ÀÓ ¹æÁö¿ë ÃÊ±âÈ­
+            mainDeckDropdown.onValueChanged.RemoveAllListeners(); // ê¼¬ì„ ë°©ì§€ìš© ì´ˆê¸°í™”
             mainDeckDropdown.onValueChanged.AddListener(OnDropdownValueChanged);
         }
 
@@ -26,11 +26,11 @@ public class DeckSelector : MonoBehaviour
     {
         if (mainDeckDropdown == null) return;
 
-        // 1. ÃÊ±âÈ­
+        // 1. ì´ˆê¸°í™”
         mainDeckDropdown.ClearOptions();
         List<string> options = new List<string>();
 
-        // 2. µ¦ Æú´õ °æ·Î (DeckManager¶û ¶È°°Àº °æ·Î!)
+        // 2. ë± í´ë” ê²½ë¡œ (DeckManagerë‘ ë˜‘ê°™ì€ ê²½ë¡œ!)
         string folderPath = Path.Combine(Application.dataPath, "MyDeck");
 
         if (!Directory.Exists(folderPath))
@@ -38,7 +38,7 @@ public class DeckSelector : MonoBehaviour
             Directory.CreateDirectory(folderPath);
         }
 
-        // 3. ÆÄÀÏ ¸ñ·Ï °¡Á®¿À±â
+        // 3. íŒŒì¼ ëª©ë¡ ê°€ì ¸ì˜¤ê¸°
         string[] filePaths = Directory.GetFiles(folderPath, "*.json");
 
         foreach (string path in filePaths)
@@ -47,21 +47,21 @@ public class DeckSelector : MonoBehaviour
             options.Add(fileName);
         }
 
-        // µ¦ÀÌ ÇÏ³ªµµ ¾øÀ¸¸é?
+        // ë±ì´ í•˜ë‚˜ë„ ì—†ìœ¼ë©´?
         if (options.Count == 0)
         {
-            options.Add("µ¦ ¾øÀ½");
+            options.Add("ë± ì—†ìŒ");
             mainDeckDropdown.AddOptions(options);
             mainDeckDropdown.interactable = false;
             return;
         }
 
-        // 4. µå·Ó´Ù¿î Ã¤¿ì±â
+        // 4. ë“œë¡­ë‹¤ìš´ ì±„ìš°ê¸°
         mainDeckDropdown.interactable = true;
         mainDeckDropdown.AddOptions(options);
 
-        // 5. [Áß¿ä] Áö³­¹ø¿¡ °ñ¶ú´ø µ¦ ÀÚµ¿ ¼±ÅÃÇØÁÖ±â
-        string lastSelectedDeck = PlayerPrefs.GetString(PREF_KEY, ""); // ÀúÀåµÈ °Å ÀÖ´Ï?
+        // 5. [ì¤‘ìš”] ì§€ë‚œë²ˆì— ê³¨ëë˜ ë± ìë™ ì„ íƒí•´ì£¼ê¸°
+        string lastSelectedDeck = PlayerPrefs.GetString(PREF_KEY, ""); // ì €ì¥ëœ ê±° ìˆë‹ˆ?
 
         int targetIndex = 0;
         if (!string.IsNullOrEmpty(lastSelectedDeck))
@@ -72,11 +72,11 @@ public class DeckSelector : MonoBehaviour
 
         mainDeckDropdown.value = targetIndex;
 
-        // ½ÃÀÛÇÏÀÚ¸¶ÀÚ ÇöÀç ¼±ÅÃµÈ µ¦ ÀúÀåÇØµÎ±â (¾ÈÀü»§)
+        // ì‹œì‘í•˜ìë§ˆì í˜„ì¬ ì„ íƒëœ ë± ì €ì¥í•´ë‘ê¸° (ì•ˆì „ë¹µ)
         SaveSelectedDeck(targetIndex);
     }
 
-    // µå·Ó´Ù¿î °ªÀÌ ¹Ù²ğ ¶§ ½ÇÇàÇÒ ÇÔ¼ö (ÀÎ½ºÆåÅÍ¿¡¼­ ¿¬°áÇÏ°Å³ª, ¾Æ·¡Ã³·³ ÄÚµå·Î ¿¬°á)
+    // ë“œë¡­ë‹¤ìš´ ê°’ì´ ë°”ë€” ë•Œ ì‹¤í–‰í•  í•¨ìˆ˜ (ì¸ìŠ¤í™í„°ì—ì„œ ì—°ê²°í•˜ê±°ë‚˜, ì•„ë˜ì²˜ëŸ¼ ì½”ë“œë¡œ ì—°ê²°)
     public void OnDropdownValueChanged(int index)
     {
         SaveSelectedDeck(index);
@@ -86,9 +86,9 @@ public class DeckSelector : MonoBehaviour
     {
         string selectedName = mainDeckDropdown.options[index].text;
 
-        if (selectedName == "µ¦ ¾øÀ½") return;
+        if (selectedName == "ë± ì—†ìŒ") return;
 
-        // "SelectedDeckName"ÀÌ¶ó´Â ÀÌ¸§À¸·Î ÄÄÇ»ÅÍ¿¡ ±â¾ï½ÃÅ´!
+        // "SelectedDeckName"ì´ë¼ëŠ” ì´ë¦„ìœ¼ë¡œ ì»´í“¨í„°ì— ê¸°ì–µì‹œí‚´!
         PlayerPrefs.SetString(PREF_KEY, selectedName);
         PlayerPrefs.Save();
     }

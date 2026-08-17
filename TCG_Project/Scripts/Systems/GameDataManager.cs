@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
-using System.IO;
+//using System.IO;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;
 using TCG_Project.Scripts.Interfaces;
@@ -12,6 +12,13 @@ namespace TCG_Project.Scripts.Systems
     public class GameDataManager
     {
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
+        public readonly IJsonLoader _jsonLoader; // JSON 로딩 담당
+
+        // 생성자에서 심부름꾼을 강제로 받도록 설정
+        public GameDataManager(IJsonLoader jsonLoader)
+        {
+            _jsonLoader = jsonLoader;
+        }
 
         // ─── 룰북 카드 로더 ───────────────────────────────────────────────────
 
@@ -29,7 +36,9 @@ namespace TCG_Project.Scripts.Systems
             public int reduction;
             public bool isStackAction;
             public bool requirePreviousSuccess;
-            public string rewardOnSuccess; // ★ 반격 성공 시 실행할 보상 (예: "DAIN-09"의 리벤지 효과)
+            public string rewardOnSuccess;
+            public string description;
+            public RawRulebookEffect action;
         }
 
         private class RawRulebookCard
@@ -45,6 +54,7 @@ namespace TCG_Project.Scripts.Systems
             public bool isBattlefield;
             public string description;
             public bool cannotBePlayedByEffect; // 다른 카드를 통한 간접 사용이 가능한가?
+            public string imagePath;
             public List<RawRulebookEffect> effects;
         }
 
@@ -75,9 +85,10 @@ namespace TCG_Project.Scripts.Systems
             = new Dictionary<string, RawCharacterCard>();
 
         /// <summary>Data/Character.json 을 읽어 캐릭터 카드 데이터를 로드한다.</summary>
-        public void LoadCharacterCards(string basePath)
+        public void LoadCharacterCards()
         {
-            var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
+            var wrapper = ReadJson<CharacterCardWrapper>("Character");
+            //var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
             if (wrapper?.Characters == null)
             {
                 Console.WriteLine("[System] Character.json 없음, 캐릭터 카드 로드 생략.");
@@ -95,6 +106,32 @@ namespace TCG_Project.Scripts.Systems
             }
 
             Console.WriteLine($"[System] 캐릭터 카드 {_characterCards.Count}종 로드 완료.");
+        }
+
+        /// <summary>
+        /// 용병(캐릭터) 카드를 UI 표시용 Card 객체로 만들어 반환한다. 없으면 null.
+        ///
+        /// 캐릭터 카드는 <see cref="AllCards"/>에 등록되지 않고 내부 사전에만 보관된다
+        /// (효과 카드·자원 카드만 AllCards에 들어간다). 그래서 UI가 카드 ID로 이름·설명을
+        /// 찾으려면 이 접근자가 필요하다.
+        ///
+        /// 반환값은 표시 전용 사본이다. 게임 상태로 쓰지 말 것.
+        /// </summary>
+        public Card GetCharacterCardView(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return null;
+            if (!_characterCardsById.TryGetValue(cardId, out var raw) || raw == null) return null;
+
+            return new Card
+            {
+                Id = raw.id,
+                DataId = raw.id,
+                Name = raw.name,
+                CharacterId = raw.characterId,
+                Description = raw.description,
+                ImagePath = raw.imagePath,
+                Type = CardType.Character
+            };
         }
 
         /// <summary>Resources.Load용 경로로 imagePath를 정규화한다. (확장자·Assets/Resources/ 제거)</summary>
@@ -130,6 +167,7 @@ namespace TCG_Project.Scripts.Systems
             public int speed;
             public int cost;
             public string description;
+            public string imagePath;
         }
 
         private class ResourceCardWrapper
@@ -138,9 +176,10 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// Data/ResourceCards.json 을 읽어 AllCards에 추가한다.
-        public void LoadResourceCards(string basePath)
+        public void LoadResourceCards()
         {
-            var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
+            var wrapper = ReadJson<ResourceCardWrapper>("ResourceCards");
+            // var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
             if (wrapper?.ResourceCards == null)
             {
                 Console.WriteLine("[System] ResourceCards.json 없음, 자원 카드 로드 생략.");
@@ -169,6 +208,7 @@ namespace TCG_Project.Scripts.Systems
                     Cost = raw.cost,
                     OriginalCost = raw.cost,
                     Description = raw.description ?? "",
+                    ImagePath = raw.imagePath ?? "",
                 };
                 AllCards[card.Id] = card;
             }
@@ -181,9 +221,10 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// <summary>Data/RulebookCards.json 을 읽어 AllCards에 추가한다.</summary>
-        public void LoadRulebookCards(string basePath)
+        public void LoadRulebookCards()
         {
-            var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
+            var wrapper = ReadJson<RulebookCardWrapper>("RulebookCards");
+            // var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
             if (wrapper?.Card == null)
             {
                 Console.WriteLine("[System] RulebookCards.json 없음, 룰북 카드 로드 생략.");
@@ -216,7 +257,8 @@ namespace TCG_Project.Scripts.Systems
                     CharacterId = raw.characterId,
                     IsStack = raw.isStack,
                     IsBattlefield = raw.isBattlefield,
-                    CannotBePlayedByEffect = raw.cannotBePlayedByEffect
+                    CannotBePlayedByEffect = raw.cannotBePlayedByEffect,
+                    ImagePath = raw.imagePath ?? "",
                 };
 
                 foreach (var eff in raw.effects ?? new List<RawRulebookEffect>())
@@ -340,6 +382,28 @@ namespace TCG_Project.Scripts.Systems
                 return BuildBattlefieldEffect(raw);
             }
 
+            // ── 선택 행동 ─────────────────────────────────────────────────────
+            if (raw.type == "OptionalActionEffect" || raw.type == "optional_action")
+            {
+                var p = new Dictionary<string, object>
+                {
+                    ["isStackAction"] = raw.isStackAction,
+                    ["requirePreviousSuccess"] = raw.requirePreviousSuccess
+                };
+                if (!string.IsNullOrEmpty(raw.description))
+                    p["description"] = raw.description;
+                if (raw.action != null)
+                {
+                    ICardEffect inner = CreateKeywordEffect(raw.action);
+                    if (inner != null)
+                        p["action"] = inner;
+                }
+
+                var optional = new OptionalActionEffect();
+                optional.Initialize(p);
+                return optional;
+            }
+
             // ── 복합 효과: 폐기존 카드 선택 → 임시 코스트 감소 → PlayBuffer에서 발동 ───── (다이나: "기뢰")
             if (raw.type == "ReplayCardEffect")
             {
@@ -352,7 +416,7 @@ namespace TCG_Project.Scripts.Systems
                 {
                     ["from"] = "Graveyard",
                     ["to"] = "PlayBuffer",
-                    ["mode"] = "Random",
+                    ["mode"] = "Choose",
                     ["count"] = 1,
                     ["filter"] = filter,
                     ["excludeSelf"] = true // 자기 자신 제외
@@ -439,7 +503,8 @@ namespace TCG_Project.Scripts.Systems
                 case "SearchDeckEffect":
                     p["from"] = "Deck";
                     p["to"] = "Hand";
-                    p["mode"] = "First";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "First";
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     p["shuffleAfter"] = true;
                     if (!string.IsNullOrEmpty(raw.filter)) p["filter"] = raw.filter;
@@ -448,7 +513,8 @@ namespace TCG_Project.Scripts.Systems
                 case "ResourceFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "ResourceZone";
-                    p["mode"] = "Top";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "Top";
                     p["count"] = raw.count != 0 ? raw.count : 99;  // 기본 전부
                     p["filter"] = "type:Resource";
                     break;
@@ -456,7 +522,8 @@ namespace TCG_Project.Scripts.Systems
                 case "ReturnFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "Deck";
-                    p["mode"] = "Last";
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
+                    // p["mode"] = "Last";
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     p["filter"] = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
                     p["shuffleAfter"] = true;
@@ -480,7 +547,7 @@ namespace TCG_Project.Scripts.Systems
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
-                        { ["buffType"] = "Armor", ["amount"] = amt };
+                        { ["buffType"] = "BattlefieldArmor", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
                         bf.PerResourcePhaseEffect = buffEff;
@@ -491,7 +558,7 @@ namespace TCG_Project.Scripts.Systems
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
-                        { ["buffType"] = "Firepower", ["amount"] = amt };
+                        { ["buffType"] = "BattlefieldFirepower", ["amount"] = amt };
                         var buffEff = new BuffEffect();
                         buffEff.Initialize(buffParams);
                         bf.PerResourcePhaseEffect = buffEff;
@@ -549,11 +616,16 @@ namespace TCG_Project.Scripts.Systems
                 ? s
                 : char.ToUpper(s[0]) + s.Substring(1);
 
-        private T ReadJson<T>(string path)
+        private T ReadJson<T>(string fileName)
         {
+            string json = _jsonLoader.LoadJson(fileName);
+            if (string.IsNullOrEmpty(json)) return default;
+
+            return JsonConvert.DeserializeObject<T>(json);
+            /* ★ 기존 File.ReadAllText 방식에서 IJsonLoader 인터페이스로 변경하여, Unity 리소스 로딩과 콘솔 파일 로딩을 모두 지원합니다.
             if (!File.Exists(path)) return default;
             string json = File.ReadAllText(path, System.Text.Encoding.UTF8);
-            return JsonConvert.DeserializeObject<T>(json);
+            return JsonConvert.DeserializeObject<T>(json);*/
         }
     }
 }

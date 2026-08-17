@@ -5,7 +5,6 @@ using System.Linq;
 using TCG_Project.Scripts.Abilities;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;   // BattlefieldEffect, MoveEffect 등
-using TCG_Project.Scripts.Manager;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using TCG_Project.Scripts.Utils;
@@ -52,27 +51,19 @@ namespace TCG_Project
             _dataManager.LoadCharacterCards();
             _dataManager.LoadResourceCards();
 
-            /* 과거 Unity 리소스 로더 방식 (동기화용으로 남겨둠)
-            //GameRules.LoadRules("../Resources/GameData/CommonConfig.json");
-            GameRules.LoadRules("./Data/CommonConfig.json"); // 예비 경로
-            _dataManager = new GameDataManager();
-            //_dataManager.LoadRulebookCards("../Resources/GameData");
-            _dataManager.LoadRulebookCards("./Data"); // 예비 경로
-            //_dataManager.LoadCharacterCards("../Resources/GameData");
-            _dataManager.LoadCharacterCards("./Data"); // 예비 경로
-            //_dataManager.LoadResourceCards("../Resources/GameData");
-            _dataManager.LoadResourceCards("./Data"); // 예비 경로
-            */
-
             // 3. 가상의 로비(Lobby) 역할: 플레이어 데이터 조립
             var p1Setup = new PlayerSetupData
             {
                 PlayerName = "Bot_Red",
-                Type = UserType.Bot, // 혹은 테스트 시 Bot
+                Type = UserType.Bot,
                 MainCharacterId = "ELLI-01",
                 SubCharacterId = "DAIN-01",
-                DeckCardIds = new List<string> {
-                    
+                DeckCardIds = new List<string>
+                {
+                    "ELLI-02", "ELLI-02", "ELLI-03", "ELLI-03", "ELLI-04", "ELLI-04",
+                    "ELLI-05", "ELLI-05", "ELLI-06", "ELLI-06",
+                    "DAIN-02", "DAIN-02", "DAIN-03", "DAIN-03", "DAIN-07", "DAIN-07",
+                    "DAIN-09", "DAIN-09", "DAIN-05", "DAIN-05"
                 }
             };
 
@@ -82,8 +73,12 @@ namespace TCG_Project
                 Type = UserType.Bot,
                 MainCharacterId = "VERO-01",
                 SubCharacterId = "SONI-01",
-                DeckCardIds = new List<string> {
-                    
+                DeckCardIds = new List<string>
+                {
+                    "VERO-02", "VERO-02", "VERO-03", "VERO-03", "VERO-05", "VERO-05",
+                    "VERO-07", "VERO-07", "VERO-11", "VERO-11",
+                    "SONI-02", "SONI-02", "SONI-03", "SONI-03", "SONI-05", "SONI-05",
+                    "SONI-06", "SONI-06", "SONI-07", "SONI-07"
                 }
             };
 
@@ -95,14 +90,9 @@ namespace TCG_Project
             p2.InitializeBrain();
 
             // 하드코딩된 배열을 기반으로 덱을 생성합니다.
-            var deck1 = CreateDeckFromIds(p1Setup.DeckCardIds); // 로비에서 받은 카드 ID 리스트로 덱 생성
+            var deck1 = CreateDeckFromIds(p1Setup.DeckCardIds);
             var deck2 = CreateDeckFromIds(p2Setup.DeckCardIds);
 
-            // 덱 재구성 (듀얼 5:5 비율) 후 플레이어 상태 완전 초기화 - 원본 코드
-            // p1.ResetForNewGame(CreateDualCharacterDeck(p1.MainCharacterId, p1.SecondaryCharacterId, 5, 5), CreateResourceDeck());
-            // p2.ResetForNewGame(CreateDualCharacterDeck(p2.MainCharacterId, p2.SecondaryCharacterId, 5, 5), CreateResourceDeck());
-
-            // 덱 셔플 및 플레이어 초기화
             p1.ResetForNewGame(deck1, CreateResourceDeck());
             p2.ResetForNewGame(deck2, CreateResourceDeck());
 
@@ -183,16 +173,7 @@ namespace TCG_Project
             GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
             GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
 
-            /* ==============================================================
-            // ★ QA 인젝션 테스트: 게임 시작하자마자 Bot_Blue 스택존에 방어 카드 3장 수동 장전
-            // ==============================================================
-            InjectTestCard(p2, "SONI-10", ZoneType.Graveyard); // 신재생에너지
-            InjectTestCard(p2, "SONI-09", ZoneType.Graveyard); // 공격적인 전술
-            // InjectTestCard(p2, "VERO-05", ZoneType.StackZone); // 요새화
-            
-            // Bot_Red가 바로 함포 준비를 쏠 수 있게 패에 강제 주입
-            InjectTestCard(p2, "SONI-10", ZoneType.Hand);      // 신재생에너지
-            // ============================================================== */
+            // QaInjection.ApplyDefaultScenario(_dataManager, p1, p2);
 
             EventManager.OnLogMessage?.Invoke($"\n[초기 상태]");
             EventManager.OnLogMessage?.Invoke(
@@ -808,54 +789,6 @@ namespace TCG_Project
             // ★ 상태 복구 (State Restore)
             context.ActivePlayer = originalActive;
             context.TargetPlayer = originalTarget;
-        }
-
-        /// <summary>
-        /// [QA 전용] 특정 플레이어의 원하는 위치(Zone)에 특정 카드를 강제로 생성하여 주입합니다.
-        /// 복잡한 엣지 케이스(스택 3개 중첩 등)를 1턴 만에 재현하기 위한 디버깅용 툴입니다.
-        /// </summary>
-        private static void InjectTestCard(Player player, string cardId, ZoneType targetZone)
-        {
-            // 1. 데이터 매니저에서 카드 템플릿 검색
-            if (!_dataManager.AllCards.TryGetValue(cardId, out Card template))
-            {
-                EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] 주입 실패: ID '{cardId}'를 찾을 수 없습니다.</color>");
-                return;
-            }
-
-            // 2. 실제 게임에 사용될 독립된 객체로 복제 (Deep Copy)
-            Card injectedCard = template.Clone();
-
-            // 3. 타겟 존의 성격에 맞춰 안전하게 밀어넣기
-            switch (targetZone)
-            {
-                case ZoneType.Hand:
-                    player.InsertCard(ZoneType.Hand, injectedCard);
-                    break;
-                case ZoneType.Deck:
-                    // 덱 조작: 다음 턴에 바로 뽑히도록 덱의 맨 위(0번 인덱스)에 강제 삽입
-                    player.Deck.Insert(0, injectedCard);
-                    break;
-                case ZoneType.Graveyard:
-                    player.InsertCard(ZoneType.Graveyard, injectedCard);
-                    break;
-                case ZoneType.ResourceZone:
-                    player.InsertCard(ZoneType.ResourceZone, injectedCard);
-                    break;
-                case ZoneType.StackZone:
-                    // 스택존 전용 공식 파이프라인 탑재
-                    player.AddToStackZone(injectedCard);
-                    break;
-                case ZoneType.BattlefieldZone:
-                    // 전장 전용 공식 파이프라인 탑재 (기존 전장이 있다면 덮어씌움)
-                    player.PlaceBattlefield(injectedCard);
-                    break;
-                default:
-                    EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] '{targetZone}'은(는) 주입이 지원되지 않는 존입니다.</color>");
-                    return;
-            }
-
-            EventManager.OnLogMessage?.Invoke($"<color=yellow>[QA Inject] {player.Name}의 {targetZone}에 '{injectedCard.Name}' 강제 장전 완료.</color>");
         }
 
         private static void CustomColoredConsoleLogger(string message)

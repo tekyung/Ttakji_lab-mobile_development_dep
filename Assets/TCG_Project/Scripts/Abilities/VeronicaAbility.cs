@@ -39,7 +39,7 @@ namespace TCG_Project.Scripts.Abilities
                 shouldActivate = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<bool>(
                     cb => EventManager.OnRequireOptionalAction?.Invoke(me, "베로니카 능력을 발동하시겠습니까?", ctx, cb),
                     () => false,
-                    GameRules.ChooseWaitTime
+                    GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
             }
 
@@ -62,7 +62,7 @@ namespace TCG_Project.Scripts.Abilities
                 var selectedList = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<System.Collections.Generic.List<Card>>(
                     cb => EventManager.OnRequireCardPick?.Invoke(me, peeked, 1, cb),
                     () => new System.Collections.Generic.List<Card> { peeked.OrderBy(c => Guid.NewGuid()).First() }, // 타임아웃 무작위
-                    GameRules.ChooseWaitTime
+                    GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
                 chosenCard = selectedList?.FirstOrDefault();
             }
@@ -70,11 +70,13 @@ namespace TCG_Project.Scripts.Abilities
             // 3. 실제 적용
             if (chosenCard != null && peeked.Contains(chosenCard))
             {
-                me.Deck.Remove(chosenCard);
-                me.Hand.Add(chosenCard);
+                me.ExtractCard(ZoneType.Deck, chosenCard);
+                me.InsertCard(ZoneType.Hand, chosenCard);
+                EventManager.OnCardMove?.Invoke(chosenCard, me, ZoneType.Deck, me, ZoneType.Hand);
+                EventManager.OnCardDraw?.Invoke(chosenCard, me, ZoneType.Deck);
                 EventManager.OnLogMessage?.Invoke($"  ▶ [{me.Name}] 베로니카 능력 발동! '{chosenCard.Name}' 패로 추가.");
                 me.MarkCharacterAbilityUsed(CharacterCardId);
-                onComplete?.Invoke(true); 
+                onComplete?.Invoke(true);
             }
             else
             {

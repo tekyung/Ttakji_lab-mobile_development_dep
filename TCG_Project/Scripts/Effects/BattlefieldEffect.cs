@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
@@ -21,16 +21,16 @@ namespace TCG_Project.Scripts.Effects
     public class BattlefieldEffect : ICardEffect
     {
         /// <summary>매 드로우 페이즈마다 발동되는 효과 (VERO-11, DAIN-11, SONI-11)</summary>
-        public ICardEffect PerTurnEffect          { get; set; }
+        public ICardEffect PerTurnEffect { get; set; }
 
         /// <summary>매 자원 페이즈마다 발동되는 효과 (ELLI-11)</summary>
         public ICardEffect PerResourcePhaseEffect { get; set; }
 
         /// <summary>코스트 감소 대상 필터 (SONI-11 관제탑)</summary>
-        public string CostReductionFilter         { get; set; }
+        public string CostReductionFilter { get; set; }
 
         /// <summary>코스트 감소량</summary>
-        public int    CostReduction               { get; set; }
+        public int CostReduction { get; set; }
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack 속성을 따르지만, JSON에서 오버라이드 가능)
 
@@ -39,12 +39,12 @@ namespace TCG_Project.Scripts.Effects
         public void Initialize(Dictionary<string, object> parameters)
         {
             _cachedParams = parameters ?? new Dictionary<string, object>();
-                
+
             if (parameters.ContainsKey("requirePreviousSuccess"))
             {
                 RequirePreviousSuccess = Convert.ToBoolean(parameters["requirePreviousSuccess"]);
             }
-            
+
             if (parameters.ContainsKey("isStackAction"))
                 IsStackAction = Convert.ToBoolean(parameters["isStackAction"]);
             else
@@ -52,9 +52,9 @@ namespace TCG_Project.Scripts.Effects
         }
 
         public void Execute(GameContext context, Action onComplete)
-        {   
+        {
             Player owner = context.ActivePlayer;
-            Card self    = owner?.PlayingCard;
+            Card self = owner?.PlayingCard;
 
             if (owner == null || self == null)
             {
@@ -67,7 +67,7 @@ namespace TCG_Project.Scripts.Effects
             // owner.PlaceBattlefield(self);
             EventManager.OnLogMessage?.Invoke(
                 $"  [전장 배치] {owner.Name}: '{self.Name}' 전장존 — {BuildDetailText()}");
-            
+
             onComplete?.Invoke();
         }
 
@@ -95,11 +95,11 @@ namespace TCG_Project.Scripts.Effects
         {
             return new BattlefieldEffect
             {
-                PerTurnEffect          = PerTurnEffect?.Clone(),
+                PerTurnEffect = PerTurnEffect?.Clone(),
                 PerResourcePhaseEffect = PerResourcePhaseEffect?.Clone(),
-                CostReductionFilter    = CostReductionFilter,
-                CostReduction          = CostReduction,
-                _cachedParams          = _cachedParams
+                CostReductionFilter = CostReductionFilter,
+                CostReduction = CostReduction,
+                _cachedParams = _cachedParams
             };
         }
     }

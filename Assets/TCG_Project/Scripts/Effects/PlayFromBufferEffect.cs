@@ -8,18 +8,18 @@ using TCG_Project.Scripts.Systems;
 namespace TCG_Project.Scripts.Effects
 {
     /// <summary>
-    /// PlayBufferÀÇ Ã¹ ¹øÂ° Ä«µå¸¦ ÄÚ½ºÆ® ÁöºÒ ÈÄ Áï½Ã ¹ßµ¿ÇÏ°í,
-    /// ¹ßµ¿ ¿Ï·á ÈÄ OriginalCost¸¦ º¹¿øÇÑ µÚ Æó±âÁ¸À¸·Î ÀÌµ¿ÇÑ´Ù.
+    /// PlayBufferì˜ ì²« ë²ˆì§¸ ì¹´ë“œë¥¼ ì½”ìŠ¤íŠ¸ ì§€ë¶ˆ í›„ ì¦‰ì‹œ ë°œë™í•˜ê³ ,
+    /// ë°œë™ ì™„ë£Œ í›„ OriginalCostë¥¼ ë³µì›í•œ ë’¤ íê¸°ì¡´ìœ¼ë¡œ ì´ë™í•œë‹¤.
     ///
-    /// CompositeEffect Step ¼ø¼­: MoveEffect(¡æPlayBuffer) ¡æ TemporaryCostEffect ¡æ PlayFromBufferEffect
+    /// CompositeEffect Step ìˆœì„œ: MoveEffect(â†’PlayBuffer) â†’ TemporaryCostEffect â†’ PlayFromBufferEffect
     ///
-    /// ÄÚ½ºÆ® ÁöºÒ ºÒ°¡ ½Ã Ä«µå¸¦ Æó±âÁ¸¿¡¸¸ ÀÌµ¿ÇÏ°í È¿°ú´Â Ãë¼ÒÇÑ´Ù.
+    /// ì½”ìŠ¤íŠ¸ ì§€ë¶ˆ ë¶ˆê°€ ì‹œ ì¹´ë“œë¥¼ íê¸°ì¡´ì—ë§Œ ì´ë™í•˜ê³  íš¨ê³¼ëŠ” ì·¨ì†Œí•œë‹¤.
     /// </summary>
     public class PlayFromBufferEffect : ICardEffect
     {
         private Dictionary<string, object> _cachedParams;
-        public bool RequirePreviousSuccess { get; set; } = false; // ±âº»°ªÀº false (µ¶¸³ ½ÇÇà)
-        public bool IsStackAction { get; set; } = false; // ±âº»°ªÀº false (Ä«µåÀÇ IsStackÀ» µû¶ó°¡µÇ, JSON¿¡¼­ ¿À¹ö¶óÀÌµå °¡´É)
+        public bool RequirePreviousSuccess { get; set; } = false; // ê¸°ë³¸ê°’ì€ false (ë…ë¦½ ì‹¤í–‰)
+        public bool IsStackAction { get; set; } = false; // ê¸°ë³¸ê°’ì€ false (ì¹´ë“œì˜ IsStackì„ ë”°ë¼ê°€ë˜, JSONì—ì„œ ì˜¤ë²„ë¼ì´ë“œ ê°€ëŠ¥)
         public void Initialize(Dictionary<string, object> parameters)
         {
             _cachedParams = parameters ?? new Dictionary<string, object>();
@@ -46,16 +46,16 @@ namespace TCG_Project.Scripts.Effects
 
             Card bufferedCard = owner.PlayBuffer[0];
 
-            // 1. ÀÚ¾Æ(Identity) ±³Ã¼: ÀÌÆåÆ®µéÀÌ ÀÚ±â ÀÚ½ÅÀ» ¿Ã¹Ù¸£°Ô ÂüÁ¶ÇÏµµ·Ï º¯°æ
+            // 1. ìì•„(Identity) êµì²´: ì´í™íŠ¸ë“¤ì´ ìê¸° ìì‹ ì„ ì˜¬ë°”ë¥´ê²Œ ì°¸ì¡°í•˜ë„ë¡ ë³€ê²½
             Card originalPlayingCard = owner.PlayingCard;
             owner.PlayingCard = bufferedCard;
 
-            EventManager.OnLogMessage?.Invoke($"  [¹öÆÛ¹ßµ¿] '{bufferedCard.Name}' (ÄÚ½ºÆ® {bufferedCard.Cost}) Áï½Ã ¹ßµ¿!");
+            EventManager.OnLogMessage?.Invoke($"  [ë²„í¼ë°œë™] '{bufferedCard.Name}' (ì½”ìŠ¤íŠ¸ {bufferedCard.Cost}) ì¦‰ì‹œ ë°œë™!");
 
-            // 2. Ä«µå ¹ßµ¿
+            // 2. ì¹´ë“œ ë°œë™
             bufferedCard.Play(context, () =>
             {
-                // 3. Ä«µå ÀÌµ¿ ºĞ±â Ã³¸® (ConsoleRunner ±³ÅëÁ¤¸®¿Í 100% µ¿ÀÏÇÑ ¶ó¿ìÆÃ)
+                // 3. ì¹´ë“œ ì´ë™ ë¶„ê¸° ì²˜ë¦¬ (ConsoleRunner êµí†µì •ë¦¬ì™€ 100% ë™ì¼í•œ ë¼ìš°íŒ…)
                 owner.ExtractCard(ZoneType.PlayBuffer, bufferedCard);
 
                 if (bufferedCard.IsStack)
@@ -68,22 +68,22 @@ namespace TCG_Project.Scripts.Effects
                     owner.PlaceBattlefield(bufferedCard);
                     EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.BattlefieldZone);
 
-                    // ¡Ú ÀüÀå Áï½Ã ¹ßµ¿(Wake) Ã³¸®
+                    // â˜… ì „ì¥ ì¦‰ì‹œ ë°œë™(Wake) ì²˜ë¦¬
                     GameLogicHelpers.ApplyBattlefieldTurnEffects(owner, context);
                 }
                 else if (owner.ResourceZone.Contains(bufferedCard))
                 {
-                    // SelfAsResource È¿°ú (º¸±Ş Àü´Ş µî)
+                    // SelfAsResource íš¨ê³¼ (ë³´ê¸‰ ì „ë‹¬ ë“±)
                     EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.ResourceZone);
                 }
                 else
                 {
                     owner.InsertCard(ZoneType.Graveyard, bufferedCard);
                     EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.Graveyard);
-                    EventManager.OnLogMessage?.Invoke($"  [¹öÆÛ¹ßµ¿] '{bufferedCard.Name}' ¹ßµ¿ ¿Ï·á ¡æ Æó±âÁ¸");
+                    EventManager.OnLogMessage?.Invoke($"  [ë²„í¼ë°œë™] '{bufferedCard.Name}' ë°œë™ ì™„ë£Œ â†’ íê¸°ì¡´");
                 }
 
-                // 4. ÀÚ¾Æ(Identity) º¹±¸: ´Ù½Ã ¿ø·¡´ë·Î µ¹¾Æ¿È("±â·Ú" µî)
+                // 4. ìì•„(Identity) ë³µêµ¬: ë‹¤ì‹œ ì›ë˜ëŒ€ë¡œ ëŒì•„ì˜´("ê¸°ë¢°" ë“±)
                 owner.PlayingCard = originalPlayingCard;
 
                 onComplete?.Invoke();

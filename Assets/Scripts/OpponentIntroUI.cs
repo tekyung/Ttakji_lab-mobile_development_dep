@@ -12,14 +12,14 @@ public class OpponentIntroUI : MonoBehaviour
 
     IEnumerator ShowIntro()
     {
-        // Ã³À½¿¡ ÄÑ±â
+        // ì²˜ìŒì— ì¼œê¸°
         if (popupOpponentIntro != null)
             popupOpponentIntro.SetActive(true);
 
-        // 1ÃÊ ±â´Ù¸²
+        // 1ì´ˆ ê¸°ë‹¤ë¦¼
         yield return new WaitForSeconds(1f);
 
-        // ²ô±â
+        // ë„ê¸°
         if (popupOpponentIntro != null)
             popupOpponentIntro.SetActive(false);
     }

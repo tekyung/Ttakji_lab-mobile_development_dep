@@ -23,16 +23,16 @@ namespace TCG_Project.Scripts.Effects
             if (parameters.TryGetValue("description", out var descObj))
                 Description = descObj.ToString();
 
-            // JSON 파싱 시 내부 효과 생성 (GameDataManager의 팩토리 로직 연계 필요)
-            // if (parameters.TryGetValue("action", out var actionDict))
-            // {
-            //     ActionToPerform = GameDataManager.CreateEffect((Dictionary<string,object>)actionDict);
-            // }
-            
+            if (parameters.TryGetValue("action", out var actionObj) && actionObj is ICardEffect inner)
+                ActionToPerform = inner;
+
             if (parameters.TryGetValue("isStackAction", out var isStackObj))
             {
                 IsStackAction = Convert.ToBoolean(isStackObj.ToString());
             }
+
+            if (parameters.TryGetValue("requirePreviousSuccess", out var reqObj))
+                RequirePreviousSuccess = Convert.ToBoolean(reqObj.ToString());
         }
 
         public void Execute(GameContext context, Action onComplete)
@@ -88,7 +88,9 @@ namespace TCG_Project.Scripts.Effects
             return new OptionalActionEffect
             {
                 Description = this.Description,
-                ActionToPerform = this.ActionToPerform?.Clone()
+                ActionToPerform = this.ActionToPerform?.Clone(),
+                RequirePreviousSuccess = this.RequirePreviousSuccess,
+                IsStackAction = this.IsStackAction
             };
         }
     }

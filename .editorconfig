@@ -1,0 +1,27 @@
+# 이 프로젝트의 소스 파일 인코딩은 UTF-8(BOM 없음)로 통일한다.
+#
+# 배경: 일부 파일이 CP949(EUC-KR)로 저장되어 한글 주석과 문자열이 전부 깨져 있었다.
+#       특히 DeckValidator.cs의 깨진 에러 문자열은 덱 빌딩 UI 팝업에 그대로 노출됐다.
+#       2026-08-16에 저장소 전체(15개 파일)를 UTF-8로 변환했다. 다시 CP949로 저장하지 말 것.
+#
+# Visual Studio / Rider / VS Code 모두 이 파일을 읽어 파일 인코딩을 맞춘다.
+# 인코딩을 임의로 바꾸는 편집기(메모장 등)로 소스를 저장하지 않도록 주의한다.
+#
+# ※ 줄바꿈(end_of_line)은 일부러 지정하지 않는다.
+#   현재 .cs가 CRLF 43개 / LF 57개로 혼재되어 있어, 규칙을 강제하면 저장하는 순간
+#   파일 전체가 변경된 것으로 잡혀 diff가 오염되고 병합 충돌이 난다.
+#   줄바꿈을 통일하려면 별도 작업으로 한 번에 정리하고 .gitattributes와 함께 다뤄야 한다.
+
+root = true
+
+[*]
+charset = utf-8
+
+[*.{cs,json,md,txt,ps1}]
+charset = utf-8
+
+# Unity가 생성·관리하는 파일도 UTF-8이다. 서식은 Unity가 쓰는 대로 둔다.
+[*.{unity,prefab,asset,meta,mat,controller,anim,inputactions}]
+charset = utf-8
+trim_trailing_whitespace = false
+insert_final_newline = false

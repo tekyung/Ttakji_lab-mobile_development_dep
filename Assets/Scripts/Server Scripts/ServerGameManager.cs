@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using TCG_Project.Scripts.Abilities;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;
-using TCG_Project.Scripts.Manager;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using TCG_Project.Scripts.Utils;
@@ -18,6 +17,8 @@ public class ServerGameManager : MonoBehaviour
     public GameContext context;
 
     public int CurrentTurn = 1;
+
+    private float ActionDelay => GameRules.BotDelayTime;
 
     // 세트 페이즈: 네트워크 응답을 BattleManager식 콜백으로 연결
     private readonly Dictionary<string, Action<Card>> _pendingSetPhaseCallbacks = new Dictionary<string, Action<Card>>();
@@ -437,6 +438,7 @@ public class ServerGameManager : MonoBehaviour
         if (context == null || context.IsGameOver || context.CurrentPhase != GamePhase.SetPhase)
             yield break;
 
+        yield return new WaitForSeconds(ActionDelay);
         if (p1SetCard != null && !context.Players[0].SetCard(p1SetCard))
             yield break;
 
@@ -505,7 +507,9 @@ public class ServerGameManager : MonoBehaviour
         _pendingSetPhaseCallbacks[player.Name] = pending;
         EventManager.OnRequireSetPhaseAction?.Invoke(player, context, null);
 
-        float waitLimit = GameRules.ChooseWaitTime / 100f;
+        // ChooseWaitTime은 밀리초(CommonConfig.json의 choose_wait_time, 기본 10000)다.
+        // 100f로 나누면 10초가 아니라 100초가 되어 이탈한 상대를 매 턴 100초씩 기다리게 된다.
+        float waitLimit = GameRules.ChooseWaitTime / 1000f;
         float timer = 0f;
         while (!done && timer < waitLimit && context != null && !context.IsGameOver && context.CurrentPhase == GamePhase.SetPhase)
         {
@@ -603,6 +607,7 @@ public class ServerGameManager : MonoBehaviour
         _p2RevealedCard = ApplyOpenChoice(context.Players[1], p2Choice, p2Cost);
         context.OpenPhaseStates[context.Players[1].Name] = new PlayerOpenPhaseState{HasOpened = (_p2RevealedCard != null),RevealedCard = _p2RevealedCard};
 
+        yield return new WaitForSeconds(ActionDelay);
         StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.MainPhase));
     }
 
@@ -643,7 +648,8 @@ public class ServerGameManager : MonoBehaviour
         _pendingOpenPhaseCallbacks[player.Name] = pending;
         EventManager.OnRequireOpenPhaseAction?.Invoke(player, player.SetZoneCard, effectiveCost, context, null);
 
-        float waitLimit = GameRules.ChooseWaitTime / 100f;
+        // 밀리초 → 초. (구 코드는 100f로 나눠 10초가 아니라 100초를 기다렸다)
+        float waitLimit = GameRules.ChooseWaitTime / 1000f;
         float timer = 0f;
         while (!done && timer < waitLimit && context != null && !context.IsGameOver && context.CurrentPhase == GamePhase.OpenPhase)
         {
@@ -814,6 +820,7 @@ public class ServerGameManager : MonoBehaviour
 
         player.PlayingCard = null;
 
+        yield return new WaitForSeconds(ActionDelay);
         if (card.IsStack)
         {
             player.AddToStackZone(card);
@@ -975,6 +982,7 @@ public class ServerGameManager : MonoBehaviour
             yield return new WaitUntil(() => done || context == null || context.IsGameOver);
 
             stackOwner.PlayingCard = null;
+            yield return new WaitForSeconds(ActionDelay);
             stackOwner.UseAndDiscardStack(stackCard);
             
             yield return StartCoroutine(SyncBoardStateAndWait());
@@ -1083,7 +1091,7 @@ public class ServerGameManager : MonoBehaviour
 
     private void ResolveSimultaneousDeckout(Player p1, Player p2) //동기화화
 {
-    EventManager.OnTiebreaker.Invoke(p1, p2);
+    EventManager.OnTiebreaker?.Invoke(p1, p2);
     int result = TiebreakerResolver.ResolveTiebreaker(p1, p2);
 
     if (result > 0)

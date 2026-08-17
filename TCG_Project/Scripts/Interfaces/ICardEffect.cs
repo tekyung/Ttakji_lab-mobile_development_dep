@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
+using System;
 
 namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
 {
@@ -9,7 +10,7 @@ namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
         // ★ 신규: 스택존에서 상대 공격에 반응하여 터지는 효과인가?
         // (기본값은 카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
         bool IsStackAction { get; set; }
-        
+
         // JSON에서 읽어온 파라미터를 설정하는 함수
         void Initialize(Dictionary<string, object> parameters);
 
@@ -23,4 +24,3 @@ namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
         ICardEffect Clone();
     }
 }
-

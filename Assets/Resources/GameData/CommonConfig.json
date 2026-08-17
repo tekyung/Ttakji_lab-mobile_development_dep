@@ -21,40 +21,36 @@
       "Value": "10000"
     },
     {
-        "Name": "gain_prize_by_direct",
-        "Value": "1"
+      "Name": "gain_prize_by_direct",
+      "Value": "1"
     },
     {
-        "Name": "starting_hands",
-        "Value": "5"
+      "Name": "starting_hands",
+      "Value": "5"
     },
     {
-        "Name": "draw_per_turn",
-        "Value": "1"
+      "Name": "draw_per_turn",
+      "Value": "1"
     },
     {
-        "Name": "life_tokens",
-        "Value": "5"
+      "Name": "life_tokens",
+      "Value": "5"
     },
     {
-        "Name": "resource_deck_count",
-        "Value": "15"
+      "Name": "resource_deck_count",
+      "Value": "15"
     },
     {
-        "Name": "Bot_delay_time",
-        "Value": "500"
+      "Name": "Bot_delay_time",
+      "Value": "500"
     },
     {
-        "Name": "Bot_single_game",
-        "Value": "1"
+      "Name": "Bot_single_game",
+      "Value": "1"
     },
     {
-        "Name": "card_zoom_hold_duration_time",
-        "Value": "550"
-    },
-    {
-      "Name": "Random_Matching_With_Bot_Waiting_Time",
-      "Value": "30000"
+      "Name": "card_zoom_hold_duration_time",
+      "Value": "550"
     },
     {
       "Name": "default_card_back",

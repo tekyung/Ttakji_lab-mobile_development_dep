@@ -28,7 +28,7 @@ namespace TCG_Project.Scripts.Abilities
                 shouldActivate = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<bool>(
                     cb => EventManager.OnRequireOptionalAction?.Invoke(me, "다이나 능력을 발동하여 라이프를 1 회복하시겠습니까?", ctx, cb),
                     () => false, // 타임아웃 시 힐 포기
-                    GameRules.ChooseWaitTime
+                    GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
             }
 

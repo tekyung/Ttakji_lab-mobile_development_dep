@@ -5,17 +5,6 @@ using TCG_Project.Scripts.Systems;
 
 namespace TCG_Project.Scripts.Utils
 {
-    /// <summary>
-    /// 덱 검증 결과를 담는 구조체입니다. UI 팝업에서 ErrorMessage를 그대로 띄워주면 됩니다.
-    /// </summary>
-    public class DeckValidationResult
-    {
-        public bool IsValid { get; set; }
-        public string ErrorMessage { get; set; }
-
-        public static DeckValidationResult Success() => new DeckValidationResult { IsValid = true, ErrorMessage = string.Empty };
-        public static DeckValidationResult Fail(string msg) => new DeckValidationResult { IsValid = false, ErrorMessage = msg };
-    }
 
     public static class DeckValidator
     {
@@ -49,11 +38,14 @@ namespace TCG_Project.Scripts.Utils
             }
 
             // ── 3. 카드 종류 및 매수 검증 (10종류, 각각 2장씩) ──
+            // ※ 아래 두 Fail 반환은 의도적으로 주석 처리된 상태입니다.
+            //    룰북상으로는 "10종류 × 2장"이 맞지만 팀 내 협의가 진행 중이라 강제하지 않습니다.
+            //    협의가 끝나면 주석을 해제하십시오. (임의로 지우지 말 것)
             var groupedCards = mainDeck.GroupBy(c => c.Id).ToList();
 
             if (groupedCards.Count != 10)
             {
-                return DeckValidationResult.Fail($"메인 덱은 정확히 10종류의 카드로 구성되어야 합니다. (현재 {groupedCards.Count}종류)");
+                //return DeckValidationResult.Fail($"메인 덱은 정확히 10종류의 카드로 구성되어야 합니다. (현재 {groupedCards.Count}종류)");
             }
 
             foreach (var group in groupedCards)
@@ -61,15 +53,20 @@ namespace TCG_Project.Scripts.Utils
                 if (group.Count() != 2)
                 {
                     Card sample = group.First();
-                    return DeckValidationResult.Fail($"'{sample.Name}' 카드가 {group.Count()}장 있습니다. 모든 카드는 정확히 2장씩 넣어야 합니다.");
+                    //return DeckValidationResult.Fail($"'{sample.Name}' 카드가 {group.Count()}장 있습니다. 모든 카드는 정확히 2장씩 넣어야 합니다.");
                 }
 
                 // ── 4. 선택한 용병 테마 일치 여부 검증 ──
                 Card card = group.First();
-                
-                // 카드의 CharacterId 속성이 비어있다면 ID 접두사(Prefix)로 판별
-                bool isTheme1 = !string.IsNullOrEmpty(card.CharacterId) ? card.CharacterId == prefix1 : card.Id.StartsWith(prefix1);
-                bool isTheme2 = !string.IsNullOrEmpty(card.CharacterId) ? card.CharacterId == prefix2 : card.Id.StartsWith(prefix2);
+
+                // ★ 수정: "ELLIE" == "ELLI" 같은 하드코딩 불일치 문제를 해결하기 위해,
+                // Card.Id("ELLI-05") 가 접두사로 시작하거나, CharacterId("ELLIE") 가 접두사로 시작하면 통과시킵니다.
+
+                bool isTheme1 = card.Id.StartsWith(prefix1) ||
+                                (!string.IsNullOrEmpty(card.CharacterId) && card.CharacterId.StartsWith(prefix1));
+
+                bool isTheme2 = card.Id.StartsWith(prefix2) ||
+                                (!string.IsNullOrEmpty(card.CharacterId) && card.CharacterId.StartsWith(prefix2));
 
                 if (!isTheme1 && !isTheme2)
                 {
@@ -88,35 +85,19 @@ namespace TCG_Project.Scripts.Utils
         }
 
         /// <summary>
-        /// 동시 덱아웃 발생 시 룰북에 명시된 6단계 타이브레이커 판정을 수행합니다.
-        /// 반환값: 양수(p1 승리), 음수(p2 승리), 0(무승부로 코인토스 필요)
+        /// 덱 검증 결과를 담는 구조체입니다. UI 팝업에서 ErrorMessage를 그대로 띄워주면 됩니다.
         /// </summary>
-        public static int ResolveTiebreaker(Player p1, Player p2)
+        public class DeckValidationResult
         {
-            // 1단계: 남은 라이프 (많은 쪽 승)
-            if (p1.LifeTokens != p2.LifeTokens) 
-                return p1.LifeTokens.CompareTo(p2.LifeTokens);
+            public bool IsValid { get; set; }
+            public string ErrorMessage { get; set; }
 
-            // 2단계: 전장 카드 유무 (있는 쪽 승)
-            int p1Field = p1.BattlefieldCard != null ? 1 : 0;
-            int p2Field = p2.BattlefieldCard != null ? 1 : 0;
-            if (p1Field != p2Field) 
-                return p1Field.CompareTo(p2Field);
-
-            // 3단계: 스택 존 카드 수 (많은 쪽 승)
-            if (p1.StackZone.Count != p2.StackZone.Count) 
-                return p1.StackZone.Count.CompareTo(p2.StackZone.Count);
-
-            // 4단계: 패(Hand) 장수 (많은 쪽 승)
-            if (p1.Hand.Count != p2.Hand.Count) 
-                return p1.Hand.Count.CompareTo(p2.Hand.Count);
-
-            // 5단계: 자원 존(Resource) 개수 (많은 쪽 승)
-            if (p1.ResourceZone.Count != p2.ResourceZone.Count) 
-                return p1.ResourceZone.Count.CompareTo(p2.ResourceZone.Count);
-
-            // 6단계: 여기까지 모두 같으면 0을 반환 (ConsoleRunner가 코인 토스 진행)
-            return 0;
+            public static DeckValidationResult Success() => new DeckValidationResult { IsValid = true, ErrorMessage = string.Empty };
+            public static DeckValidationResult Fail(string msg) => new DeckValidationResult { IsValid = false, ErrorMessage = msg };
         }
+
+        // 타이브레이커 판정은 TiebreakerResolver.ResolveTiebreaker(p1, p2)로 이관되었습니다.
+        // 이 클래스에 있던 구 구현은 호출처가 없는 데다 판정 순서가 룰북과 달라 삭제했습니다. (2026-08-16)
     }
+
 }

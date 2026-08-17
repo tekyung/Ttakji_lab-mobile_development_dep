@@ -37,7 +37,7 @@ namespace TCG_Project.Scripts.Abilities
                 shouldActivate = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<bool>(
                     cb => EventManager.OnRequireOptionalAction?.Invoke(me, "소니아 능력을 발동하시겠습니까?", ctx, cb),
                     () => false,
-                    GameRules.ChooseWaitTime
+                    GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
             }
 
@@ -60,7 +60,7 @@ namespace TCG_Project.Scripts.Abilities
                 var selectedList = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<System.Collections.Generic.List<Card>>(
                     cb => EventManager.OnRequireCardPick?.Invoke(me, validCards, 1, cb),
                     () => new System.Collections.Generic.List<Card> { validCards.OrderBy(c => Guid.NewGuid()).First() },
-                    GameRules.ChooseWaitTime
+                    GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
                 chosenCard = selectedList?.FirstOrDefault();
             }
@@ -68,8 +68,11 @@ namespace TCG_Project.Scripts.Abilities
             // 3. 실행
             if (chosenCard != null && validCards.Contains(chosenCard))
             {
-                me.Graveyard.Remove(chosenCard);
+                me.ExtractCard(ZoneType.Graveyard, chosenCard);
                 me.InsertCard(ZoneType.Hand, chosenCard);
+                // OnCardMove를 빼먹으면 보드의 폐기존 스택에 카드 GO가 유령으로 남고,
+                // 엔진 리스트(SSOT)를 읽는 폐기존 패널과 화면이 어긋난다
+                EventManager.OnCardMove?.Invoke(chosenCard, me, ZoneType.Graveyard, me, ZoneType.Hand);
                 EventManager.OnLogMessage?.Invoke($"  ▶ [{me.Name}] 소니아 능력 발동! 폐기존 '{chosenCard.Name}' → 패");
                 me.MarkCharacterAbilityUsed(CharacterCardId);
                 onComplete?.Invoke(true);

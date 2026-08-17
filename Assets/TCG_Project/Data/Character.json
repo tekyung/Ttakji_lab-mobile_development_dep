@@ -9,7 +9,7 @@
       "condition": "usedAttackCardThisTurn",
       "description": "메인 페이즈에 엘리의 공격카드 사용했다면 발동 가능하다. 자신의 패에있는 공격 카드 1장을 스피드에 맞게 사용한다.",
       "flavorText": "붉은 늑대, 출격합니다.",
-      "imagePath": "Assets/Resources/card_image/ELLIE/ELLI-01.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-01.png"
     },
     {
       "id": "VERO-01",

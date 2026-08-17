@@ -8,7 +8,7 @@
         { "type": "DamageEffect", "amount": 1 },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-02.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-02.png"
     },
     {
       "id": "ELLI-03", "characterId": "ELLIE", "name": "수류탄 투척",
@@ -18,7 +18,7 @@
         { "type": "DamageEffect", "amount": 2 },
         { "type": "DiscardFromHandEffect", "count": 2, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-03.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-03.png"
     },
     {
       "id": "ELLI-04", "characterId": "ELLIE", "name": "미니건 난사",
@@ -27,7 +27,7 @@
       "effects": [
         { "type": "DamageEffect", "amount": 3 }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-04.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-04.png"
     },
     {
       "id": "ELLI-05", "characterId": "ELLIE", "name": "준비된 방어선",
@@ -36,7 +36,7 @@
       "effects": [
         { "type": "ArmorEffect", "amount": 1, "duration": "ThisTurn" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-05.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-05.png"
     },
     {
       "id": "ELLI-06", "characterId": "ELLIE", "name": "격추 시스템",
@@ -46,7 +46,7 @@
         { "type": "SuperArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose", "isStackAction": false }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-06.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-06.png"
     },
     {
       "id": "ELLI-07", "characterId": "ELLIE", "name": "카모플라쥬",
@@ -55,7 +55,7 @@
       "effects": [
         { "type": "InvincibilityEffect", "duration": "ThisTurn" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-07.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-07.png"
     },
     {
       "id": "ELLI-08", "characterId": "ELLIE", "name": "보급 전달",
@@ -65,7 +65,7 @@
         { "type": "SelfAsResourceEffect" },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-08.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-08.png"
     },
     {
       "id": "ELLI-09", "characterId": "ELLIE", "name": "리로드",
@@ -74,7 +74,7 @@
       "effects": [
         { "type": "RecoverFromDiscardEffect", "count": 1, "filter": "character:ELLIE,type:Attack" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-09.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-09.png"
     },
     {
       "id": "ELLI-10", "characterId": "ELLIE", "name": "전략적 후퇴",
@@ -84,7 +84,7 @@
         { "type": "DrawEffect", "count": 2 },
         { "type": "ShuffleReturnEffect", "count": 2, "mode": "choose", "requirePreviousSuccess": true }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-10.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-10.png"
     },
     {
       "id": "ELLI-11", "characterId": "ELLIE", "name": "무작위 노획",
@@ -93,7 +93,7 @@
       "effects": [
         { "type": "PeriodicRecoveryBattlefieldEffect", "filter": "type:Attack" }
       ],
-      "imagePath": "GameDesign/card_image/ELLI/ELLI-11.png"
+      "imagePath": "Assets/Resources/card_image/ELLI/ELLI-11.png"
     },
     {
       "id": "VERO-02", "characterId": "VERONICA", "name": "숙청",
@@ -102,7 +102,7 @@
       "effects": [
         { "type": "DamageEffect", "amount": 2 }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-02.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-02.png"
     },
     {
       "id": "VERO-03", "characterId": "VERONICA", "name": "계획대로",
@@ -112,7 +112,7 @@
         { "type": "DiscardFromHandEffect", "count": 3, "mode": "choose" },
         { "type": "DamageEffect", "amount": 3, "requirePreviousSuccess": true }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-03.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-03.png"
     },
     {
       "id": "VERO-04", "characterId": "VERONICA", "name": "프로젝트 : 바빌론", "isBattlefield": false,
@@ -121,7 +121,7 @@
       "effects": [
         { "type": "DamageEffect", "amount": 5 }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-04.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-04.png"
     },
     {
       "id": "VERO-05", "characterId": "VERONICA", "name": "요새화",
@@ -130,7 +130,7 @@
       "effects": [
         { "type": "ArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-05.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-05.png"
     },
     {
       "id": "VERO-06", "characterId": "VERONICA", "name": "흐릿한 안개성",
@@ -139,7 +139,7 @@
       "effects": [
         { "type": "ArmorEffect", "amount": 3, "duration": "Stack", "isStackAction": true }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-06.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-06.png"
     },
     {
       "id": "VERO-07", "characterId": "VERONICA", "name": "시위 해산",
@@ -149,7 +149,7 @@
         { "type": "SuperArmorEffect", "amount": 1, "duration": "ThisTurn" },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-07.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-07.png"
     },
     {
       "id": "VERO-08", "characterId": "VERONICA", "name": "정세 읽기",
@@ -158,7 +158,7 @@
       "effects": [
         { "type": "ResourceGainEffect", "count": 1 }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-08.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-08.png"
     },
     {
       "id": "VERO-09", "characterId": "VERONICA", "name": "준비는 철저하게",
@@ -168,7 +168,7 @@
         { "type": "DrawEffect", "count": 2 },
         { "type": "ArmorEffect", "amount": 1, "duration": "ThisTurn" }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-09.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-09.png"
     },
     {
       "id": "VERO-10", "characterId": "VERONICA", "name": "테러의 잔향",
@@ -178,7 +178,7 @@
         { "type": "PiercingDamageEffect", "amount": 1 },
         { "type": "ResourceGainEffect", "count": 2 }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-10.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-10.png"
     },
     {
       "id": "VERO-11", "characterId": "VERONICA", "name": "체크메이트",
@@ -187,7 +187,7 @@
       "effects": [
         { "type": "ArmorBattlefieldEffect", "amount": 1 }
       ],
-      "imagePath": "GameDesign/card_image/VERONICA/VERO-11.png"
+      "imagePath": "Assets/Resources/card_image/VERONICA/VERO-11.png"
     },
     {
       "id": "DAIN-02", "characterId": "DAINA", "name": "함포 준비, 발사!",
@@ -197,7 +197,7 @@
         { "type": "MultiHitDamageEffect", "amount": 1, "times": 2 },
         { "type": "SelfDamageEffect", "amount": 1 }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-02.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-02.png"
     },
     {
       "id": "DAIN-03", "characterId": "DAINA", "name": "미사일 발사!",
@@ -206,7 +206,7 @@
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 2 }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-03.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-03.png"
     },
     {
       "id": "DAIN-04", "characterId": "DAINA", "name": "풀 버스트!",
@@ -216,7 +216,7 @@
         { "type": "MultiHitDamageEffect", "amount": 2, "times": 3 },
         { "type": "SelfDamageEffect", "amount": 2 }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-04.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-04.png"
     },
     {
       "id": "DAIN-05", "characterId": "DAINA", "name": "잠수정",
@@ -225,7 +225,7 @@
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-05.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-05.png"
     },
     {
       "id": "DAIN-06", "characterId": "DAINA", "name": "공습 주의",
@@ -234,7 +234,7 @@
       "effects": [
         { "type": "SuperArmorEffect", "amount": 2, "duration": "ThisTurn" }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-06.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-06.png"
     },
     {
       "id": "DAIN-07", "characterId": "DAINA", "name": "강도 테스트",
@@ -243,7 +243,7 @@
       "effects": [
         { "type": "ArmorEffect", "amount": 2, "duration": "Stack", "isStackAction": true }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-07.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-07.png"
     },
     {
       "id": "DAIN-08", "characterId": "DAINA", "name": "약탈",
@@ -253,7 +253,7 @@
         { "type": "DrawEffect", "count": 3 },
         { "type": "DiscardFromHandEffect", "count": 1, "mode": "random", "requirePreviousSuccess": true }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-08.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-08.png"
     },
     {
       "id": "DAIN-09", "characterId": "DAINA", "name": "리벤지",
@@ -262,7 +262,7 @@
       "effects": [
         { "type": "CounterAttackEffect", "duration": "ThisTurn", "rewardOnSuccess": "SelfToResource" }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-09.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-09.png"
     },
     {
       "id": "DAIN-10", "characterId": "DAINA", "name": "기뢰",
@@ -271,7 +271,7 @@
       "effects": [
         { "type": "ReplayCardEffect", "costReduction": 1 }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-10.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-10.png"
     },
     {
       "id": "DAIN-11", "characterId": "DAINA", "name": "조선소",
@@ -280,7 +280,7 @@
       "effects": [
         { "type": "FirepowerBattlefieldEffect", "amount": 1 }
       ],
-      "imagePath": "GameDesign/card_image/DAINA/DAIN-11.png"
+      "imagePath": "Assets/Resources/card_image/DAINA/DAIN-11.png"
     },
     {
       "id": "SONI-02", "characterId": "SONIA", "name": "빵야!",
@@ -289,7 +289,7 @@
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 1 }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-02.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-02.png"
     },
     {
       "id": "SONI-03", "characterId": "SONIA", "name": "내 선물이야 ♬",
@@ -298,7 +298,7 @@
       "effects": [
         { "type": "PiercingDamageEffect", "amount": 2 }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-03.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-03.png"
     },
     {
       "id": "SONI-04", "characterId": "SONIA", "name": "전술 핵",
@@ -308,7 +308,7 @@
         { "type": "PiercingDamageEffect", "amount": 6 },
         { "type": "DiscardFromHandEffect", "count": 0, "mode": "all" }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-04.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-04.png"
     },
     {
       "id": "SONI-05", "characterId": "SONIA", "name": "곡예 비행",
@@ -318,7 +318,7 @@
         { "type": "SuperArmorEffect", "amount": 1, "duration": "ThisTurn" },
         { "type": "TopDeckToDiscardEffect", "count": 1 }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-05.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-05.png"
     },
     {
       "id": "SONI-06", "characterId": "SONIA", "name": "엔진 예열",
@@ -328,7 +328,7 @@
         { "type": "NextTurnBuffEffect", "buffType": "Firepower", "amount": 1, "isStackAction": false },
         { "type": "ArmorEffect", "amount": 1, "duration": "Stack", "isStackAction": true }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-06.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-06.png"
     },
     {
       "id": "SONI-07", "characterId": "SONIA", "name": "마하 10",
@@ -337,7 +337,7 @@
       "effects": [
         { "type": "InvincibilityEffect", "duration": "Stack", "isStackAction": true }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-07.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-07.png"
     },
     {
       "id": "SONI-08", "characterId": "SONIA", "name": "연료 충전",
@@ -347,7 +347,7 @@
         { "type": "ResourceGainEffect", "count": 2 },
         { "type": "TopDeckToDiscardEffect", "count": 4, "requirePreviousSuccess": true }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-08.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-08.png"
     },
     {
       "id": "SONI-09", "characterId": "SONIA", "name": "공격적인 전술",
@@ -357,7 +357,7 @@
         { "type": "DiscardFromHandEffect", "count": 3, "mode": "choose" },
         { "type": "SearchDeckEffect", "filter": "character:SONIA,type:Attack", "count": 1, "requirePreviousSuccess": true, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-09.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-09.png"
     },
     {
       "id": "SONI-10", "characterId": "SONIA", "name": "신재생에너지",
@@ -367,7 +367,7 @@
         { "type": "ResourceFromDiscardEffect", "count": 1 },
         { "type": "ReturnFromDiscardEffect", "count": 1, "filter": "type:Effect", "requirePreviousSuccess": true, "mode": "choose" }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-10.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-10.png"
     },
     {
       "id": "SONI-11", "characterId": "SONIA", "name": "노을지는 활주로",
@@ -376,7 +376,7 @@
       "effects": [
         { "type": "CostReductionBattlefieldEffect", "filter": "character:SONIA", "reduction": 1 }
       ],
-      "imagePath": "GameDesign/card_image/SONIA/SONI-11.png"
+      "imagePath": "Assets/Resources/card_image/SONIA/SONI-11.png"
     }
   ]
 }

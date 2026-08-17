@@ -942,6 +942,7 @@ MonoBehaviour:
   maxHandSize: 10
   cardWidth: 200
   readyButton: {fileID: 0}
+  enableLegacyHandTest: 0
 --- !u!4 &131497430
 Transform:
   m_ObjectHideFlags: 0
@@ -1818,6 +1819,7 @@ MonoBehaviour:
   plusButton: {fileID: 0}
   minusButton: {fileID: 0}
   myCardID: 0
+  myInstanceId: 
   removeAllButton: {fileID: 0}
   deckCount: {fileID: 0}
   deckCountText: {fileID: 0}
@@ -2171,7 +2173,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 280, y: -325}
-  m_SizeDelta: {x: 77.3243, y: 42.5811}
+  m_SizeDelta: {x: 77.3243, y: 59.6135}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &402830686
 MonoBehaviour:
@@ -3241,6 +3243,7 @@ GameObject:
   m_Component:
   - component: {fileID: 509403884}
   - component: {fileID: 509403883}
+  - component: {fileID: 509403885}
   m_Layer: 0
   m_Name: PlayerUI
   m_TagString: Untagged
@@ -3263,12 +3266,24 @@ MonoBehaviour:
   myHandTransform: {fileID: 1391486264}
   mySetZoneTransform: {fileID: 626117088}
   myGraveyardTransform: {fileID: 176251152}
-  myStackZoneTransform: {fileID: 1040047757}
+  myDeckTransform: {fileID: 1400438607}
+  myStackZoneRoot: {fileID: 1040047757}
+  myStackCardWidth: 200
   myBattlefieldTransform: {fileID: 2019444410}
+  myResourceZoneTransform: {fileID: 268158813}
   myLifeText: {fileID: 1966609485}
   myResourceText: {fileID: 1243088291}
+  myDeckCountText: {fileID: 0}
+  myResourceDeckCountText: {fileID: 0}
   myCardPrefab: {fileID: 8456415601423846929, guid: 50a6ab8f5cb59c54d8696a27c3bd72af, type: 3}
   readyButtonObj: {fileID: 402830684}
+  setGhostSize: {x: 200, y: 280}
+  setGhostBorderThickness: 6
+  pendingHandCardAlpha: 0.4
+  setGhostAlpha: 0.45
+  setGhostConfirmedAlpha: 0.8
+  revealBorderColor: {r: 0.25, g: 0.55, b: 1, a: 1}
+  abandonBorderColor: {r: 0.92, g: 0.3, b: 0.3, a: 1}
 --- !u!4 &509403884
 Transform:
   m_ObjectHideFlags: 0
@@ -3284,6 +3299,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &509403885
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 509403882}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1c2d3e4f5061728394a5b6c7d8e9f01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CardBoardInvariantChecker
+  repairOnMismatch: 1
 --- !u!1 &511754526
 GameObject:
   m_ObjectHideFlags: 0
@@ -3878,7 +3906,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 266.3, y: -224.6}
-  m_SizeDelta: {x: 77.3243, y: 42.5811}
+  m_SizeDelta: {x: 77.3243, y: 59.6135}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &606329167
 MonoBehaviour:
@@ -4216,13 +4244,17 @@ MonoBehaviour:
   enemyHandTransform: {fileID: 461606206}
   enemySetZoneTransform: {fileID: 1678132280}
   enemyGraveyardTransform: {fileID: 1621361767}
-  enemyStackZoneTransform: {fileID: 829141213}
+  enemyDeckTransform: {fileID: 1531192584}
+  enemyStackZoneRoot: {fileID: 829141213}
   enemyBattlefieldTransform: {fileID: 958344851}
+  enemyResourceZoneTransform: {fileID: 2127135301}
   enemyLifeText: {fileID: 426151976}
   enemyResourceText: {fileID: 1743460199}
   usePlayerUiZonesForP1Bot: 1
-  cardBackPrefab: {fileID: 7725646687710810970, guid: 29e79ed516f6b0c48a014d7a9acb07eb, type: 3}
+  revealAllHandsInBotVsBot: 1
   cardFrontPrefab: {fileID: 8456415601423846929, guid: 50a6ab8f5cb59c54d8696a27c3bd72af, type: 3}
+  enemyDeckCountText: {fileID: 0}
+  enemyResourceDeckCountText: {fileID: 0}
   enemyCardWidth: 200
 --- !u!4 &645034583
 Transform:
@@ -4675,8 +4707,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -140, y: 140}
-  m_SizeDelta: {x: 80, y: 140}
+  m_AnchoredPosition: {x: -40, y: 140}
+  m_SizeDelta: {x: 280, y: 140}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &829141214
 MonoBehaviour:
@@ -5767,8 +5799,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 140, y: -140}
-  m_SizeDelta: {x: 80, y: 140}
+  m_AnchoredPosition: {x: 40, y: -140}
+  m_SizeDelta: {x: 280, y: 140}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1040047758
 MonoBehaviour:
@@ -6165,6 +6197,7 @@ MonoBehaviour:
   plusButton: {fileID: 0}
   minusButton: {fileID: 0}
   myCardID: 0
+  myInstanceId: 
   removeAllButton: {fileID: 0}
   deckCount: {fileID: 0}
   deckCountText: {fileID: 0}
@@ -8698,7 +8731,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1643347631
 RectTransform:
   m_ObjectHideFlags: 0
@@ -10068,7 +10101,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1919340084
 RectTransform:
   m_ObjectHideFlags: 0
@@ -10187,8 +10220,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f7a3b2c18d4e4f6a9b0c1d2e3f4a5b6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LocalMatchStarter
-  mode: 0
+  mode: 1
   autoStart: 1
+  revealAllHandsInBotVsBot: 1
+  enemyVisualTester: {fileID: 0}
 --- !u!114 &1926648253
 MonoBehaviour:
   m_ObjectHideFlags: 0

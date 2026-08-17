@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems; // 마우스/터치 이벤트를 처리하기 위해 꼭 필요합니다!
 
 // IPointerDownHandler(누를 때), IPointerUpHandler(뗄 때), IPointerExitHandler(영역을 벗어날 때) 인터페이스를 상속받습니다.
-public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("Zoom Settings")]
     public float holdTime = 0.5f; // 0.5초 동안 누르고 있으면 확대됨
@@ -16,6 +16,29 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     public float focusScaleFactor = 1.2f;
     public GameObject actionButtonPanel; // 공개, 폐기 버튼
     private bool isSelected = false; // 현재 내가 선택되었는가
+
+    /// <summary>선택(확대·액션 버튼 표시) 상태인지. CardZoomPopupUI가 두 번째 클릭을 구분하는 데 쓴다.</summary>
+    public bool IsSelected => isSelected;
+
+    private static CardInteraction _currentDragging;
+
+    /// <summary>
+    /// 지금 드래그 중인 손패 카드. 없으면 null.
+    /// ⚠️ 단순 static bool로 두면 안 된다 — 드래그 도중 플레이를 멈추거나 카드 GO가 풀로 비활성화되면
+    /// 플래그가 true로 굳어 호버 미리보기가 영영 죽는다(에디터에서 도메인 리로드를 끄면 세션을 넘어 살아남는다).
+    /// 그래서 참조를 들고 있다가 읽을 때마다 실제 드래그 중인지 확인해 스스로 정리한다.
+    /// </summary>
+    public static CardInteraction CurrentDragging
+    {
+        get
+        {
+            if (_currentDragging != null && !_currentDragging.isDragging) _currentDragging = null;
+            return _currentDragging;
+        }
+    }
+
+    /// <summary>드래그 중에는 CardZoomPopupUI의 호버 미리보기가 대상을 바꾸지 않고 집은 카드를 계속 보여 준다.</summary>
+    public static bool IsDraggingAny => CurrentDragging != null;
     private static CardInteraction currentlySelectedCard; // 현재 카드 기억하기
     public bool isInSetZone = false; // 네트존에 있는가
 
@@ -50,6 +73,35 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         // Canvas를 추가하면 클릭이 먹통이 될 수 있어 GraphicRaycaster도 짝꿍으로 달아줍니다.
         if (GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
             gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        // 세트 선택 시 카드 본체는 흐려지지만(PlayerUIManager가 루트 CanvasGroup.alpha를 낮춤)
+        // 그 위에 뜨는 [공개]/[폐기] 버튼까지 같이 흐려지면 안 된다.
+        // 버튼 패널에 자체 CanvasGroup을 두고 부모의 alpha를 무시하게 만든다.
+        DetachFromParentAlpha(actionButtonPanel);
+        DetachFromParentAlpha(actionButtonPanelBottom);
+    }
+
+    /// <summary>부모 CanvasGroup의 alpha 영향을 받지 않도록 자체 CanvasGroup을 붙인다.</summary>
+    private static void DetachFromParentAlpha(GameObject panel)
+    {
+        if (panel == null) return;
+
+        CanvasGroup group = panel.GetComponent<CanvasGroup>();
+        if (group == null) group = panel.AddComponent<CanvasGroup>();
+
+        group.alpha = 1f;
+        group.ignoreParentGroups = true;
+    }
+
+    void OnDisable()
+    {
+        // 드래그 도중 카드 GO가 풀로 비활성화되면 OnEndDrag가 오지 않는다.
+        // 상태가 고착되면 호버 미리보기가 영영 멈추므로 여기서 푼다.
+        if (isDragging)
+        {
+            isDragging = false;
+            if (_currentDragging == this) _currentDragging = null;
+        }
     }
 
     void Update()
@@ -82,10 +134,45 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         // 💡 나중에 여기에 "카드를 위로 드래그해서 뗐을 때 발동(Play)"하는 로직을 추가할 수 있습니다.
     }
 
+    // 커서를 올리기만 해도 왼쪽 서브 팝업에 카드를 크게 보여 준다 (클릭 불필요)
+    //
+    // ★ 미리보기를 띄우는 경로는 둘이다: 이 포인터 이벤트와 CardZoomPopupUI의 Rect 호버 판정.
+    //   이 보드에서는 포인터 이동 이벤트가 카드까지 오지 않는 경우가 있어(중첩 Canvas +
+    //   존별 레이캐스트 토글) 어느 한쪽만으로는 호버가 죽는다. 둘 다 두고, 표시는 멱등하게 만든다.
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (isInSetZone || isPlayed) return;
+
+        ShowSubPopup();
+    }
+
     // 누른 상태로 카드 밖으로 마우스가 빠져나갔을 때
     public void OnPointerExit(PointerEventData eventData)
     {
         ResetPress(); // 의도치 않은 확대 방지
+
+        // 드래그를 시작하면 blocksRaycasts가 꺼져 Exit가 오지만, 그때는 계속 보여 줘야 한다
+        if (isDragging || IsDraggingAny) return;
+
+        CloseSubPopup();
+    }
+
+    /// <summary>이 카드를 왼쪽 서브 팝업(읽기 전용 미리보기)에 띄운다.</summary>
+    private void ShowSubPopup()
+    {
+        if (CardZoomPopupUI.Instance == null) return;
+
+        CardUI ui = GetComponent<CardUI>();
+        if (ui != null) CardZoomPopupUI.Instance.ShowSubByInstanceId(ui.myInstanceId);
+    }
+
+    /// <summary>커서가 이 카드를 벗어났음을 알린다. 실제로 닫을지는 CardZoomPopupUI가 판단한다.</summary>
+    private void CloseSubPopup()
+    {
+        if (CardZoomPopupUI.Instance == null) return;
+
+        CardUI ui = GetComponent<CardUI>();
+        if (ui != null) CardZoomPopupUI.Instance.CloseSubOnPointerExit(ui.myInstanceId);
     }
 
     private void ResetPress()
@@ -108,6 +195,10 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             // 안 튀어나와 있다면 -> 앞으로 꺼내기
             SelectCard();
         }
+
+        // 클릭으로도 미리보기가 뜬다 (기존 동작 유지).
+        // 마우스 다운 시점에 CardZoomPopupUI가 서브 팝업을 닫을 수 있으므로 클릭 처리 끝에서 다시 띄운다
+        ShowSubPopup();
     }
 
     private void SelectCard()
@@ -207,7 +298,12 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         if (isSelected) DeselectCard();
 
         isDragging = true;
+        _currentDragging = this;
         isPointerDown = false; // 드래그를 시작하면 줌 기능 취소
+
+        // 카드가 손패에서 들리는 순간, 화면 왼쪽 서브 팝업에 큰 이미지를 띄운다.
+        // 중앙 모달과 달리 보드를 가리지 않으므로 드래그 목표 지점이 계속 보인다.
+        ShowSubPopup();
 
         // 원래 있던 패 영역(HandArea)과 순서를 기억해 둡니다.
         originalParent = transform.parent;
@@ -247,13 +343,17 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         if (isPlayed || isInSetZone) return;
 
         isDragging = false;
+        if (_currentDragging == this) _currentDragging = null;
         canvasGroup.blocksRaycasts = true;
 
         if (transform.position.y > startDragPosition.y + dragUpThreshold)
         {
             ShowZoomPanel();
         }
-            ReturnToHand();
+
+        // 서브 팝업 정리는 CardZoomPopupUI의 호버 판정이 맡는다.
+        // (커서가 손패를 벗어나 있으면 닫히고, 아직 카드 위면 그대로 유지된다)
+        ReturnToHand();
     }
 
     private void ShowZoomPanel()
@@ -261,6 +361,10 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         Debug.Log("🌟 위로 드래그 성공! 전용 줌 패널 띄우기");
 
         // ⭐ InGameUIManager에게 '나 자신(this)'을 넘겨주며 줌 패널을 띄워달라고 요청합니다.
+        // 세트 선택용 중앙 팝업(공개/폐기 버튼 포함)을 연다.
+        // 읽기용 서브 팝업과 겹치지 않도록 먼저 닫는다.
+        if (CardZoomPopupUI.Instance != null) CardZoomPopupUI.Instance.CloseSub();
+
         if (InGameUIManager.Instance != null)
         {
             InGameUIManager.Instance.ShowCardZoom(this);
@@ -347,23 +451,20 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
         if (setField != null)
         {
-            if (setField.transform.childCount >= 2) // 세트존 이라는 글자 때문에 2로 둠
+            if (PlayerUIManager.Instance != null && !PlayerUIManager.Instance.CanPlaceCardInSetZone())
             {
                 Debug.LogWarning("⚠️ 이미 세트 존에 카드가 있습니다! 더 이상 놓을 수 없습니다.");
-
                 DeselectCard();
                 return;
             }
-            // 아까 만들어둔 완벽한 이동 함수를 불러서 필드 중앙에 꽂아버립니다!
-            DeselectCard();
-            //PlayThisCard(setField.transform);
-            // ⭐ 1. 내 카드에 적힌 ID를 가져옵니다.
-            string myId = GetComponent<CardUI>().myCardID;
 
-            // ⭐ 2. 내 UI 매니저에게 "나 이 카드 낼 거니까 심판한테 알려줘!" 라고 넘깁니다.
+            DeselectCard();
+            CardUI cardUI = GetComponent<CardUI>();
+            string instanceId = cardUI != null ? cardUI.myInstanceId : null;
+
             if (PlayerUIManager.Instance != null)
             {
-                PlayerUIManager.Instance.ConfirmSetCard(myId, this.gameObject, isReveal);
+                PlayerUIManager.Instance.ConfirmSetCard(instanceId, this.gameObject, isReveal);
             }
             else
             {

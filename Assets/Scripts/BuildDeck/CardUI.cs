@@ -1,4 +1,5 @@
-﻿using TMPro;
+﻿using TCG_Project.Scripts.Core;
+using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,6 +16,7 @@ public class CardUI : MonoBehaviour
     public Button minusButton;
 
     public string myCardID;
+    public string myInstanceId;
     private DeckBuilderManager deckManager; // 매니저 참조 변수
 
     public Button removeAllButton;
@@ -45,7 +47,7 @@ public class CardUI : MonoBehaviour
         if (nameText) nameText.text = data.name;
         // if (descText) descText.text = data.description;
 
-        LoadCardImage(data.skin_res);
+        LoadCardImage(data.imagePath);
 
         isDeckMode = isDeck;
 
@@ -158,11 +160,7 @@ public class CardUI : MonoBehaviour
         if (nameText) nameText.text = data.name;
         //if (descText) descText.text = data.description; // 설명도 있다면 표시
 
-        // 이미지 로드
-        string path = data.skin_res.Replace(".png", "").Replace("Assets/Resources/", "");
-        path = path.Replace(".png", "").Replace(".jpg", "");
-        Sprite sp = Resources.Load<Sprite>(path);
-        if (sp && cardImage) cardImage.sprite = sp;
+        LoadCardImage(data.imagePath);
 
         // 3. [중요] 확대 화면에서는 필요 없는 것들 숨기기
 
@@ -177,6 +175,7 @@ public class CardUI : MonoBehaviour
     public void SetupForBattle(string id)
     {
         myCardID = id;
+        myInstanceId = null;
 
         // 1. 데이터 불러오기
         CardData data = CardDataManager.Instance.GetCard(id);
@@ -186,10 +185,38 @@ public class CardUI : MonoBehaviour
         if (nameText) nameText.text = data.name;
         //if (descText) descText.text = data.description; // 주석 해제하시면 설명도 뜹니다!
 
-        LoadCardImage(data.skin_res);
+        LoadCardImage(data.imagePath);
         ApplyDefaultCardBack();
 
         // 4. 전투 씬에서는 필요 없는 '덱 편성용 UI' 전부 끄기
+        if (countText) countText.gameObject.SetActive(false);
+        if (deckCount) deckCount.SetActive(false);
+        if (plusButton) plusButton.gameObject.SetActive(false);
+        if (minusButton) minusButton.gameObject.SetActive(false);
+        if (removeAllButton) removeAllButton.gameObject.SetActive(false);
+    }
+
+    public void BindEngineCard(Card card)
+    {
+        if (card == null)
+            return;
+
+        myCardID = card.Id;
+        myInstanceId = card.InstanceId;
+        gameObject.name = string.IsNullOrEmpty(card.InstanceId) ? card.Id : card.InstanceId;
+
+        if (nameText) nameText.text = card.Name;
+
+        string imagePath = card.ImagePath;
+        if (string.IsNullOrEmpty(imagePath) && CardDataManager.Instance != null)
+        {
+            CardData data = CardDataManager.Instance.GetCard(card.Id);
+            imagePath = data != null ? data.imagePath : null;
+        }
+
+        LoadCardImage(imagePath);
+        ApplyDefaultCardBack();
+
         if (countText) countText.gameObject.SetActive(false);
         if (deckCount) deckCount.SetActive(false);
         if (plusButton) plusButton.gameObject.SetActive(false);

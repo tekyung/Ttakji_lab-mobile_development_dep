@@ -9,7 +9,6 @@ using System.Linq;
 using TCG_Project.Scripts.Abilities;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Effects;
-using TCG_Project.Scripts.Manager;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using TCG_Project.Scripts.Utils;
@@ -99,17 +98,26 @@ public class BattleManager : MonoBehaviour
         Debug.Log(msg);
     }
 
+    // ─── QA 자동 응답기 ───────────────────────────────────────────────
+    // ★ 봇 전용. 사람(Human)의 요청은 HumanChoiceDialogUI가 처리하므로 여기서 가로채면 안 된다.
+    //   사람 요청을 여기서 즉시 응답해 버리면 플레이어의 선택권이 사라진다.
+    //   (현재 OnRequireCardPick / OnRequireOptionalAction의 모든 발행처가 이미 Human 분기에서만
+    //    이벤트를 쏘므로, 아래 가드가 걸리면 이 응답기는 사실상 동작하지 않는다.
+    //    그래도 봇 경로가 추가될 때를 대비해 응답기 자체는 남겨 둔다.)
+
     private void HandleQA_CardPick(Player player, List<Card> validCards, int count, Action<List<Card>> callback)
     {
-        // UI가 없을 때의 임시 카드 선택기 (앞에서부터 강제 선택)
-        Debug.Log($"<color=orange>[임시 UI] {player.Name}에게 카드 선택 요청 ({validCards.Count}장 중 {count}장) -> 앞쪽부터 강제 자동 선택</color>");
+        if (player == null || player.Type != UserType.Bot) return; // 사람은 UI가 응답한다
+
+        Debug.Log($"<color=orange>[봇 자동응답] {player.Name} 카드 선택 ({validCards.Count}장 중 {count}장) -> 앞쪽부터 자동 선택</color>");
         callback?.Invoke(validCards.Take(count).ToList());
     }
 
     private void HandleQA_OptionalAction(Player player, string message, GameContext ctx, Action<bool> callback)
     {
-        // UI가 없을 때의 임시 Yes/No 선택기 (무조건 Yes 발동)
-        Debug.Log($"<color=orange>[임시 UI] {player.Name}에게 질문: '{message}' -> 무조건 Yes 응답</color>");
+        if (player == null || player.Type != UserType.Bot) return; // 사람은 UI가 응답한다
+
+        Debug.Log($"<color=orange>[봇 자동응답] {player.Name} 질문: '{message}' -> Yes</color>");
         callback?.Invoke(true);
     }
 
@@ -151,6 +159,44 @@ public class BattleManager : MonoBehaviour
 
         // 2. 매치 루프 가동
         StartCoroutine(MatchLoop());
+    }
+
+    // ─── 퍼블릭 API: 항복 ──────────────────────────────────────────────
+
+    /// <summary>
+    /// 로드된 카드 데이터 조회용 (읽기 전용 용도).
+    /// UI가 카드 ID로 이름·설명·이미지 경로를 찾을 때 쓴다. 상태를 바꾸지 말 것.
+    /// </summary>
+    public GameDataManager CardData => _dataManager;
+
+    /// <summary>현재 매치에 참여 중인 사람 플레이어. 없으면 null (봇 vs 봇).</summary>
+    public Player HumanPlayer
+    {
+        get
+        {
+            if (p1 != null && p1.Type == UserType.Human) return p1;
+            if (p2 != null && p2.Type == UserType.Human) return p2;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// UI의 [항복] 버튼용. 항복한 플레이어의 상대를 승자로 확정하고 게임을 끝낸다.
+    ///
+    /// OnGameSet을 발행하면 HandleGameSet이 context.IsGameOver를 세우고,
+    /// RunSingleGame의 페이즈 간 CheckAndHandleGameOver()가 루프를 빠져나온다.
+    /// 입력 대기 중이더라도 각 대기 지점이 IsGameOver를 함께 감시하므로 즉시 풀린다.
+    /// </summary>
+    public void SurrenderBy(Player quitter)
+    {
+        if (quitter == null || context == null || context.IsGameOver) return;
+
+        Player winner = ReferenceEquals(quitter, p1) ? p2 : p1;
+        if (winner == null) return;
+
+        EventManager.OnLogMessage?.Invoke(
+            $"<color=red>[항복] {quitter.Name}이(가) 항복했습니다. {winner.Name} 승리.</color>");
+        EventManager.OnGameSet?.Invoke(winner);
     }
 
     // ─── 시스템 초기화 ───────────────────────────────────────────────
@@ -370,16 +416,7 @@ public class BattleManager : MonoBehaviour
         GameLogicHelpers.DrawCards(p1, GameRules.StartingHands, context);
         GameLogicHelpers.DrawCards(p2, GameRules.StartingHands, context);
 
-        // ==============================================================
-        // ★ QA 인젝션 테스트 (유니티 환경)
-        // ==============================================================
-        // (예시) 봇 블루의 스택에 방어막 강제 장전
-        // InjectTestCard(p2, "SONI-07", ZoneType.StackZone); // 마하 10
-        // InjectTestCard(p2, "SONI-06", ZoneType.StackZone); // 엔진 예열
-
-        // (예시) 플레이어 레드의 패에 무기 강제 쥐어주기
-        // InjectTestCard(p1, "DAIN-02", ZoneType.Hand);      // 함포 준비, 발사!
-        // ==============================================================
+        // QaInjection.ApplyDefaultScenario(_dataManager, p1, p2);
 
         EventManager.OnLogMessage?.Invoke($"\n[초기] {p1.Name} — 라이프:{p1.LifeTokens} / 덱:{p1.Deck.Count} / 자원덱:{p1.ResourceDeck.Count} / 패:{p1.Hand.Count}");
         EventManager.OnLogMessage?.Invoke($"[초기] {p2.Name} — 라이프:{p2.LifeTokens} / 덱:{p2.Deck.Count} / 자원덱:{p2.ResourceDeck.Count} / 패:{p2.Hand.Count}");
@@ -547,6 +584,7 @@ public class BattleManager : MonoBehaviour
         yield return new WaitUntil(() => p1SetDone && p2SetDone);
 
         // 3. 일괄 적용 (동시에 세트존에 배치)
+        yield return new WaitForSeconds(ActionDelay);
         if (p1SetCard != null) p1.SetCard(p1SetCard);
         if (p2SetCard != null) p2.SetCard(p2SetCard);
 
@@ -590,38 +628,23 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 휴먼 로직: UI 대기 + 타임아웃
+            // 휴먼 로직: UI 응답을 무제한 대기
+            // ★ 사람은 제한 시간 없이 생각할 수 있어야 한다 (사람 vs 봇 기준).
+            //   온라인(사람 vs 사람)에서는 상대를 무한정 기다리게 할 수 없으므로
+            //   ServerGameManager 쪽 제한 시간은 그대로 유지한다.
             bool done = false;
             Card chosenCard = null;
-            bool timeOutOccurred = false;
 
             EventManager.OnRequireSetPhaseAction?.Invoke(player, context, card =>
             {
-                if (timeOutOccurred) return;
                 chosenCard = card;
                 done = true;
             });
 
-            float waitLimit = GameRules.ChooseWaitTime / 1000f;
-            float timer = 0f;
+            // IsGameOver도 함께 감시한다. 항복 등으로 게임이 끝나면 입력을 기다리지 않고 즉시 빠져나온다.
+            yield return new WaitUntil(() => done || context.IsGameOver);
 
-            while (!done && timer < waitLimit)
-            {
-                timer += Time.deltaTime;
-                yield return null;
-            }
-
-            if (!done)
-            {
-                timeOutOccurred = true;
-                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간 초과! 시스템이 강제로 세트 카드를 무작위 선택합니다.</color>");
-                // 타임아웃 시 봇과 동일한 전략으로 자동 선택
-                var affordableCards = player.Hand.Where(c => GameLogicHelpers.GetEffectiveCost(c, player) <= player.ResourceZone.Count).ToList();
-                var candidates = affordableCards.Count > 0 ? affordableCards : player.Hand;
-                chosenCard = candidates.OrderBy(c => Guid.NewGuid()).FirstOrDefault();
-            }
-
-            onChosen(chosenCard);
+            onChosen(done ? chosenCard : null);
         }
     }
 
@@ -646,7 +669,7 @@ public class BattleManager : MonoBehaviour
         // 양측이 선택을 마칠 때까지 대기
         yield return new WaitUntil(() => p1Done && p2Done);
 
-        // 2. 수집된 결과를 일괄 적용 (여기서 실제 효과와 로그가 터짐)
+        // 2. 수집된 결과를 동시 적용 (여기서 실제 효과와 로그가 터짐)
         _p1RevealedCard = ApplyOpenChoice(p1, p1Choice);
         context.OpenPhaseStates[p1.Name] = new PlayerOpenPhaseState { HasOpened = (_p1RevealedCard != null), RevealedCard = _p1RevealedCard };
 
@@ -675,33 +698,18 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 휴먼 로직: UI 대기 + 타임아웃
+            // 휴먼 로직: UI 응답을 무제한 대기 (사람 vs 봇 기준 — 제한 시간 없음)
             bool done = false;
-            bool timeOutOccurred = false;
-            OpenPhaseChoice chosen = OpenPhaseChoice.Abandon; // 기본값 타임아웃 시 폐기
+            OpenPhaseChoice chosen = OpenPhaseChoice.Abandon; // 응답 전 기본값
 
             EventManager.OnRequireOpenPhaseAction?.Invoke(player, player.SetZoneCard, effectiveCost, context, c =>
             {
-                if (timeOutOccurred) return;
                 chosen = c;
                 done = true;
             });
 
-            float waitLimit = GameRules.ChooseWaitTime / 1000f;
-            float timer = 0f;
-
-            while (!done && timer < waitLimit)
-            {
-                timer += Time.deltaTime;
-                yield return null;
-            }
-
-            if (!done)
-            {
-                timeOutOccurred = true;
-                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간 초과! 시스템이 강제로 세트 카드를 폐기합니다.</color>");
-                chosen = OpenPhaseChoice.Abandon; // 안전하게 폐기 처리
-            }
+            // 항복 등으로 게임이 끝나면 입력을 기다리지 않는다 (기본값 폐기로 진행)
+            yield return new WaitUntil(() => done || context.IsGameOver);
 
             onChosen(chosen);
         }
@@ -874,6 +882,7 @@ public class BattleManager : MonoBehaviour
                 player.PlayingCard = null;
 
                 // [팀원 공유용] 카드 라우팅 및 이동 이벤트 방송 동기화
+                yield return new WaitForSeconds(ActionDelay);
                 if (card.IsStack)
                 {
                     player.AddToStackZone(card);
@@ -1010,39 +1019,19 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 휴먼은 UI를 통해 직접 발동 순서를 고름
+            // 휴먼은 UI(HumanChoiceDialogUI)를 통해 직접 발동 순서를 고른다.
+            // ★ 제한 시간 없음 — 사람은 얼마든지 생각할 수 있어야 한다 (사람 vs 봇 기준).
             bool done = false;
-            bool timeOutOccurred = false; // ★ 지각 응답 차단용 플래그
 
             EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, chosenCards =>
             {
-                // 이미 시간이 지나서 시스템이 강제 선택했다면, 뒤늦게 들어온 UI 클릭은 무시!
-                if (timeOutOccurred) return;
-                selectedCards = chosenCards;
+                selectedCards = chosenCards ?? new List<Card>();
                 done = true;
             });
 
-            // ★ 무한 대기(WaitUntil)를 버리고, 타이머 루프를 돌립니다.
-            // GameRules.ChooseWaitTime은 밀리초(기본 10000)이므로 초 단위(10f)로 변환
-            float waitLimit = GameRules.ChooseWaitTime / 1000f;
-            float timer = 0f;
-
-            // 응답이 아직 안 왔고, 타이머가 제한 시간을 넘지 않았다면 계속 대기
-            while (!done && timer < waitLimit)
-            {
-                timer += Time.deltaTime;
-                yield return null; // 다음 프레임까지 대기
-            }
-
-            // ★ 루프를 빠져나왔는데 여전히 done이 false라면? = 타임아웃 발생!
-            if (!done)
-            {
-                timeOutOccurred = true;
-                EventManager.OnLogMessage?.Invoke($"<color=red>⏳ 제한 시간({waitLimit}초) 초과! 시스템이 강제로 방어 카드를 자동 선택합니다.</color>");
-
-                // 봇과 동일하게 앞에서부터 필요한 만큼 강제 선택
-                selectedCards = validStackCards.Take(requiredCount).ToList();
-            }
+            // 항복 등으로 게임이 끝나면 입력을 기다리지 않는다 (스택 미발동으로 진행)
+            yield return new WaitUntil(() => done || context.IsGameOver);
+            if (!done) yield break;
         }
 
         // 5. 선택된 카드들을 순서대로 발동 (실행)
@@ -1066,6 +1055,7 @@ public class BattleManager : MonoBehaviour
 
             // 복구: 발동이 끝났으니 다시 null로 비워줍니다.
             stackOwner.PlayingCard = null;
+            yield return new WaitForSeconds(ActionDelay);
             stackOwner.UseAndDiscardStack(stackCard);
 
             yield return new WaitForSeconds(ActionDelay);
@@ -1126,51 +1116,12 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private void InjectTestCard(Player player, string cardId, ZoneType targetZone)
     {
-        if (_dataManager == null) return;
-
-        // 1. 데이터 매니저에서 카드 템플릿 검색
-        if (!_dataManager.AllCards.TryGetValue(cardId, out Card template))
-        {
-            EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] 주입 실패: ID '{cardId}'를 찾을 수 없습니다.</color>");
-            return;
-        }
-
-        // 2. 실제 게임에 사용될 독립된 객체로 복제 (Deep Copy)
-        Card injectedCard = template.Clone();
-
-        // 3. 타겟 존의 성격에 맞춰 안전하게 밀어넣기
-        switch (targetZone)
-        {
-            case ZoneType.Hand:
-                player.InsertCard(ZoneType.Hand, injectedCard);
-                break;
-            case ZoneType.Deck:
-                // 덱 조작: 다음 턴에 바로 뽑히도록 덱의 맨 위(0번 인덱스)에 강제 삽입
-                player.Deck.Insert(0, injectedCard);
-                break;
-            case ZoneType.Graveyard:
-                player.InsertCard(ZoneType.Graveyard, injectedCard);
-                break;
-            case ZoneType.ResourceZone:
-                player.InsertCard(ZoneType.ResourceZone, injectedCard);
-                break;
-            case ZoneType.StackZone:
-                player.AddToStackZone(injectedCard);
-                break;
-            case ZoneType.BattlefieldZone:
-                player.PlaceBattlefield(injectedCard);
-                break;
-            default:
-                EventManager.OnLogMessage?.Invoke($"<color=red>[QA Error] '{targetZone}'은(는) 주입이 지원되지 않는 존입니다.</color>");
-                return;
-        }
-
-        EventManager.OnLogMessage?.Invoke($"<color=yellow>[QA Inject] {player.Name}의 {targetZone}에 '{injectedCard.Name}' 강제 장전 완료.</color>");
+        QaInjection.Inject(_dataManager, player, cardId, targetZone);
     }
 
     private void ResolveSimultaneousDeckout()
     {
-        EventManager.OnTiebreaker.Invoke(p1, p2);
+        EventManager.OnTiebreaker?.Invoke(p1, p2);
         int result = TiebreakerResolver.ResolveTiebreaker(p1, p2);
 
         if (result > 0)

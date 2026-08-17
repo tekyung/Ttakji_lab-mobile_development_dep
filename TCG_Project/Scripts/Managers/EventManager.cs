@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 
@@ -32,7 +32,6 @@ namespace TCG_Project.Scripts.Managers
 
         /// <summary>자원 페이즈 시작: 자원덱→자원존 1장 이동 직전에 발행.</summary>
         public static Action<string, int> OnResourcePhase;
-        public static Action<Player, int> OnResourceChange;
 
         /// <summary>드로우 페이즈 시작: 메인덱→패 1장 드로우 직전에 발행.</summary>
         public static Action<string, int> OnDrawPhase;
@@ -63,16 +62,19 @@ namespace TCG_Project.Scripts.Managers
         /// <summary>3판 2선승 매치의 승자가 결정되었을 때 발행.</summary>
         public static Action<Player> OnMatchSet;
 
+        /// <summary>타이브레이커 실행 시 발행.</summary>
+        public static Action<Player, Player> OnTiebreaker;
+
         /// <summary>3판 2선승 매치가 무승부로 종료되었을 때 발행.</summary>
         public static Action<Player, Player> OnMatchDraw;
 
         // ─── 4. 플레이어 상태 변경 ─────────────────────────────────────────────
 
-        /// <summary>승점(PrizePoints) 변경. player=소유자, newValue=변경 후 값.</summary>
-        public static Action<Player, int> OnPrizeChange;
-
         /// <summary>라이프 토큰 변경. player=소유자, newValue=변경 후 값.</summary>
         public static Action<Player, int> OnLifeChange;
+
+        // 자원 변경
+        public static Action<Player, int> OnResourceChange;
 
         /// <summary>게임 시작/리셋 시 용병 필드 4슬롯 전체 동기화.</summary>
         public static Action<IReadOnlyList<CharacterSlotSnapshot>> OnCharacterFieldSync;
@@ -88,13 +90,41 @@ namespace TCG_Project.Scripts.Managers
         /// <summary>카드 사용(Play) 시 발행.</summary>
         public static Action<Player, Card> OnPlayCard;
 
+        /// <summary>카드 상태 변경 시 발행.</summary>
+        public static Action<Card> OnCardStateChanged;
+
+        /// <summary>카드 효과 발동 실패 시 발행.</summary>
+        public static Action<Card> OnPlayFailed;
+
         // ─── 6. 카드 이동 ──────────────────────────────────────────────────────
 
-        /// <summary>카드가 한 존에서 다른 존으로 이동할 때 발행.</summary>
+        /// <summary>카드가 한 존에서 다른 존으로 이동할 때 발행. (기본값)</summary>
         public static Action<Card, Player, ZoneType, Player, ZoneType> OnCardMove;
 
         /// <summary>카드가 드로우될 때 발행.</summary>
         public static Action<Card, Player, ZoneType> OnCardDraw;
+
+        /// <summary>카드가 버려질 때 발행.</summary>
+        /// 예: 패→묘지, 세트존→묘지(폐기), 스택존→묘지(폐기) 등 모든 버려짐 상황에서 발행.
+        public static Action<Card, Player, ZoneType> OnCardDiscard;
+
+        /// <summary>카드가 세트될 때 발행.</summary>
+        public static Action<Card, Player> OnCardSet;
+
+        /// <summary>카드가 스택에 추가될 때 발행.</summary>
+        public static Action<Card, Player> OnCardStacked;
+
+        /// <summary>카드가 스택에서 제거될 때 발행.</summary>
+        public static Action<Card, Player> OnCardUnstacked;
+
+        /// <summary>카드가 전장에 배치될 때 발행.</summary>
+        public static Action<Card, Player> OnCardBattlefield;
+
+        /// <summary>카드가 전장에서 제거될 때 발행.</summary>
+        public static Action<Card, Player> OnCardUnbattlefield;
+
+        /// <summary>카드가 자원 존에 추가될 때 발행.</summary>
+        public static Action<Card, Player> OnCardResourceAdded;
 
         // ─── 7. Human Input — 6페이즈 구조 (Phase 8) ──────────────────────────
 

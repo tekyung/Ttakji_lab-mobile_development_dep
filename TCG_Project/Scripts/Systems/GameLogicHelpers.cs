@@ -13,6 +13,23 @@ namespace TCG_Project.Scripts.Systems
     /// </summary>
     public static class GameLogicHelpers
     {
+        /// <summary>무한 대기를 뜻하는 타임아웃 값. Task.Delay(-1)은 영원히 완료되지 않는다.</summary>
+        public const int NoTimeout = -1;
+
+        /// <summary>
+        /// 입력 대기 제한 시간(밀리초)을 플레이어 유형에 따라 결정한다.
+        ///
+        /// - Human: 제한 없음(<see cref="NoTimeout"/>). 사람은 얼마든지 생각할 수 있어야 한다.
+        /// - Bot 및 그 외: <c>GameRules.ChooseWaitTime</c> (CommonConfig.json의 choose_wait_time)
+        ///
+        /// 온라인(사람 vs 사람)에서는 상대를 무한정 기다리게 할 수 없으므로 이 헬퍼를 쓰지 말고
+        /// 별도의 서버 제한 시간을 적용해야 한다.
+        /// </summary>
+        public static int GetChooseTimeoutMs(Player player)
+        {
+            return player != null && player.Type == UserType.Human ? NoTimeout : GameRules.ChooseWaitTime;
+        }
+
         /// <summary>
         /// BattlefieldEffect.CostReductionFilter를 반영한 실효 코스트 계산.
         /// </summary>

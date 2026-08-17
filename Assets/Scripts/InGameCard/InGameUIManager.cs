@@ -38,6 +38,9 @@ public class InGameUIManager : MonoBehaviour
             {
                 zoomCardImage.sprite = cardUI.cardImage.sprite;
 
+                // 패널 Rect 비율에 맞춰 늘어나지 않고, 원본 이미지 비율을 유지한 채 확대되도록 한다
+                zoomCardImage.preserveAspect = true;
+
                 Debug.Log($"📸 줌 패널 사진 복사 완료! 가져온 사진 이름: {cardUI.cardImage.sprite.name}");
             }
 

@@ -2,7 +2,7 @@ using System;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 
-namespace TCG_Project.Scripts.Manager
+namespace TCG_Project.Scripts.Managers
 {
     /// <summary>
     /// 3판 2선승 매치(세트)를 관리한다.

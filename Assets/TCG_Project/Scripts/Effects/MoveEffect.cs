@@ -143,7 +143,7 @@ namespace TCG_Project.Scripts.Effects
                     var result = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<List<Card>>(
                         cb => EventManager.OnRequireCardPick?.Invoke(self, candidates, _count, cb),
                         () => candidates.OrderBy(c => Guid.NewGuid()).Take(_count).ToList(), // 타임아웃 시 랜덤
-                        GameRules.ChooseWaitTime
+                        GameLogicHelpers.GetChooseTimeoutMs(self)
                     );
                     finalSelected = result ?? new List<Card>();
                 }

@@ -1,4 +1,5 @@
 using System.Text;
+using System;
 
 namespace TCG_Project
 {
@@ -9,7 +10,6 @@ namespace TCG_Project
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
             ConsoleRunner.Run();
-            Console.ReadLine();
         }
     }
 }

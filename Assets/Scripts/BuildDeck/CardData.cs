@@ -11,7 +11,7 @@ public class CardData
     public int speed;
     public int cost;
     public int max_deck_count;
-    public string skin_res;
+    public string imagePath;
     //public string description;
 
     [System.Serializable]

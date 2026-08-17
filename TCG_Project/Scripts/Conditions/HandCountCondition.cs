@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
-using TCG_Project.Scripts.Systems; // FormulaEvaluator »ç¿ë
+using TCG_Project.Scripts.Systems; // FormulaEvaluator ì‚¬ìš©
 
 namespace TCG_Project.Scripts.Conditions
 {
@@ -10,7 +10,7 @@ namespace TCG_Project.Scripts.Conditions
     {
         private string targetType;
         private string op;
-        private object valueParam; // [º¯°æ] int -> object
+        private object valueParam; // [ë³€ê²½] int -> object
 
         public void Initialize(Dictionary<string, object> parameters)
         {
@@ -25,15 +25,15 @@ namespace TCG_Project.Scripts.Conditions
 
         public bool IsMet(GameContext context)
         {
-            // 1. Å¸°Ù ÇÚµå ¼ö °¡Á®¿À±â
+            // 1. íƒ€ê²Ÿ í•¸ë“œ ìˆ˜ ê°€ì ¸ì˜¤ê¸°
             List<Player> targets = TargetEvaluator.Evaluate(targetType, context);
             if (targets.Count == 0) return false;
             int handCount = targets[0].Hand.Count;
 
-            // 2. [ÇÙ½É] ºñ±³ÇÒ °ª °è»ê
+            // 2. [í•µì‹¬] ë¹„êµí•  ê°’ ê³„ì‚°
             int compareValue = FormulaEvaluator.Evaluate(valueParam, context);
 
-            // 3. ºñ±³ ¿¬»ê
+            // 3. ë¹„êµ ì—°ì‚°
             switch (op)
             {
                 case "Greater": return handCount > compareValue;

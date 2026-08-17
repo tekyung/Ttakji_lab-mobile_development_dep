@@ -5,16 +5,16 @@ public class DataManager : MonoBehaviour
 {
     public static DataManager Instance;
 
-    // ¸ŞÀÎ È­¸é¿¡¼­ ¼±ÅÃÇÑ µ¦ÀÇ 'Ä«µå ¹øÈ£(ID)'µéÀ» ´ã¾ÆµÑ ¸®½ºÆ®ÀÔ´Ï´Ù.
+    // ë©”ì¸ í™”ë©´ì—ì„œ ì„ íƒí•œ ë±ì˜ 'ì¹´ë“œ ë²ˆí˜¸(ID)'ë“¤ì„ ë‹´ì•„ë‘˜ ë¦¬ìŠ¤íŠ¸ì…ë‹ˆë‹¤.
     public List<string> selectedDeckList = new List<string>();
 
     private void Awake()
     {
-        // ½Ì±ÛÅæ & ¾ÀÀÌ ³Ñ¾î°¡µµ ÆÄ±«µÇÁö ¾Êµµ·Ï ¼³Á¤
+        // ì‹±ê¸€í†¤ & ì”¬ì´ ë„˜ì–´ê°€ë„ íŒŒê´´ë˜ì§€ ì•Šë„ë¡ ì„¤ì •
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); // ÀÌ ½ºÅ©¸³Æ®°¡ ºÙÀº ¿ÀºêÁ§Æ®´Â Àı´ë ÆÄ±«µÇÁö ¾ÊÀ½!
+            DontDestroyOnLoad(gameObject); // ì´ ìŠ¤í¬ë¦½íŠ¸ê°€ ë¶™ì€ ì˜¤ë¸Œì íŠ¸ëŠ” ì ˆëŒ€ íŒŒê´´ë˜ì§€ ì•ŠìŒ!
         }
         else
         {

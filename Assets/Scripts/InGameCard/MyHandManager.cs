@@ -21,9 +21,14 @@ public class MyHandManager : MonoBehaviour
     [Header("UI Elements")]
     public Button readyButton;
 
+    [SerializeField] private bool enableLegacyHandTest = false;
+
     private void Start()
     {
-        LoadDeckFromJSON(); // 게임 시작하자마자 덱을 불러옵니다!
+        if (!enableLegacyHandTest)
+            return;
+
+        LoadDeckFromJSON();
     }
 
     private void LoadDeckFromJSON()
@@ -67,6 +72,11 @@ public class MyHandManager : MonoBehaviour
 
     public void DrawCard()
     {
+        if (!enableLegacyHandTest)
+        {
+            Debug.LogWarning("[MyHandManager] Legacy DrawCard disabled. Engine CardBoardRegistry owns card GOs.");
+            return;
+        }
         if (handArea.childCount >= maxHandSize) return;
         if (currentDrawPile.Count <= 0) return;
 

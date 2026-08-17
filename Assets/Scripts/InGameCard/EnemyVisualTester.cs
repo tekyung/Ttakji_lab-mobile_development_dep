@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using TMPro;
@@ -12,8 +11,10 @@ public class EnemyVisualTester : MonoBehaviour
     public Transform enemyHandTransform;
     public Transform enemySetZoneTransform;
     public Transform enemyGraveyardTransform;
-    public Transform enemyStackZoneTransform;
+    public Transform enemyDeckTransform;
+    public Transform enemyStackZoneRoot;
     public Transform enemyBattlefieldTransform;
+    public Transform enemyResourceZoneTransform;
 
     [Header("Opponent Status UI")]
     public TextMeshProUGUI enemyLifeText;
@@ -22,32 +23,51 @@ public class EnemyVisualTester : MonoBehaviour
     [Header("BotVsBot: P1 uses PlayerUI bottom zones when both sides are bots")]
     [SerializeField] private bool usePlayerUiZonesForP1Bot = true;
 
+    [Header("BotVsBot Spectator")]
+    [SerializeField] private bool revealAllHandsInBotVsBot = true;
+
     [Header("Prefabs")]
-    public GameObject cardBackPrefab;
     public GameObject cardFrontPrefab;
+
+    [Header("Deck Counts")]
+    public TextMeshProUGUI enemyDeckCountText;
+    public TextMeshProUGUI enemyResourceDeckCountText;
 
     public float enemyCardWidth = 200f;
 
     private Player _p1;
     private Player _p2;
     private readonly Dictionary<Player, GameObject> _currentSetCards = new Dictionary<Player, GameObject>();
+    private readonly Dictionary<Player, Dictionary<string, GameObject>> _botStackCards =
+        new Dictionary<Player, Dictionary<string, GameObject>>();
+    private readonly Dictionary<Player, Transform> _botHiddenPools = new Dictionary<Player, Transform>();
 
     private void OnEnable()
     {
         EventManager.OnGameStart += HandleGameStart;
+        EventManager.OnGameSet += HandleGameEnd;
         EventManager.OnCardMove += HandleEnemyCardMove;
+        EventManager.OnCardDraw += HandleEnemyCardDraw;
         EventManager.OnPlayCard += HandleEnemyPlayCard;
+        EventManager.OnCardStateChanged += HandleCardStateChanged;
         EventManager.OnLifeChange += HandleEnemyLifeChange;
         EventManager.OnResourceChange += HandleEnemyResourceChange;
+        EventManager.OnTurnEnd += HandleTurnEnd;
+        EventManager.OnEndPhase += HandleEndPhase;
     }
 
     private void OnDisable()
     {
         EventManager.OnGameStart -= HandleGameStart;
+        EventManager.OnGameSet -= HandleGameEnd;
         EventManager.OnCardMove -= HandleEnemyCardMove;
+        EventManager.OnCardDraw -= HandleEnemyCardDraw;
         EventManager.OnPlayCard -= HandleEnemyPlayCard;
+        EventManager.OnCardStateChanged -= HandleCardStateChanged;
         EventManager.OnLifeChange -= HandleEnemyLifeChange;
         EventManager.OnResourceChange -= HandleEnemyResourceChange;
+        EventManager.OnTurnEnd -= HandleTurnEnd;
+        EventManager.OnEndPhase -= HandleEndPhase;
     }
 
     private void HandleGameStart(Player p1, Player p2)
@@ -55,6 +75,96 @@ public class EnemyVisualTester : MonoBehaviour
         _p1 = p1;
         _p2 = p2;
         _currentSetCards.Clear();
+        _botStackCards.Clear();
+        _botHiddenPools.Clear();
+
+        CardBoardRegistry.ClearPool();
+
+        if (PlayerUIManager.Instance != null)
+            PlayerUIManager.Instance.InitializeHumanCardPool(PlayerUIManager.ResolveHumanPlayer(p1, p2));
+
+        enemyDeckTransform = DeckGraveyardStackUI.EnsureDeckCardAnchor(enemyDeckTransform);
+
+        TryBuildBotPool(p1);
+        TryBuildBotPool(p2);
+        SyncPhysicalStacks(p1);
+        SyncPhysicalStacks(p2);
+        RefreshBotDeckCounts(p1);
+        RefreshBotDeckCounts(p2);
+        RefreshBotStatus(p1);
+        RefreshBotStatus(p2);
+
+        Debug.Log($"[EnemyVisual] 카드 풀 생성: {CardBoardRegistry.Count}장");
+    }
+
+    private void RefreshBotStatus(Player player)
+    {
+        if (player == null || player.Type != UserType.Bot)
+            return;
+
+        HandleEnemyLifeChange(player, player.LifeTokens);
+        HandleEnemyResourceChange(player, player.GetResourceCount());
+    }
+
+    private void HandleGameEnd(Player winner)
+    {
+        CardBoardRegistry.ClearPool();
+        _currentSetCards.Clear();
+        _botStackCards.Clear();
+        _botHiddenPools.Clear();
+    }
+
+    public void ConfigureBotVsBotSpectator(bool revealHands)
+    {
+        revealAllHandsInBotVsBot = revealHands;
+    }
+
+    private bool IsBotVsBot =>
+        _p1 != null && _p2 != null &&
+        _p1.Type == UserType.Bot && _p2.Type == UserType.Bot;
+
+    private void TryBuildBotPool(Player player)
+    {
+        if (player == null || player.Type != UserType.Bot || cardFrontPrefab == null)
+            return;
+
+        var poolCards = new List<Card>();
+        poolCards.AddRange(player.Deck);
+        poolCards.AddRange(player.ResourceDeck);
+
+        CardBoardRegistry.BuildPool(player, poolCards, cardFrontPrefab, GetBotHiddenPool(player));
+    }
+
+    private Transform GetBotHiddenPool(Player player)
+    {
+        if (player == null)
+            return null;
+
+        if (!_botHiddenPools.TryGetValue(player, out Transform pool) || pool == null)
+        {
+            Transform hintHand = enemyHandTransform;
+            Transform hintSet = enemySetZoneTransform;
+            Transform hintDeck = enemyDeckTransform;
+            Transform hintGrave = enemyGraveyardTransform;
+            if (TryGetBotBoard(player, out BotBoardView board))
+            {
+                hintHand = board.Hand;
+                hintSet = board.SetZone;
+                hintDeck = board.Deck;
+                hintGrave = board.Graveyard;
+            }
+
+            pool = CardBoardRegistry.CreateHiddenPool(
+                $"BotHiddenCardPool_{player.Name}",
+                transform,
+                hintHand,
+                hintSet,
+                hintDeck,
+                hintGrave);
+            _botHiddenPools[player] = pool;
+        }
+
+        return pool;
     }
 
     private struct BotBoardView
@@ -62,8 +172,10 @@ public class EnemyVisualTester : MonoBehaviour
         public Transform Hand;
         public Transform SetZone;
         public Transform Graveyard;
-        public Transform StackZone;
+        public Transform Deck;
+        public Transform StackBar;
         public Transform Battlefield;
+        public Transform ResourceZone;
         public TextMeshProUGUI LifeText;
         public TextMeshProUGUI ResourceText;
     }
@@ -84,8 +196,10 @@ public class EnemyVisualTester : MonoBehaviour
                 Hand = ui.myHandTransform,
                 SetZone = ui.mySetZoneTransform,
                 Graveyard = ui.myGraveyardTransform,
-                StackZone = ui.myStackZoneTransform,
+                Deck = ui.myDeckTransform,
+                StackBar = ui.myStackZoneRoot,
                 Battlefield = ui.myBattlefieldTransform,
+                ResourceZone = ui.myResourceZoneTransform,
                 LifeText = ui.myLifeText,
                 ResourceText = ui.myResourceText
             };
@@ -97,12 +211,33 @@ public class EnemyVisualTester : MonoBehaviour
             Hand = enemyHandTransform,
             SetZone = enemySetZoneTransform,
             Graveyard = enemyGraveyardTransform,
-            StackZone = enemyStackZoneTransform,
+            Deck = enemyDeckTransform,
+            StackBar = enemyStackZoneRoot,
             Battlefield = enemyBattlefieldTransform,
+            ResourceZone = enemyResourceZoneTransform,
             LifeText = enemyLifeText,
             ResourceText = enemyResourceText
         };
         return board.Hand != null;
+    }
+
+    private ZoneMoveContext CreateBotZoneContext(BotBoardView board, Player owner)
+    {
+        return new ZoneMoveContext
+        {
+            Hand = board.Hand,
+            SetZone = board.SetZone,
+            Graveyard = board.Graveyard,
+            Deck = board.Deck,
+            StackBar = board.StackBar,
+            Battlefield = board.Battlefield,
+            HiddenPool = GetBotHiddenPool(owner),
+            ResourceZone = board.ResourceZone,
+            CardWidth = enemyCardWidth,
+            UseCardBackInHand = !(revealAllHandsInBotVsBot && IsBotVsBot),
+            OnHandLayoutRequested = null,
+            OnPhysicalStackSync = skipId => SyncPhysicalStacks(owner, skipId)
+        };
     }
 
     private void HandleEnemyLifeChange(Player player, int currentLife)
@@ -119,6 +254,131 @@ public class EnemyVisualTester : MonoBehaviour
             return;
 
         board.ResourceText.text = $"♣ : {currentResource}";
+        RefreshBotDeckCounts(player);
+    }
+
+    private void HandleEnemyCardMove(Card card, Player owner, ZoneType fromZone, Player target, ZoneType toZone)
+    {
+        if (!TryGetBotBoard(owner, out BotBoardView board))
+            return;
+
+        if (toZone == ZoneType.StackZone)
+        {
+            CardBoardRegistry.TryGet(card, out GameObject adoptCard);
+            if (adoptCard == null)
+                _currentSetCards.TryGetValue(owner, out adoptCard);
+
+            Vector2 fromAnchored = Vector2.zero;
+            bool hasFrom = false;
+            if (adoptCard != null)
+            {
+                CardMoveTween.Complete(adoptCard.transform);
+                CardBoardRegistry.ResetVisualState(adoptCard);
+                if (board.StackBar != null && adoptCard.transform.parent != board.StackBar)
+                    adoptCard.transform.SetParent(board.StackBar, true);
+
+                RectTransform adoptRect = adoptCard.GetComponent<RectTransform>();
+                if (adoptRect != null)
+                {
+                    fromAnchored = adoptRect.anchoredPosition;
+                    hasFrom = true;
+                }
+            }
+
+            SyncBotStack(owner, board, adoptCard);
+            CardBoardRegistry.HideStrayCards(board.SetZone, null, GetBotHiddenPool(owner));
+            if (adoptCard != null && hasFrom)
+                CardMoveTween.PlayFromCaptured(adoptCard.transform, fromAnchored);
+
+            _currentSetCards.Remove(owner);
+            RefreshBotDeckCounts(owner);
+            return;
+        }
+
+        if (toZone == ZoneType.Graveyard && fromZone == ZoneType.StackZone)
+        {
+            CardBoardRegistry.TryGet(card, out GameObject moving);
+            Vector3 fromWorld = Vector3.zero;
+            bool hasFrom = false;
+            if (moving != null)
+            {
+                CardMoveTween.Complete(moving.transform);
+                fromWorld = moving.transform.position;
+                hasFrom = moving.activeInHierarchy;
+            }
+
+            StackZoneRowUI.MoveCardToGraveyard(
+                board.StackBar,
+                board.Graveyard,
+                card,
+                GetBotStackMap(owner),
+                null);
+
+            SyncBotStack(owner, board);
+            SyncPhysicalStacks(owner, card.InstanceId);
+            if (moving != null)
+            {
+                RectTransform movingRect = moving.GetComponent<RectTransform>();
+                DeckGraveyardStackUI.ApplyStackedCardFrame(movingRect, enemyCardWidth);
+                Vector2 fromAnchored = hasFrom
+                    ? CardMoveTween.WorldToAnchored(movingRect, fromWorld)
+                    : CardMoveTween.WorldToAnchored(
+                        movingRect,
+                        board.StackBar != null ? board.StackBar.position : fromWorld);
+                Vector2 toAnchored = DeckGraveyardStackUI.GetStackedAnchoredPosition(
+                    owner.Graveyard,
+                    card,
+                    topIsIndexZero: false);
+                CardMoveTween.Play(moving.transform, fromAnchored, toAnchored);
+            }
+
+            RefreshBotDeckCounts(owner);
+            return;
+        }
+
+        ZoneMoveContext ctx = CreateBotZoneContext(board, owner);
+        if (CardBoardRegistry.ApplyZoneMove(card, owner, fromZone, toZone, ctx))
+        {
+            if (toZone == ZoneType.SetZone && CardBoardRegistry.TryGet(card, out GameObject setGo))
+                _currentSetCards[owner] = setGo;
+            else if (fromZone == ZoneType.SetZone)
+                _currentSetCards.Remove(owner);
+        }
+
+        RefreshBotDeckCounts(owner);
+    }
+
+    private void HandleEnemyCardDraw(Card card, Player owner, ZoneType sourceZone)
+    {
+        RefreshBotDeckCounts(owner);
+    }
+
+    private Dictionary<string, GameObject> GetBotStackMap(Player owner)
+    {
+        if (!_botStackCards.TryGetValue(owner, out Dictionary<string, GameObject> map))
+        {
+            map = new Dictionary<string, GameObject>();
+            _botStackCards[owner] = map;
+        }
+
+        return map;
+    }
+
+    private void SyncBotStack(Player owner, BotBoardView board, GameObject adoptCard = null)
+    {
+        if (board.StackBar == null || owner == null)
+            return;
+
+        StackZoneRowUI.SyncFromEngineStack(new StackZoneSyncContext
+        {
+            barRoot = board.StackBar,
+            engineStack = owner.StackZone,
+            cardPrefab = cardFrontPrefab,
+            instanceMap = GetBotStackMap(owner),
+            adoptCard = adoptCard,
+            cardWidth = enemyCardWidth,
+            applyCardSize = rect => ForceCenterAndSize(rect, true)
+        });
     }
 
     private static void ForceCenterAndSize(RectTransform rect, bool applySize = false)
@@ -133,140 +393,158 @@ public class EnemyVisualTester : MonoBehaviour
         if (applySize) rect.sizeDelta = new Vector2(200f, 280f);
     }
 
-    private void HandleEnemyCardMove(Card card, Player owner, ZoneType fromZone, Player target, ZoneType toZone)
+    private void HandleCardStateChanged(Card card)
     {
-        if (!TryGetBotBoard(owner, out BotBoardView board))
+        if (card == null || !card.IsFaceUp)
             return;
 
-        if (toZone == ZoneType.Hand)
-        {
-            GameObject newCard = Instantiate(cardBackPrefab, board.Hand);
-            newCard.name = $"{owner.Name} Card ({card.Name})";
-            CardImageLoader.ApplyDefaultCardBack(newCard);
-            ForceCenterAndSize(newCard.GetComponent<RectTransform>(), true);
+        TryRevealSetZoneCard(_p1, card);
+        TryRevealSetZoneCard(_p2, card);
+    }
 
-            Debug.Log($"🤖 [{owner.Name}] 드로우 UI 반영 — 엔진 패: {owner.Hand.Count}장, UI 자식: {board.Hand.childCount}장");
-            StartCoroutine(UpdateHandSpacingRoutine(board.Hand));
+    private void TryRevealSetZoneCard(Player player, Card card)
+    {
+        if (player == null || player.Type != UserType.Bot || player.SetZoneCard == null)
             return;
-        }
 
-        if (toZone == ZoneType.SetZone && fromZone == ZoneType.Hand)
-        {
-            if (board.Hand.childCount > 0)
-            {
-                Transform cardToMove = board.Hand.GetChild(0);
-                cardToMove.SetParent(board.SetZone);
-                ForceCenterAndSize(cardToMove.GetComponent<RectTransform>());
-            }
-
+        if (!IsSameEngineCard(player.SetZoneCard, card))
             return;
-        }
 
-        if (toZone == ZoneType.Graveyard || toZone == ZoneType.StackZone || toZone == ZoneType.BattlefieldZone)
-        {
-            GameObject cardObjToMove = null;
+        if (!TryGetBotBoard(player, out BotBoardView board) || board.SetZone == null)
+            return;
 
-            if (fromZone == ZoneType.SetZone && _currentSetCards.TryGetValue(owner, out GameObject setCard))
-            {
-                cardObjToMove = setCard;
-            }
-            else if (fromZone == ZoneType.StackZone && board.StackZone != null)
-            {
-                Transform t = board.StackZone.Find(card.Id);
-                if (t != null) cardObjToMove = t.gameObject;
-            }
-            else if (fromZone == ZoneType.BattlefieldZone && board.Battlefield != null)
-            {
-                Transform t = board.Battlefield.Find(card.Id);
-                if (t != null) cardObjToMove = t.gameObject;
-            }
+        GameObject cardObj = null;
+        if (_currentSetCards.TryGetValue(player, out GameObject setCardObj) && setCardObj != null)
+            cardObj = setCardObj;
+        else
+            CardBoardRegistry.TryGet(card, out cardObj);
 
-            if (cardObjToMove != null)
-            {
-                if (toZone == ZoneType.Graveyard && board.Graveyard != null)
-                {
-                    cardObjToMove.transform.SetParent(board.Graveyard);
-                    ForceCenterAndSize(cardObjToMove.GetComponent<RectTransform>());
-                }
-                else if (toZone == ZoneType.StackZone && board.StackZone != null)
-                {
-                    cardObjToMove.transform.SetParent(board.StackZone);
-                    cardObjToMove.name = card.Id;
-                    ForceCenterAndSize(cardObjToMove.GetComponent<RectTransform>());
-                }
-                else if (toZone == ZoneType.BattlefieldZone && board.Battlefield != null)
-                {
-                    cardObjToMove.transform.SetParent(board.Battlefield);
-                    cardObjToMove.name = card.Id;
-                    ForceCenterAndSize(cardObjToMove.GetComponent<RectTransform>());
-                }
-                else
-                {
-                    Destroy(cardObjToMove);
-                }
-            }
+        if (cardObj == null)
+            return;
 
-            if (fromZone == ZoneType.SetZone && board.SetZone != null)
-            {
-                foreach (Transform child in board.SetZone)
-                    Destroy(child.gameObject);
+        if (board.SetZone != null && cardObj.transform.parent != board.SetZone)
+            return;
 
-                _currentSetCards.Remove(owner);
-            }
-        }
+        RevealCardObject(cardObj, card);
+    }
+
+    private static void RevealCardObject(GameObject cardObj, Card card)
+    {
+        CardUI ui = cardObj.GetComponent<CardUI>();
+        if (ui == null)
+            return;
+
+        ui.BindEngineCard(card);
+        ui.SetFaceDown(false);
+    }
+
+    private static bool IsSameEngineCard(Card left, Card right)
+    {
+        if (left == null || right == null)
+            return false;
+
+        if (!string.IsNullOrEmpty(left.InstanceId) && !string.IsNullOrEmpty(right.InstanceId))
+            return left.InstanceId == right.InstanceId;
+
+        return left.Id == right.Id;
     }
 
     private void HandleEnemyPlayCard(Player player, Card card)
     {
-        if (!TryGetBotBoard(player, out BotBoardView board))
+        if (!TryGetBotBoard(player, out BotBoardView board) || card == null)
             return;
 
-        if (_currentSetCards.TryGetValue(player, out GameObject existingSetCard) && existingSetCard != null)
-            Destroy(existingSetCard);
+        if (!CardBoardRegistry.TryGet(card, out GameObject cardObj))
+            return;
 
-        if (board.SetZone != null)
-        {
-            foreach (Transform child in board.SetZone)
-                Destroy(child.gameObject);
-        }
+        if (board.SetZone != null && cardObj.transform.parent != board.SetZone)
+            return;
 
-        GameObject realCard = Instantiate(cardFrontPrefab, board.SetZone);
-        ForceCenterAndSize(realCard.GetComponent<RectTransform>(), true);
-
-        CardUI ui = realCard.GetComponent<CardUI>();
-        if (ui != null) ui.SetupForBattle(card.Id);
-
-        CardInteraction interaction = realCard.GetComponent<CardInteraction>();
-        if (interaction != null) interaction.enabled = false;
-
-        _currentSetCards[player] = realCard;
+        RevealCardObject(cardObj, card);
+        CardInteraction interaction = cardObj.GetComponent<CardInteraction>();
+        if (interaction != null)
+            interaction.enabled = false;
     }
 
-    private IEnumerator UpdateHandSpacingRoutine(Transform handTransform)
+    private void RefreshBotDeckCounts(Player owner)
     {
-        yield return null;
+        if (!TryGetBotBoard(owner, out _))
+            return;
 
-        if (handTransform == null)
-            yield break;
+        if (enemyDeckCountText != null)
+            enemyDeckCountText.text = owner.Deck != null ? owner.Deck.Count.ToString() : "0";
 
-        HorizontalLayoutGroup layoutGroup = handTransform.GetComponent<HorizontalLayoutGroup>();
-        if (layoutGroup == null)
-            yield break;
+        if (enemyResourceDeckCountText != null)
+            enemyResourceDeckCountText.text = owner.ResourceDeck != null ? owner.ResourceDeck.Count.ToString() : "0";
+    }
 
-        int cardCount = handTransform.childCount;
-        if (cardCount < 2)
+    private void HandleTurnEnd(string playerName)
+    {
+        SyncPhysicalStacks(_p1);
+        SyncPhysicalStacks(_p2);
+    }
+
+    private void HandleEndPhase(string playerName, int turn)
+    {
+        SyncPhysicalStacks(_p1);
+        SyncPhysicalStacks(_p2);
+    }
+
+    public Transform ResolveSetRoot(Player player)
+    {
+        if (TryGetBotBoard(player, out BotBoardView board))
+            return board.SetZone;
+
+        return null;
+    }
+
+    public Transform ResolveDeckRoot(Player player)
+    {
+        if (TryGetBotBoard(player, out BotBoardView board))
+            return board.Deck;
+
+        return null;
+    }
+
+    public Transform ResolveGraveRoot(Player player)
+    {
+        if (TryGetBotBoard(player, out BotBoardView board))
+            return board.Graveyard;
+
+        return null;
+    }
+
+    public Transform ResolveHiddenPool(Player player)
+    {
+        return GetBotHiddenPool(player);
+    }
+
+    public void SyncPhysicalStacks(Player owner, string skipLayoutInstanceId = null)
+    {
+        if (!TryGetBotBoard(owner, out BotBoardView board))
+            return;
+
+        Transform hidden = GetBotHiddenPool(owner);
+        DeckGraveyardStackUI.Sync(new DeckGraveyardSyncContext
         {
-            layoutGroup.spacing = 0;
-            yield break;
-        }
+            ZoneRoot = board.Deck,
+            EngineList = owner.Deck,
+            HiddenPool = hidden,
+            CardWidth = enemyCardWidth,
+            FaceDown = true,
+            TopIsIndexZero = true,
+            SkipLayoutInstanceId = skipLayoutInstanceId
+        });
 
-        RectTransform handRect = handTransform.GetComponent<RectTransform>();
-        float panelWidth = handRect.rect.width;
-        float totalCardWidth = enemyCardWidth * cardCount;
-
-        if (totalCardWidth > panelWidth)
-            layoutGroup.spacing = (panelWidth - totalCardWidth) / (cardCount - 1);
-        else
-            layoutGroup.spacing = -20f;
+        DeckGraveyardStackUI.Sync(new DeckGraveyardSyncContext
+        {
+            ZoneRoot = board.Graveyard,
+            EngineList = owner.Graveyard,
+            HiddenPool = hidden,
+            CardWidth = enemyCardWidth,
+            FaceDown = false,
+            TopIsIndexZero = false,
+            SkipLayoutInstanceId = skipLayoutInstanceId
+        });
     }
 }

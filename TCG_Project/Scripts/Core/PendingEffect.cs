@@ -3,12 +3,12 @@ using TCG_Project.Scripts.Interfaces;
 
 namespace TCG_Project.Scripts.Core
 {
-    // ³ªÁß¿¡ ¹ßµ¿µÉ È¿°ú Á¤º¸
+    // ë‚˜ì¤‘ì— ë°œë™ë  íš¨ê³¼ ì •ë³´
     public class PendingEffect
     {
-        public GamePhase TriggerPhase; // ¾ğÁ¦ ¹ßµ¿?
-        public Player OwnerPlayer;     // ´©±¸ ÅÏ¿¡? (¿¹: '³ªÀÇ' ´ÙÀ½ ÅÏ ½ÃÀÛ ½Ã)
-        public ICardEffect Effect;     // ½ÇÇàÇÒ È¿°ú (ÁÖ·Î ¿ª¿¬»ê)
-        public GameContext Context;    // ´ç½ÃÀÇ »óÈ² ½º³À¼¦
+        public GamePhase TriggerPhase; // ì–¸ì œ ë°œë™?
+        public Player OwnerPlayer;     // ëˆ„êµ¬ í„´ì—? (ì˜ˆ: 'ë‚˜ì˜' ë‹¤ìŒ í„´ ì‹œì‘ ì‹œ)
+        public ICardEffect Effect;     // ì‹¤í–‰í•  íš¨ê³¼ (ì£¼ë¡œ ì—­ì—°ì‚°)
+        public GameContext Context;    // ë‹¹ì‹œì˜ ìƒí™© ìŠ¤ëƒ…ìƒ·
     }
 }

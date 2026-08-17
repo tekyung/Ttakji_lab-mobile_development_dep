@@ -12,15 +12,15 @@ namespace TCG_Project.Scripts.Systems
     public class GameDataManager
     {
         public Dictionary<string, Card> AllCards { get; private set; } = new Dictionary<string, Card>();
-        public readonly IJsonLoader _jsonLoader; // JSON ·Îµù ´ã´ç
+        public readonly IJsonLoader _jsonLoader; // JSON ë¡œë”© ë‹´ë‹¹
 
-        // »ı¼ºÀÚ¿¡¼­ ½ÉºÎ¸§²ÛÀ» °­Á¦·Î ¹Şµµ·Ï ¼³Á¤
+        // ìƒì„±ìì—ì„œ ì‹¬ë¶€ë¦„ê¾¼ì„ ê°•ì œë¡œ ë°›ë„ë¡ ì„¤ì •
         public GameDataManager(IJsonLoader jsonLoader)
         {
             _jsonLoader = jsonLoader;
         }
 
-        // ¦¡¦¡¦¡ ·êºÏ Ä«µå ·Î´õ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+        // â”€â”€â”€ ë£°ë¶ ì¹´ë“œ ë¡œë” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private class RawRulebookEffect
         {
@@ -36,7 +36,9 @@ namespace TCG_Project.Scripts.Systems
             public int reduction;
             public bool isStackAction;
             public bool requirePreviousSuccess;
-            public string rewardOnSuccess; // ¡Ú ¹İ°İ ¼º°ø ½Ã ½ÇÇàÇÒ º¸»ó (¿¹: "DAIN-09"ÀÇ ¸®º¥Áö È¿°ú)
+            public string rewardOnSuccess;
+            public string description;
+            public RawRulebookEffect action;
         }
 
         private class RawRulebookCard
@@ -51,12 +53,12 @@ namespace TCG_Project.Scripts.Systems
             public bool isStack;
             public bool isBattlefield;
             public string description;
-            public bool cannotBePlayedByEffect; // ´Ù¸¥ Ä«µå¸¦ ÅëÇÑ °£Á¢ »ç¿ëÀÌ °¡´ÉÇÑ°¡?
+            public bool cannotBePlayedByEffect; // ë‹¤ë¥¸ ì¹´ë“œë¥¼ í†µí•œ ê°„ì ‘ ì‚¬ìš©ì´ ê°€ëŠ¥í•œê°€?
             public string imagePath;
             public List<RawRulebookEffect> effects;
         }
 
-        // ¦¡¦¡¦¡ Ä³¸¯ÅÍ Ä«µå ·Î´õ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+        // â”€â”€â”€ ìºë¦­í„° ì¹´ë“œ ë¡œë” â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private class RawCharacterCard
         {
@@ -82,14 +84,14 @@ namespace TCG_Project.Scripts.Systems
         private Dictionary<string, RawCharacterCard> _characterCardsById
             = new Dictionary<string, RawCharacterCard>();
 
-        /// <summary>Data/Character.json À» ÀĞ¾î Ä³¸¯ÅÍ Ä«µå µ¥ÀÌÅÍ¸¦ ·ÎµåÇÑ´Ù.</summary>
+        /// <summary>Data/Character.json ì„ ì½ì–´ ìºë¦­í„° ì¹´ë“œ ë°ì´í„°ë¥¼ ë¡œë“œí•œë‹¤.</summary>
         public void LoadCharacterCards()
         {
             var wrapper = ReadJson<CharacterCardWrapper>("Character");
             //var wrapper = ReadJson<CharacterCardWrapper>(basePath + "/Character.json");
             if (wrapper?.Characters == null)
             {
-                Console.WriteLine("[System] Character.json ¾øÀ½, Ä³¸¯ÅÍ Ä«µå ·Îµå »ı·«.");
+                Console.WriteLine("[System] Character.json ì—†ìŒ, ìºë¦­í„° ì¹´ë“œ ë¡œë“œ ìƒëµ.");
                 return;
             }
 
@@ -103,10 +105,36 @@ namespace TCG_Project.Scripts.Systems
                     _characterCardsById[raw.id] = raw;
             }
 
-            Console.WriteLine($"[System] Ä³¸¯ÅÍ Ä«µå {_characterCards.Count}Á¾ ·Îµå ¿Ï·á.");
+            Console.WriteLine($"[System] ìºë¦­í„° ì¹´ë“œ {_characterCards.Count}ì¢… ë¡œë“œ ì™„ë£Œ.");
         }
 
-        /// <summary>Resources.Load¿ë °æ·Î·Î imagePath¸¦ Á¤±ÔÈ­ÇÑ´Ù. (È®ÀåÀÚ¡¤Assets/Resources/ Á¦°Å)</summary>
+        /// <summary>
+        /// ìš©ë³‘(ìºë¦­í„°) ì¹´ë“œë¥¼ UI í‘œì‹œìš© Card ê°ì²´ë¡œ ë§Œë“¤ì–´ ë°˜í™˜í•œë‹¤. ì—†ìœ¼ë©´ null.
+        ///
+        /// ìºë¦­í„° ì¹´ë“œëŠ” <see cref="AllCards"/>ì— ë“±ë¡ë˜ì§€ ì•Šê³  ë‚´ë¶€ ì‚¬ì „ì—ë§Œ ë³´ê´€ëœë‹¤
+        /// (íš¨ê³¼ ì¹´ë“œÂ·ìì› ì¹´ë“œë§Œ AllCardsì— ë“¤ì–´ê°„ë‹¤). ê·¸ë˜ì„œ UIê°€ ì¹´ë“œ IDë¡œ ì´ë¦„Â·ì„¤ëª…ì„
+        /// ì°¾ìœ¼ë ¤ë©´ ì´ ì ‘ê·¼ìê°€ í•„ìš”í•˜ë‹¤.
+        ///
+        /// ë°˜í™˜ê°’ì€ í‘œì‹œ ì „ìš© ì‚¬ë³¸ì´ë‹¤. ê²Œì„ ìƒíƒœë¡œ ì“°ì§€ ë§ ê²ƒ.
+        /// </summary>
+        public Card GetCharacterCardView(string cardId)
+        {
+            if (string.IsNullOrEmpty(cardId)) return null;
+            if (!_characterCardsById.TryGetValue(cardId, out var raw) || raw == null) return null;
+
+            return new Card
+            {
+                Id = raw.id,
+                DataId = raw.id,
+                Name = raw.name,
+                CharacterId = raw.characterId,
+                Description = raw.description,
+                ImagePath = raw.imagePath,
+                Type = CardType.Character
+            };
+        }
+
+        /// <summary>Resources.Loadìš© ê²½ë¡œë¡œ imagePathë¥¼ ì •ê·œí™”í•œë‹¤. (í™•ì¥ìÂ·Assets/Resources/ ì œê±°)</summary>
         public string GetCharacterResourcesPath(string cardId)
         {
             if (string.IsNullOrEmpty(cardId))
@@ -147,14 +175,14 @@ namespace TCG_Project.Scripts.Systems
             public List<RawResourceCard> ResourceCards;
         }
 
-        /// Data/ResourceCards.json À» ÀĞ¾î AllCards¿¡ Ãß°¡ÇÑ´Ù.
+        /// Data/ResourceCards.json ì„ ì½ì–´ AllCardsì— ì¶”ê°€í•œë‹¤.
         public void LoadResourceCards()
         {
             var wrapper = ReadJson<ResourceCardWrapper>("ResourceCards");
             // var wrapper = ReadJson<ResourceCardWrapper>(basePath + "/ResourceCards.json");
             if (wrapper?.ResourceCards == null)
             {
-                Console.WriteLine("[System] ResourceCards.json ¾øÀ½, ÀÚ¿ø Ä«µå ·Îµå »ı·«.");
+                Console.WriteLine("[System] ResourceCards.json ì—†ìŒ, ìì› ì¹´ë“œ ë¡œë“œ ìƒëµ.");
                 return;
             }
 
@@ -184,7 +212,7 @@ namespace TCG_Project.Scripts.Systems
                 };
                 AllCards[card.Id] = card;
             }
-            Console.WriteLine($"[System] ÀÚ¿ø Ä«µå {wrapper.ResourceCards.Count}Á¾ ·Îµå ¿Ï·á.");
+            Console.WriteLine($"[System] ìì› ì¹´ë“œ {wrapper.ResourceCards.Count}ì¢… ë¡œë“œ ì™„ë£Œ.");
         }
 
         private class RulebookCardWrapper
@@ -192,14 +220,14 @@ namespace TCG_Project.Scripts.Systems
             public List<RawRulebookCard> Card;
         }
 
-        /// <summary>Data/RulebookCards.json À» ÀĞ¾î AllCards¿¡ Ãß°¡ÇÑ´Ù.</summary>
+        /// <summary>Data/RulebookCards.json ì„ ì½ì–´ AllCardsì— ì¶”ê°€í•œë‹¤.</summary>
         public void LoadRulebookCards()
         {
             var wrapper = ReadJson<RulebookCardWrapper>("RulebookCards");
             // var wrapper = ReadJson<RulebookCardWrapper>(basePath + "/RulebookCards.json");
             if (wrapper?.Card == null)
             {
-                Console.WriteLine("[System] RulebookCards.json ¾øÀ½, ·êºÏ Ä«µå ·Îµå »ı·«.");
+                Console.WriteLine("[System] RulebookCards.json ì—†ìŒ, ë£°ë¶ ì¹´ë“œ ë¡œë“œ ìƒëµ.");
                 return;
             }
 
@@ -242,17 +270,17 @@ namespace TCG_Project.Scripts.Systems
                 AllCards[card.Id] = card;
                 loaded++;
             }
-            Console.WriteLine($"[System] ·êºÏ Ä«µå {loaded}Á¾ ·Îµå ¿Ï·á.");
+            Console.WriteLine($"[System] ë£°ë¶ ì¹´ë“œ {loaded}ì¢… ë¡œë“œ ì™„ë£Œ.");
         }
 
-        // ¦¡¦¡¦¡ CreateKeywordEffect ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
-        // JSONÀÇ ±âÁ¸ type ÀÌ¸§À» ¹Ş¾Æ »õ·Î¿î ÅëÇÕ Effect Å¬·¡½º ÀÎ½ºÅÏ½º¸¦ ¹İÈ¯ÇÑ´Ù.
-        // ÆÄ¶ó¹ÌÅÍ Dictionary¸¦ ºôµåÇÏ¿© Initialize()·Î Àü´ŞÇÏ°Å³ª
-        // BattlefieldEffect °°ÀÌ sub-effect°¡ ÇÊ¿äÇÑ °æ¿ì Á÷Á¢ ¼Ó¼ºÀ» ¼³Á¤ÇÑ´Ù.
+        // â”€â”€â”€ CreateKeywordEffect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // JSONì˜ ê¸°ì¡´ type ì´ë¦„ì„ ë°›ì•„ ìƒˆë¡œìš´ í†µí•© Effect í´ë˜ìŠ¤ ì¸ìŠ¤í„´ìŠ¤ë¥¼ ë°˜í™˜í•œë‹¤.
+        // íŒŒë¼ë¯¸í„° Dictionaryë¥¼ ë¹Œë“œí•˜ì—¬ Initialize()ë¡œ ì „ë‹¬í•˜ê±°ë‚˜
+        // BattlefieldEffect ê°™ì´ sub-effectê°€ í•„ìš”í•œ ê²½ìš° ì§ì ‘ ì†ì„±ì„ ì„¤ì •í•œë‹¤.
 
         private ICardEffect CreateKeywordEffect(RawRulebookEffect raw)
         {
-            // ¦¡¦¡ µ¥¹ÌÁö °è¿­ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+            // â”€â”€ ë°ë¯¸ì§€ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (raw.type == "DamageEffect" ||
                 raw.type == "PiercingDamageEffect" ||
                 raw.type == "MultiHitDamageEffect" ||
@@ -264,7 +292,7 @@ namespace TCG_Project.Scripts.Systems
                 if (raw.type == "MultiHitDamageEffect" && raw.times != 0) p["times"] = raw.times;
                 if (raw.type == "SelfDamageEffect") p["targetSelf"] = true;
 
-                // ¡Ú °øÅë ÇÃ·¡±× Àü´Ş
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
                 p["isStackAction"] = raw.isStackAction;
                 p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
                 var e = new DamageEffect();
@@ -272,7 +300,7 @@ namespace TCG_Project.Scripts.Systems
                 return e;
             }
 
-            // ¦¡¦¡ ¹öÇÁ °è¿­ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+            // â”€â”€ ë²„í”„ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (raw.type == "ArmorEffect" ||
                 raw.type == "SuperArmorEffect" ||
                 raw.type == "InvincibilityEffect" ||
@@ -301,11 +329,11 @@ namespace TCG_Project.Scripts.Systems
                 else if (raw.type == "NextTurnBuffEffect")
                     p["duration"] = "NextTurn";
 
-                // ¡Ú ¹İ°İ ¼º°ø ½Ã ½ÇÇàÇÒ º¸»ó Àü´Ş
+                // â˜… ë°˜ê²© ì„±ê³µ ì‹œ ì‹¤í–‰í•  ë³´ìƒ ì „ë‹¬
                 if (!string.IsNullOrEmpty(raw.rewardOnSuccess))
                     p["rewardOnSuccess"] = raw.rewardOnSuccess;
 
-                // ¡Ú °øÅë ÇÃ·¡±× Àü´Ş
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
                 p["isStackAction"] = raw.isStackAction;
                 p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
 
@@ -314,7 +342,7 @@ namespace TCG_Project.Scripts.Systems
                 return e;
             }
 
-            // ¦¡¦¡ Ä«µå ÀÌµ¿ °è¿­ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+            // â”€â”€ ì¹´ë“œ ì´ë™ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (raw.type == "DrawEffect" ||
                 raw.type == "DiscardFromHandEffect" ||
                 raw.type == "ResourceGainEffect" ||
@@ -331,11 +359,11 @@ namespace TCG_Project.Scripts.Systems
                 return e;
             }
 
-            // ¦¡¦¡ ÀÚ±â ÀÚ½Å ¹èÄ¡ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+            // â”€â”€ ìê¸° ìì‹  ë°°ì¹˜ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (raw.type == "SelfAsResourceEffect")
             {
                 var p = new Dictionary<string, object> { ["to"] = "ResourceZone" };
-                // ¡Ú °øÅë ÇÃ·¡±× Àü´Ş
+                // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬
                 p["isStackAction"] = raw.isStackAction;
                 p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
 
@@ -344,7 +372,7 @@ namespace TCG_Project.Scripts.Systems
                 return e;
             }
 
-            // ¦¡¦¡ ÀüÀå °è¿­ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+            // â”€â”€ ì „ì¥ ê³„ì—´ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (raw.type == "BattlefieldEffect" ||
                 raw.type == "ArmorBattlefieldEffect" ||
                 raw.type == "FirepowerBattlefieldEffect" ||
@@ -354,14 +382,36 @@ namespace TCG_Project.Scripts.Systems
                 return BuildBattlefieldEffect(raw);
             }
 
-            // ¦¡¦¡ º¹ÇÕ È¿°ú: Æó±âÁ¸ Ä«µå ¼±ÅÃ ¡æ ÀÓ½Ã ÄÚ½ºÆ® °¨¼Ò ¡æ PlayBuffer¿¡¼­ ¹ßµ¿ ¦¡¦¡¦¡¦¡¦¡ (´ÙÀÌ³ª: "±â·Ú")
+            // â”€â”€ ì„ íƒ í–‰ë™ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            if (raw.type == "OptionalActionEffect" || raw.type == "optional_action")
+            {
+                var p = new Dictionary<string, object>
+                {
+                    ["isStackAction"] = raw.isStackAction,
+                    ["requirePreviousSuccess"] = raw.requirePreviousSuccess
+                };
+                if (!string.IsNullOrEmpty(raw.description))
+                    p["description"] = raw.description;
+                if (raw.action != null)
+                {
+                    ICardEffect inner = CreateKeywordEffect(raw.action);
+                    if (inner != null)
+                        p["action"] = inner;
+                }
+
+                var optional = new OptionalActionEffect();
+                optional.Initialize(p);
+                return optional;
+            }
+
+            // â”€â”€ ë³µí•© íš¨ê³¼: íê¸°ì¡´ ì¹´ë“œ ì„ íƒ â†’ ì„ì‹œ ì½”ìŠ¤íŠ¸ ê°ì†Œ â†’ PlayBufferì—ì„œ ë°œë™ â”€â”€â”€â”€â”€ (ë‹¤ì´ë‚˜: "ê¸°ë¢°")
             if (raw.type == "ReplayCardEffect")
             {
                 int reduction = raw.costReduction != 0 ? raw.costReduction : 1;
                 string filter = string.IsNullOrEmpty(raw.filter) ? "type:Effect" : raw.filter;
-                filter += ",replayable:true"; // °£Á¢ »ç¿ë ºÒ°¡´ÉÀÎ Ä«µå´Â Á¦¿ÜÇÕ´Ï´Ù(¼Ò´Ï¾Æ: "½ÅÀç»ı¿¡³ÊÁö")
+                filter += ",replayable:true"; // ê°„ì ‘ ì‚¬ìš© ë¶ˆê°€ëŠ¥ì¸ ì¹´ë“œëŠ” ì œì™¸í•©ë‹ˆë‹¤(ì†Œë‹ˆì•„: "ì‹ ì¬ìƒì—ë„ˆì§€")
 
-                // Step 1: Æó±âÁ¸¿¡¼­ È¿°ú Ä«µå 1Àå ¡æ PlayBuffer
+                // Step 1: íê¸°ì¡´ì—ì„œ íš¨ê³¼ ì¹´ë“œ 1ì¥ â†’ PlayBuffer
                 var moveParams = new Dictionary<string, object>
                 {
                     ["from"] = "Graveyard",
@@ -369,17 +419,17 @@ namespace TCG_Project.Scripts.Systems
                     ["mode"] = "Choose",
                     ["count"] = 1,
                     ["filter"] = filter,
-                    ["excludeSelf"] = true // ÀÚ±â ÀÚ½Å Á¦¿Ü
+                    ["excludeSelf"] = true // ìê¸° ìì‹  ì œì™¸
                 };
                 var moveEff = new MoveEffect();
                 moveEff.Initialize(moveParams);
 
-                // Step 2: PlayBuffer Ä«µå ÄÚ½ºÆ® ÀÓ½Ã °¨¼Ò
+                // Step 2: PlayBuffer ì¹´ë“œ ì½”ìŠ¤íŠ¸ ì„ì‹œ ê°ì†Œ
                 var tempCostParams = new Dictionary<string, object> { ["reduction"] = reduction };
                 var tempCostEff = new TemporaryCostEffect();
                 tempCostEff.Initialize(tempCostParams);
 
-                // Step 3: PlayBuffer Ä«µå ¹ßµ¿ ÈÄ Æó±âÁ¸À¸·Î
+                // Step 3: PlayBuffer ì¹´ë“œ ë°œë™ í›„ íê¸°ì¡´ìœ¼ë¡œ
                 var playEff = new PlayFromBufferEffect();
                 playEff.Initialize(new Dictionary<string, object>());
 
@@ -391,16 +441,16 @@ namespace TCG_Project.Scripts.Systems
                 return composite;
             }
 
-            Console.WriteLine($"[GameDataManager] ¾Ë ¼ö ¾ø´Â Effect Å¸ÀÔ: {raw.type}");
+            Console.WriteLine($"[GameDataManager] ì•Œ ìˆ˜ ì—†ëŠ” Effect íƒ€ì…: {raw.type}");
             return null;
         }
 
-        // ¦¡¦¡¦¡ MoveEffect ÆÄ¶ó¹ÌÅÍ ºôµå ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+        // â”€â”€â”€ MoveEffect íŒŒë¼ë¯¸í„° ë¹Œë“œ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private Dictionary<string, object> BuildMoveParams(RawRulebookEffect raw)
         {
             var p = new Dictionary<string, object>();
-            // ¡Ú °øÅë ÇÃ·¡±× Àü´Ş (°¡Àå À§¿¡ Ãß°¡ÇØ ÁÖ¼¼¿ä)
+            // â˜… ê³µí†µ í”Œë˜ê·¸ ì „ë‹¬ (ê°€ì¥ ìœ„ì— ì¶”ê°€í•´ ì£¼ì„¸ìš”)
             p["isStackAction"] = raw.isStackAction;
             p["requirePreviousSuccess"] = raw.requirePreviousSuccess;
 
@@ -465,7 +515,7 @@ namespace TCG_Project.Scripts.Systems
                     p["to"] = "ResourceZone";
                     p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
                     // p["mode"] = "Top";
-                    p["count"] = raw.count != 0 ? raw.count : 99;  // ±âº» ÀüºÎ
+                    p["count"] = raw.count != 0 ? raw.count : 99;  // ê¸°ë³¸ ì „ë¶€
                     p["filter"] = "type:Resource";
                     break;
 
@@ -484,7 +534,7 @@ namespace TCG_Project.Scripts.Systems
             return p;
         }
 
-        // ¦¡¦¡¦¡ BattlefieldEffect ºôµå ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+        // â”€â”€â”€ BattlefieldEffect ë¹Œë“œ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private BattlefieldEffect BuildBattlefieldEffect(RawRulebookEffect raw)
         {
@@ -493,7 +543,7 @@ namespace TCG_Project.Scripts.Systems
 
             switch (raw.type)
             {
-                case "ArmorBattlefieldEffect": // º£·Î´ÏÄ«: Ã¼Å©¸ŞÀÌÆ®
+                case "ArmorBattlefieldEffect": // ë² ë¡œë‹ˆì¹´: ì²´í¬ë©”ì´íŠ¸
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
@@ -504,7 +554,7 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "FirepowerBattlefieldEffect": // ´ÙÀÌ³ª: Á¶¼±¼Ò
+                case "FirepowerBattlefieldEffect": // ë‹¤ì´ë‚˜: ì¡°ì„ ì†Œ
                     {
                         int amt = raw.amount != 0 ? raw.amount : 1;
                         var buffParams = new Dictionary<string, object>
@@ -515,7 +565,7 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "PeriodicRecoveryBattlefieldEffect": // ¿¤¸®: ¹«ÀÛÀ§ ³ëÈ¹
+                case "PeriodicRecoveryBattlefieldEffect": // ì—˜ë¦¬: ë¬´ì‘ìœ„ ë…¸íš
                     {
                         string filter = string.IsNullOrEmpty(raw.filter) ? "type:Attack" : raw.filter;
                         var moveParams = new Dictionary<string, object>
@@ -532,20 +582,20 @@ namespace TCG_Project.Scripts.Systems
                         break;
                     }
 
-                case "CostReductionBattlefieldEffect": // ¼Ò´Ï¾Æ: ³ëÀ»Áö´Â È°ÁÖ·Î
+                case "CostReductionBattlefieldEffect": // ì†Œë‹ˆì•„: ë…¸ì„ì§€ëŠ” í™œì£¼ë¡œ
                     bf.CostReductionFilter = raw.filter ?? "";
                     bf.CostReduction = raw.reduction != 0 ? raw.reduction : 1;
                     break;
 
-                    // "BattlefieldEffect": ´Ü¼ø ÀüÀå ¹èÄ¡ (³»ºÎ È¿°ú ¾øÀ½)
+                    // "BattlefieldEffect": ë‹¨ìˆœ ì „ì¥ ë°°ì¹˜ (ë‚´ë¶€ íš¨ê³¼ ì—†ìŒ)
             }
 
             return bf;
         }
 
         /// <summary>
-        /// ÁöÁ¤ Ä³¸¯ÅÍÀÇ È¿°ú Ä«µå ID ¸ñ·Ï ¹İÈ¯ (Ä³¸¯ÅÍ Ä«µå Á¦¿Ü).
-        /// ¿¹: "ELLI-01" ¡æ ["ELLI-02", "ELLI-03", ..., "ELLI-11"]
+        /// ì§€ì • ìºë¦­í„°ì˜ íš¨ê³¼ ì¹´ë“œ ID ëª©ë¡ ë°˜í™˜ (ìºë¦­í„° ì¹´ë“œ ì œì™¸).
+        /// ì˜ˆ: "ELLI-01" â†’ ["ELLI-02", "ELLI-03", ..., "ELLI-11"]
         /// </summary>
         public List<string> GetEffectCardIdsForCharacter(string characterCardId)
         {
@@ -559,7 +609,7 @@ namespace TCG_Project.Scripts.Systems
                 .ToList();
         }
 
-        // ¦¡¦¡¦¡ °øÅë À¯Æ¿ ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+        // â”€â”€â”€ ê³µí†µ ìœ í‹¸ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private string Capitalize(string s)
             => string.IsNullOrEmpty(s)
@@ -572,7 +622,7 @@ namespace TCG_Project.Scripts.Systems
             if (string.IsNullOrEmpty(json)) return default;
 
             return JsonConvert.DeserializeObject<T>(json);
-            /* ¡Ú ±âÁ¸ File.ReadAllText ¹æ½Ä¿¡¼­ IJsonLoader ÀÎÅÍÆäÀÌ½º·Î º¯°æÇÏ¿©, Unity ¸®¼Ò½º ·Îµù°ú ÄÜ¼Ö ÆÄÀÏ ·ÎµùÀ» ¸ğµÎ Áö¿øÇÕ´Ï´Ù.
+            /* â˜… ê¸°ì¡´ File.ReadAllText ë°©ì‹ì—ì„œ IJsonLoader ì¸í„°í˜ì´ìŠ¤ë¡œ ë³€ê²½í•˜ì—¬, Unity ë¦¬ì†ŒìŠ¤ ë¡œë”©ê³¼ ì½˜ì†” íŒŒì¼ ë¡œë”©ì„ ëª¨ë‘ ì§€ì›í•©ë‹ˆë‹¤.
             if (!File.Exists(path)) return default;
             string json = File.ReadAllText(path, System.Text.Encoding.UTF8);
             return JsonConvert.DeserializeObject<T>(json);*/
