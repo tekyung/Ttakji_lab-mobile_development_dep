@@ -1,7 +1,7 @@
 # TCG_Project 작업 인수인계 문서
 
 최초 작성일: 2026-02-28  
-최종 수정일: 2026-08-17 (Firebase 서버 실측 진단 / 손패 호버 미해결 기록 / 버튼 우선순위 / 서브 팝업 3배 / 폐기존 패널 바깥 클릭 / 소니아 OnCardMove 누락)
+최종 수정일: 2026-08-18 (온라인 2인 대전 안정화 · 문서 재정비)
 목적: 새 AI가 현재까지의 작업을 이어받아 계속 진행하기 위한 컨텍스트 제공 (로직 레이어 + Unity 보드 UI)
 
 > **2026-08-16 갱신 범위**  
@@ -25,6 +25,24 @@
 6. **섹션 9 (다음 Phase 체크리스트)** — 다음 Phase 착수 전 확인 사항으로 교체
 7. **섹션 10 (대화 참조)** — 현재 대화의 에이전트 ID 추가
 8. **섹션 11 (모드별 진단)** — 사람 vs 봇 / 사람 vs 사람 상태가 바뀌면 갱신
+
+---
+
+## 0. 지금 상태 한눈에 (2026-08-18)
+
+**온라인 1대1 단판제 대전이 처음부터 끝까지 진행된다.** 다만 아래 제약이 남아 있다.
+
+| 모드 | 엔진 | 화면·입력 |
+| ---- | ---- | --------- |
+| 봇 vs 봇 | ✅ | ✅ 회귀 기준선 |
+| 사람 vs 봇 | ✅ | ✅ |
+| **사람 vs 사람** | ✅ | 🔶 게스트 입력 절반(세트·오픈만) / 용병 능력 미작동 |
+
+**가장 큰 공백은 덱·용병 주입이다** — 덱이 하드코딩이고 캐릭터 ID가 비어 있어 용병 능력 4종이 발동하지 않는다.
+서버 담당 영역이다(섹션 11 F-1 #2·#3).
+
+> 프로젝트 소개·역할별 남은 일·공통 규칙은 **저장소 루트 `README.md`**를 먼저 본다.
+> 이 문서는 그다음에 읽는 상세 인수인계서다.
 
 ---
 
@@ -488,6 +506,209 @@ Assets/Scripts/
 ---
 
 ## 5. Phase별 완료 현황
+
+### [2026-08-18 후속] 문서 재정비 + 이동 속도 조정 ✅
+
+| 항목 | 내용 |
+| ---- | ---- |
+| `movesPerFrame` 1로 | 게스트 카드 이동을 프레임당 1건만 반영 (화면 점등 최소화) |
+| 루트 `README.md` 재작성 | 프로젝트 소개 / 현재 진행 상황 / **역할별 남은 일** / 모두가 알아야 할 규칙. 기존 내용은 `docs/개발_기록.md`로 이관 |
+| `EVENTMANAGER_CONTRACT.md` | 죽은 계약 2개(`OnRequireStackResponse`·`OnRequireCardChoice`), 미발행 이벤트 3개(`OnCardDiscard`·`OnCardUnstacked`·`OnCardUnbattlefield`) 표기. **온라인에서 콜백이 null로 온다**는 주의 추가 |
+| `CardManual.md` (정본+루트 사본) | `max_deck_count` 필드 문서화. 빠뜨리면 덱 빌더의 추가 버튼이 죽는다는 경고 포함 |
+| 과거 문서 3종 | `PROJECT_DIAGNOSIS.md` · `EFFECT_SYSTEM_PROPOSAL.md` · `BattleManager-ServerGameManager-FunctionList.md`에 **"과거 기록" 머리말** 부착 |
+
+---
+
+### [2026-08-18] 2인 실접속 안정화 — 진행 로그·이탈·제한시간·방 정리 + 게스트 표시 버그 ✅
+
+한 판이 끝까지 진행되는 것을 확인한 뒤의 다듬기 작업. **서버 스크립트는 건드리지 않았다.**
+
+#### ★ 게스트 표시 버그의 진짜 원인 — 미러가 이벤트를 골라 쐈다 (2026-08-18 최종)
+
+앞선 두 번의 수정(존 문자열, 앞뒷면 규칙)으로도 스택·전장 카드의 뒷면 표시와 화면 점등이 남았다.
+서버까지 포함해 다시 훑은 결과, **서버는 정상이었고 어댑터가 이벤트 계약을 일부만 지키고 있었다.**
+
+**서버는 문제 없다** — `ServerGameManager`는 존 전이마다 **쌍으로** 이벤트를 쏜다
+(L848 `OnCardMove` + `OnCardStacked`, L857 `OnCardMove` + `OnCardBattlefield`). `board_state`도 정확하다.
+
+**어댑터는 `OnCardMove`만 흉내 내고 있었다.** 그런데 보드 UI의 스택존 렌더링은 그 이벤트가 아니라
+**`OnCardStacked`**에 걸려 있다:
+
+```
+OnCardStacked → PlayerUIManager.HandleCardStacked → SyncMyStack
+              → StackZoneRowUI.SyncFromEngineStack   ← 줄 배치 + SetFaceDown(false)
+```
+
+그래서 내 스택 카드는 줄로 정렬되지도, 앞면으로 뒤집히지도 않았다.
+(상대 스택은 `EnemyVisualTester.HandleEnemyCardMove` L265가 `OnCardMove`만으로 처리해 멀쩡했다 —
+ 한쪽만 깨져 "일부만 뒷면"으로 보인 이유다.)
+
+**해결:** `EmitZoneArrivalEvents`로 **엔진과 같은 세트를 전부 발행**한다.
+
+| 도착 존 | 함께 쏘는 이벤트 |
+| ------- | ---------------- |
+| SetZone | `OnCardSet` |
+| StackZone | `OnCardStacked` |
+| BattlefieldZone | `OnCardBattlefield` |
+| ResourceZone | `OnCardResourceAdded` |
+| Hand (from Deck) | `OnCardDraw` |
+
+> ⚠️ **교훈: 미러는 엔진 이벤트를 골라 쏘면 안 된다.** 같은 전이에는 같은 세트를 전부 쏜다.
+> 보드 UI가 어떤 이벤트에 무엇을 걸어 뒀는지는 이벤트마다 다르다.
+
+#### 화면이 새로고침되듯 점등되던 문제
+
+스냅샷 하나에 **한 페이즈치 이동(5~10건)**이 통째로 들어 있는데 그걸 한 프레임에 다 적용하고 있었다.
+이동마다 트윈 + `DeckGraveyardStackUI.Sync`(덱·폐기존 전체 재배치)가 돌아 화면이 번쩍인다.
+호스트는 엔진이 `ActionDelay`를 두고 진행해 이런 일이 없다.
+
+→ **이동 큐**를 두고 `movesPerFrame`(기본 2)씩 나눠 반영한다. 큐를 다 비우기 전에는 다음 스냅샷을 읽지 않아
+   순서도 보존된다. 인스펙터 값이 아니라 코드 상수이므로 조절은 `movesPerFrame`에서 한다.
+
+#### 앞선 시도들 (참고 — 원인 2개는 실재했고 함께 고쳐져 있다)
+
+| 원인 | 내용 |
+| ---- | ---- |
+| ① **스택존만 앞뒷면을 안 건드린다** | `CardBoardRegistry.ApplyZonePresentation`은 Hand·SetZone·Graveyard·Deck·Battlefield에서는 `SetFaceDown`을 부르는데 **`StackZone`에서는 부르지 않는다.** 그래서 뒷면으로 세트됐던 카드가 스택존에 올라가면 뒷면인 채로 남는다. 호스트는 오픈 페이즈에서 `OnCardStateChanged`로 이미 뒤집혀 있어 드러나지 않았다 |
+| ② **어댑터가 중간 스냅샷을 버렸다** | `while (_pending.Count > 1) Dequeue()`로 "밀리면 최신 것만" 반영했다. 그래서 세트(뒷면) → **공개(앞면)** → 스택존으로 이어지는 흐름에서 가운데 '공개' 상태를 통째로 건너뛰면, 카드는 앞면으로 뒤집힐 기회를 영영 잃는다 |
+
+**해결:**
+- 스냅샷을 **순서대로 프레임당 하나씩** 반영한다(버리지 않는다. 병적으로 밀릴 때만 오래된 것을 흘린다)
+- 이동할 때마다 `RefreshCardFace`로 **카드 GO의 면을 모델에 직접 맞춘다.** `ApplyZoneMove`의 존별 처리에 기대지 않는다
+  (상대 손패·덱은 예외로 항상 뒷면)
+
+> 같은 변경이 **"화면이 새로고침되듯 점등"** 증상도 줄인다. 한 페이즈치 이동이 한 프레임에 몰려
+> 트윈과 덱·폐기존 재배치가 동시에 터지던 것이 프레임에 나뉘기 때문이다.
+
+#### 함께 추가한 것
+
+| 항목 | 내용 |
+| ---- | ---- |
+| 게스트 진행 로그 | 스냅샷 차이에서 읽어 로그로 남긴다 — 공개(이름·스피드·타입) / 세트 / 폐기 / 스택 대기 / 전장 배치 / 드로우 / **라이프 증감(색 구분)**. 호스트의 엔진 원본 로그와 같지는 않다(그건 `LogNotification` 발행이 필요 = 서버 담당) |
+| 상대 이탈 감지 | `firebase_network.ListenForSessionExit`로 세션 삭제를 감시 → 로그 + `GameStatusPanelUI.ShowNotice("상대가 나갔습니다")`. ⚠️ **게스트가 나가면 세션은 남고 `guest` 칸만 비므로 잡히지 않는다** — 그때는 호스트가 제한 시간으로 자동 진행 |
+| 입력 제한 시간 표시 | 헤더에 `ROUND 3 · 세트 페이즈   세트 12초`. 5초 이하 빨강. **내 요청일 때만** 뜨고, 카드 확정·페이즈 전환에 사라진다 |
+| 끝난 방 정리 | `ClearSession()`에서 `ExitSession` 호출(메인 메뉴 복귀 시). 호스트면 세션 삭제, 게스트면 자리만 비움. ⚠️ **에디터 Play 정지·앱 강제 종료는 정리되지 않는다** — `onDisconnect`가 필요하고 그건 `firebase_network`에 API가 없다 |
+| 카드 이동 속도 | `CardMoveTween.Duration` 0.18 → **0.36초** (눈으로 따라가기 위해) |
+| 입력 대기 시간 | `choose_wait_time` 10초 → **2분**, `UnlimitedInputForTesting = true`. ⚠️ **임시 설정** — 되돌릴 지점은 `OnlineMatchStarter` 주석에 명시 |
+
+> ⚠️ **`choose_wait_time`을 무한으로 두면 안 된다.** 게스트가 아직 답할 수 없는 요청(스택 발동·카드 선택)이
+> 오면 그 시간만큼 양쪽이 멈춘다. 실제로 1시간으로 뒀다가 스택 상황에서 게임이 정지했다.
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 봇 회귀 정상.
+**미검증:** 이 수정 이후의 2인 재접속.
+
+---
+
+### [2026-08-17 후속 9] 2인 실접속 1차 시도 — 막힌 지점 2개 해소 ✅
+
+에디터 2개(프로젝트 복사본)로 처음 붙여 본 결과. **둘 다 코드가 아니라 "배선"이 빠져 있던 문제였다.**
+
+#### ① 매칭 후 아무 일도 일어나지 않음 — 시작을 눌러 줄 주체가 없다
+
+**증상:** 양쪽 다 "match found / entering battle soon" 팝업에서 영구 정지.
+
+**원인:** 호스트·게스트 모두 `ListenForGameStart`로 **세션 state가 `PLAYING`이 되기를 기다린다.**
+그런데 state를 `PLAYING`으로 올리는 것은 `session_manage.OnClickSessionStart()` 하나뿐이고,
+**그 메서드에 연결된 버튼은 `server ui.unity`(디버그 씬)에만 있다.** 메인 메뉴의 랜덤 매칭 경로에는 없다.
+→ 방이 `READY`까지 가고 멈춘다.
+
+**해결:** 랜덤 매칭에는 로비가 없으므로(팝업 문구도 "곧 전투 시작") **호스트가 자동으로 시작을 건다.**
+
+- `RandomMatchUI` — 매칭 성사 시 호스트면 `autoStartDelay`(기본 1.5초) 뒤 `OnClickSessionStart()` 호출
+- `session_manage` — 호스트 여부를 읽는 `public bool IsHost => amIHost;` **한 줄**(읽기 전용, 동작 변화 없음)
+
+> ⚠️ **즉시 호출하면 안 된다.** `HandleGuestJoined`는 콜백을 먼저 부르고 **그 뒤에** state를 `READY`로 쓴다.
+> 바로 `PLAYING`을 쓰면 뒤이은 `READY`가 덮어써서 똑같이 멈춘다. 그래서 지연을 둔다.
+>
+> 비공개 방(방 만들기) 경로는 그대로 뒀다 — 거기는 호스트가 직접 시작을 누르는 흐름이 맞다.
+
+#### ② 씬 전환은 됐는데 빈 필드 — GameManage가 꺼져 있다
+
+**증상:** 양쪽 다 TestGameScene 진입, 그런데 `배틀 매니저 준비 완료. 매치 시작을 대기합니다...`만 뜨고
+**`[OnlineMatchStarter]`·`[GuestBoard]` 로그가 하나도 없다.** 필드는 텅 비어 있다.
+
+**원인:** `session_game_manage` + `firebase_network` + `session_ui`가 올라간 **`GameManage` 오브젝트가
+씬에 비활성(`m_IsActive: 0`)으로 저장돼 있다**(로컬 봇전에서 파이어베이스를 건드리지 않으려던 조치로 보인다).
+
+두 가지가 동시에 터진다:
+- `session_game_manage.Start()`가 아예 안 돈다 → 덱 업로드·이벤트 구독·`HostGameSetupRoutine`이 전부 없다.
+  **호스트가 매치를 시작조차 하지 않는다**
+- `FindFirstObjectByType<T>()`는 **비활성 오브젝트를 건너뛴다** → 내 부트스트랩들이 조용히 물러난다(로그조차 없음)
+
+**해결:**
+- `OnlineMatchStarter` / `OnlineGuestBoardAdapter`의 탐색을 **`FindObjectsInactive.Include`**로 바꿨다
+- 온라인 세션으로 들어왔으면 `GameManage`를 **켠다**(`SetActive(true)` + `enabled = true`). 로그를 남긴다
+- 게스트 어댑터는 `isActiveAndEnabled`를 확인하고, `ListenForBoardState`가 파이어베이스 초기화 전이라
+  실패할 수 있으므로 try/catch로 조용히 재시도한다
+
+> 로컬 봇전은 영향 없다. 세션이 없으면 `OnlineMatchStarter`가 아무것도 하지 않아 `GameManage`는 꺼진 채 남는다.
+
+**검증:** Assembly-CSharp 오류 0. **미검증:** 이 수정 이후의 2인 재접속.
+
+---
+
+### [2026-08-17 후속 8] 게스트 화면 복원 어댑터 (F-4 6단계) ✅ 1차 완료
+
+섹션 11 F-1 **#6** 착수. **서버 스크립트는 읽기만 했고 한 줄도 고치지 않았다.**
+
+**문제:** 호스트는 `ServerGameManager`가 돌고 보드 UI가 그 이벤트를 구독해 그려진다.
+그런데 **게스트에는 엔진도 `Player` 객체도 없다.** 받는 것은 `board_state` 스냅샷뿐이라
+손패 한 장도 그릴 수 없었고, 조작 수단은 인스펙터의 `Test_*` 17개뿐이었다.
+
+**해결:** `Assets/Scripts/InGameCard/OnlineGuestBoardAdapter.cs`(신규, 게스트 전용).
+스냅샷을 읽어 **게스트 쪽에 `Player` 두 개를 흉내 내어 만들고**, 스냅샷이 바뀔 때마다
+직전 상태와 비교(reconcile)해 `EventManager` 이벤트로 되쏜다.
+**보드 UI(PlayerUIManager / EnemyVisualTester / CardBoardRegistry)는 한 줄도 고치지 않았다.**
+
+| 항목 | 방식 |
+| ---- | ---- |
+| 스냅샷 수신 | `firebase_network.ListenForBoardState`를 **독자적으로 하나 더** 붙인다. 파이어베이스 `ValueChanged`는 핸들러 다중 등록이 되므로 `session_game_manage`의 구독과 공존한다 |
+| ⚠️ 금지 | `ListenForEventDTO`는 부르면 안 된다 — 그쪽은 `StopListeningEvents()`로 **기존 리스너를 떼어 낸다** |
+| 스레드 | 콜백에서는 큐에만 넣고 `Update()`에서 처리한다. 밀리면 **최신 스냅샷 하나만** 반영 |
+| 카드 복원 | `BattleManager.CardData`로 DataId → `Clone()` 후 **`InstanceId`를 호스트 값으로 덮어쓴다.** 이게 같아야 카드 GO가 매칭된다 |
+| 풀 생성 | 중간 접속 대비로 **모든 존의 카드를 일단 덱에 담아** `OnGameStart`를 쏘고, 곧바로 reconcile이 제자리로 옮긴다 |
+| 되쏘는 이벤트 | `OnGameStart` / `OnCardMove`(존 변화) / `OnLifeChange` / `OnResourceChange` / `OnTurnStart` / `OnLogMessage`(페이즈) / `OnGameSet` |
+| 플레이어 순서 | `OnGameStart(내 플레이어, 상대)` — `owner == p1`을 하단으로 보는 규칙(CharacterFieldUI·CardZoomPopupUI)에 맞춘다 |
+
+**설계에서 조심한 것:** 첫 배치 시 `_zoneOf`에 시작 위치(덱/자원덱)를 **미리 기록해 둔다.**
+이게 없으면 첫 reconcile이 "원래 어디 있었는지"를 몰라 자원덱 카드를 자원덱에 **중복 삽입**한다.
+정체를 모르는 카드는 `RemoveFromAnyZone`으로 전 존을 훑어 빼낸 뒤 넣는다.
+
+#### 게스트 입력 연결 (같은 어댑터, 2026-08-17 후속)
+
+**로컬 사람이 쓰는 UI를 그대로 재사용한다.** 보드 UI는 `OnRequireSetPhaseAction` /
+`OnRequireOpenPhaseAction`을 구독해 손패 선택과 [공개]/[폐기] 흐름을 띄우는데,
+게스트에는 그 이벤트를 쏠 엔진이 없다. 그래서 **어댑터가 board_state의 페이즈 전환을 보고
+같은 이벤트를 합성**하고, 콜백이 오면 엔진 대신 호스트로 전송한다.
+
+| 페이즈 | 합성 이벤트 | 전송 |
+| ------ | ---------- | ---- |
+| SetPhase | `OnRequireSetPhaseAction(_mine, ctx, cb)` | `session_game_manage.SendSetPhaseChoice(instanceId, true)` |
+| OpenPhase | `OnRequireOpenPhaseAction(_mine, setCard, cost, ctx, cb)` | `SendOpenPhaseChoice(instanceId, "Open"/"Abandon")` |
+
+- 세트 잔상 미리보기·버튼·확대까지 **로컬과 완전히 같은 UI**가 동작한다
+- 같은 턴·같은 페이즈에서 창이 두 번 뜨지 않도록 `(phase, turn)`으로 잠근다.
+  오픈 시점에 세트 카드가 아직 스냅샷에 없으면 잠금을 풀어 다음 스냅샷에서 재시도한다
+- **`OnCardSet`도 함께 쏜다** — `PlayerUIManager`가 이 이벤트로 확정 전 잔상을 지우므로,
+  빠뜨리면 잔상이 화면에 남는다
+- 오픈 선택은 세트 시점에 이미 정해져 있어(`pendingIsReveal`) 합성 즉시 응답이 돌아간다
+
+**아직 안 되는 것 (다음 작업):**
+
+- **카드 선택·예/아니오·스택 응답은 여전히 `Test_*` 경로다.** 이 셋은 `events` 노드로 오는
+  *알림*이고, `session_game_manage`가 `pendingCardPickNotification` 등 **private 필드**에 담아 둔다.
+  전송 API(`SubmitCardPickFromUI`, `SendPendingOptionalResponse`, `SendPendingStackResponse`)는
+  이미 공개돼 있으니, **알림이 도착했음을 알 방법만 생기면 바로 연결된다.**
+  → 서버 담당자에게 요청할 것: `public event Action<RequireCardPickNotification> OnCardPickRequested`
+     같은 공개 훅 하나. (대안인 `events` 재구독은 `ChildAdded`가 과거 이벤트를 전부 재생해 위험하다)
+  → 다만 이 셋은 용병 능력·서치 카드에서 나오는데, **용병 능력은 F-1 #3 때문에 온라인에서 아직
+     발동하지 않으므로** 당장 막히지는 않는다
+- 용병 슬롯은 비어 있다 — 호스트가 `Character1_ID`를 채우지 않는 F-1 #3이 먼저 풀려야 한다
+- 실제 2인 접속 미검증 (에디터를 띄울 수 없었다)
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 봇 회귀 정상.
+
+---
 
 ### [2026-08-17 후속 7] 온라인 무한 대기 교착 해소 (F-4 5단계) ✅ 완료
 
@@ -1884,7 +2105,9 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 
 | 문서 | 내용 |
 | ---- | ---- |
-| `Assets/TCG_Project/EVENTMANAGER_CONTRACT.md` | UI팀 이벤트 계약 명세 (EventManager.cs와 동기화) |
+| **루트 `README.md`** | **프로젝트 소개 · 현재 진행 상황 · 역할별 남은 일 · 공통 규칙. 신규 합류자는 여기부터** |
+| `Assets/TCG_Project/EVENTMANAGER_CONTRACT.md` | UI팀 이벤트 계약 명세 (2026-08-18 갱신 — 죽은 계약 2개·미발행 이벤트 3개·온라인 null 콜백 주의 표기) |
+| `docs/개발_기록.md` | 구 README (날짜별 개발 일지 + 초기 UI 연동 가이드). **과거 기록이며 현재 코드와 다른 서술이 있다** |
 | `Assets/TCG_Project/CardManual.md` (루트에도 사본) | 카드 40종 상세 매뉴얼 |
 | `Assets/TCG_Project/PROJECT_DIAGNOSIS.md` | 로직팀 상태 진단서 |
 | `Assets/TCG_Project/EFFECT_SYSTEM_PROPOSAL.md` | Effect 통합 설계 제안서 (Phase 10 근거) |
@@ -2081,14 +2304,16 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 4. **F-1 #2·#3 덱·용병 주입** — `decks/{role}` 읽기 + 용병 2종을 세션에 싣고 `PlayerSetupData` 경유로 통일(원칙 6-1)
 5. ~~**F-1 #5 타임아웃**~~ → ✅ **완료(2026-08-17).** `AllowUnlimitedHumanInput` 스위치로 해결.
    `WaitUntil` 5곳은 손대지 않아도 타임아웃 콜백이 대기를 풀어 준다. 섹션 5 참조
-6. **F-1 #6 게스트 화면** — `board_state` → 로컬 `Player` 복원 어댑터. 가장 오래 걸린다
+6. **F-1 #6 게스트 화면** → 🔶 **주요 완료(2026-08-17).** `OnlineGuestBoardAdapter`가 화면 복원 + **세트/오픈 입력**까지 담당한다.
+   남은 것은 카드 선택·예/아니오·스택 응답(알림 훅 필요 — 섹션 5 참조)
 7. F-2 안정성 (끊김·이벤트 청소·항복·타이머 표시)
 
 ### E. 기타
 
 - `ServerSenderManager.cs`(128줄)는 어떤 씬·프리팹에도 배치되어 있지 않다 (사실상 dead)
-- `TestGameScene`의 `LocalMatchStarter`는 `mode: 0`(BotVsBot), `autoStart: 1`.
-  사람 vs 봇을 보려면 인스펙터에서 **Mode를 HumanVsBot으로** 바꿔야 한다
+- `TestGameScene`의 `LocalMatchStarter`는 **`mode: 1`(HumanVsBot), `autoStart: 1`** (2026-08-17 재확인).
+  봇 vs 봇 관전으로 회귀 테스트를 하려면 인스펙터에서 **Mode를 BotVsBot으로** 바꾼다.
+  온라인으로 들어오면 이 컴포넌트는 스스로 물러나므로 값과 무관하다
 | 현행 코드 전수 대조 + HANDOFF 갱신 (2026-08-16) — DI/IJsonLoader/TiebreakerResolver/용병 필드 반영 | Claude Code 세션 |
 | DeckValidator UTF-8 복원 + 데드 타이브레이커 제거 + 콘솔 빌드 존치 이유(RL) 명문화 (2026-08-16) | Claude Code 세션 |
 

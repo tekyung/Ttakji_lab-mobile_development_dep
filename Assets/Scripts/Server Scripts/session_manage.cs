@@ -14,6 +14,9 @@ public class session_manage : MonoBehaviour
     private string myID;
     private string currentSessionCode;
     private bool amIHost = false;
+
+    /// <summary>내가 이 세션의 호스트인지. 매칭 UI가 자동 시작을 호스트에서만 걸기 위해 읽는다.</summary>
+    public bool IsHost => amIHost;
     private Coroutine DestroySessionTimer;
 
     [SerializeField] private string nextSceneName = "TestGameScene";

@@ -1,5 +1,7 @@
 # EventManager 계약 명세 (UI팀 온보딩 가이드)
 
+최종 확인: 2026-08-18 (온라인 대전 반영)
+
 최종 수정일: 2026-08-15
 
 ---
@@ -95,6 +97,19 @@
 
 콜백을 호출하지 않으면 게임이 무한 대기한다. 타임아웃 시 기본값으로 콜백을 호출한다.
 
+> ### ⚠️ 온라인(사람 vs 사람)에서는 규칙이 다르다 (2026-08-18)
+>
+> `ServerGameManager`는 이 이벤트들을 쏠 때 **콜백 자리에 `null`을 넣는다**(L520·L661).
+> 응답을 로컬 콜백이 아니라 **파이어베이스 요청**으로 받도록 설계돼 있기 때문이다.
+> 그래서 온라인에서는 다음을 지켜야 한다:
+>
+> - **콜백이 `null`인지 반드시 확인**하고, null이면 `session_game_manage`의 전송 API로 보낸다
+>   (`SendSetPhaseChoice` / `SendOpenPhaseChoice` — `OnlineMatchStarter`가 감싸 두었다)
+> - 그냥 `callback.Invoke(...)` 하면 `NullReferenceException`이 나고, 그 예외가 서버 코루틴을 죽여
+>   **게임이 그 페이즈에서 통째로 멈춘다.** 실제로 겪은 사고다
+> - 요청 대상이 **내 플레이어인지** 확인한다. 온라인은 양쪽 다 `UserType.Human`이라
+>   사람 여부만 보면 호스트가 게스트 몫까지 답해 버린다 → `LocalPlayerContext.IsMine` 사용
+
 ### B-1. 세트 페이즈
 
 `OnRequireSetPhaseAction : Action<Player me, GameContext ctx, Action<Card> callback>`
@@ -109,7 +124,9 @@
 
 `OnRequireStackResponse : Action<Player me, Card stackCard, Card opponentCard, Action<bool> callback>`
 
-방어 스택이 상대 공격/지원에 강제 대응하는 경우 이 이벤트는 **발행되지 않는다**.
+> 🚫 **현재 발행처가 0곳인 죽은 계약이다 (2026-08-18 확인).**
+> 스택 발동 여부는 `OnRequireCardPick`(B-4)으로 묻는다 (`ServerGameManager` L958, `BattleManager` 동일).
+> 되살릴지 폐기할지 아직 결정되지 않았다. 새로 구독하지 말 것.
 
 ### B-4. 목록에서 선택
 
@@ -119,11 +136,26 @@
 
 `OnRequireCardChoice : Action<Player me, ZoneType zone, int count, string filter, Action<List<Card>> callback>`
 
+> 🚫 **현재 발행처가 0곳인 죽은 계약이다 (2026-08-18 확인).** 새로 구독하지 말 것.
+
 ### B-6. 선택적 행동
 
 `OnRequireOptionalAction : Action<Player me, string message, GameContext ctx, Action<bool> callback>`
 
 `true` = 수행, `false` = 취소 (`LastEffectSucceeded = false`로 "그 후" 효과 스킵).
+
+---
+
+## B-7. 발행되지 않는 이벤트 (선언만 있음)
+
+아래는 `EventManager`에 선언돼 있으나 **현재 발행하는 코드가 없다.** 구독해도 아무 일도 일어나지 않는다.
+
+| 이벤트 | 비고 |
+| ------ | ---- |
+| `OnCardDiscard` | 폐기는 `OnCardMove(→Graveyard)`로 처리된다 |
+| `OnCardUnstacked` | 스택 소진도 `OnCardMove`로 처리된다 |
+| `OnCardUnbattlefield` | 전장 파괴도 `OnCardMove`로 처리된다 |
+| `OnRequireStackResponse` · `OnRequireCardChoice` | 위 참조 |
 
 ---
 

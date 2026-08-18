@@ -8,9 +8,11 @@
 //
 // 씬 배선이 필요 없다. RuntimeInitializeOnLoadMethod로 자가 생성하고 UI도 코드로 만든다.
 // 로그 패널 좌측 상단은 톱니바퀴 버튼(DeckInfoPanelUI) 자리를 피해 아래쪽에서 시작한다.
+using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
+using TCG_Project.Scripts.Systems;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -56,6 +58,12 @@ public class GameStatusPanelUI : MonoBehaviour
     private int _currentTurn = 1;
     private string _currentPhase = "";
 
+    // ─── 입력 제한 시간 표시 ────────────────────────────────────────────
+    // 서버는 사람 입력을 choose_wait_time만큼만 기다리고 그 뒤에는 자동으로 결정한다.
+    // 남은 시간을 안 보여 주면 갑자기 카드가 자동 선택돼 당황하게 된다.
+    private float _inputDeadline = -1f;
+    private string _inputLabel;
+
     // ─── 부트스트랩 ─────────────────────────────────────────────────────
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -88,6 +96,12 @@ public class GameStatusPanelUI : MonoBehaviour
 
         EventManager.OnLogMessage += HandleLogMessage;
 
+        EventManager.OnRequireSetPhaseAction += HandleRequireSetTimer;
+        EventManager.OnRequireOpenPhaseAction += HandleRequireOpenTimer;
+        EventManager.OnRequireCardPick += HandleRequireCardPickTimer;
+        EventManager.OnRequireOptionalAction += HandleRequireOptionalTimer;
+        EventManager.OnCardSet += HandleCardSetTimer;
+
         EventManager.OnGameSet += HandleGameSet;
         EventManager.OnGameDraw += HandleGameDraw;
         EventManager.OnMatchSet += HandleMatchSet;
@@ -107,6 +121,12 @@ public class GameStatusPanelUI : MonoBehaviour
         EventManager.OnEndPhase -= HandleEndPhase;
 
         EventManager.OnLogMessage -= HandleLogMessage;
+
+        EventManager.OnRequireSetPhaseAction -= HandleRequireSetTimer;
+        EventManager.OnRequireOpenPhaseAction -= HandleRequireOpenTimer;
+        EventManager.OnRequireCardPick -= HandleRequireCardPickTimer;
+        EventManager.OnRequireOptionalAction -= HandleRequireOptionalTimer;
+        EventManager.OnCardSet -= HandleCardSetTimer;
 
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
@@ -145,18 +165,86 @@ public class GameStatusPanelUI : MonoBehaviour
     private void SetPhase(string phaseName, int turn)
     {
         EnsureUI();
+
+        if (_currentPhase != phaseName) StopInputTimer(); // 페이즈가 넘어가면 대기도 끝난 것이다
+
         _currentTurn = turn;
         _currentPhase = phaseName;
         RefreshHeader();
+    }
+
+    // ─── 제한 시간 ──────────────────────────────────────────────────────
+
+    private void StartInputTimer(Player player, string label)
+    {
+        if (!LocalPlayerContext.IsMine(player)) return;
+
+        float limit = GameRules.ChooseWaitTime / 1000f;
+        if (limit <= 0f) return;
+
+        _inputLabel = label;
+        _inputDeadline = Time.unscaledTime + limit;
+        RefreshHeader();
+    }
+
+    private void StopInputTimer()
+    {
+        if (_inputDeadline < 0f) return;
+
+        _inputDeadline = -1f;
+        _inputLabel = null;
+        RefreshHeader();
+    }
+
+    private void HandleRequireSetTimer(Player p, GameContext c, Action<Card> cb) => StartInputTimer(p, "세트");
+    private void HandleRequireOpenTimer(Player p, Card card, int cost, GameContext c, Action<OpenPhaseChoice> cb) => StartInputTimer(p, "공개/폐기");
+    private void HandleRequireCardPickTimer(Player p, List<Card> cards, int count, Action<List<Card>> cb) => StartInputTimer(p, "카드 선택");
+    private void HandleRequireOptionalTimer(Player p, string msg, GameContext c, Action<bool> cb) => StartInputTimer(p, "선택");
+    private void HandleCardSetTimer(Card card, Player owner)
+    {
+        if (LocalPlayerContext.IsMine(owner)) StopInputTimer();
+    }
+
+    private void Update()
+    {
+        if (_inputDeadline < 0f) return;
+
+        if (Time.unscaledTime >= _inputDeadline)
+        {
+            StopInputTimer();
+            return;
+        }
+
+        RefreshHeader();
+    }
+
+    /// <summary>
+    /// 결과 오버레이를 임의 문구로 띄운다. 상대 이탈처럼 승패가 아닌 종료 상황에 쓴다.
+    /// 오버레이에는 [다시 하기] / [메인 메뉴로]가 이미 붙어 있다.
+    /// </summary>
+    public void ShowNotice(string title, string detail)
+    {
+        EnsureUI();
+        StopInputTimer();
+        ShowOverlay(title, detail, drawColor);
     }
 
     private void RefreshHeader()
     {
         if (_headerText == null) return;
 
-        _headerText.text = string.IsNullOrEmpty(_currentPhase)
+        string baseText = string.IsNullOrEmpty(_currentPhase)
             ? $"ROUND {_currentTurn}"
             : $"ROUND {_currentTurn}  ·  {_currentPhase}";
+
+        if (_inputDeadline >= 0f)
+        {
+            int remain = Mathf.Max(0, Mathf.CeilToInt(_inputDeadline - Time.unscaledTime));
+            string color = remain <= 5 ? "#ff6b6b" : "#ffd479";
+            baseText += $"   <color={color}>{_inputLabel} {remain}초</color>";
+        }
+
+        _headerText.text = baseText;
     }
 
     private void HandleLogMessage(string message)

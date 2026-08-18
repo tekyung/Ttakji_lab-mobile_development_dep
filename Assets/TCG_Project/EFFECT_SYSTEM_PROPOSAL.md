@@ -1,3 +1,13 @@
+> ## 📌 이 문서는 과거 기록입니다
+>
+> Phase 10 Effect 통합 리팩터링의 **근거 제안서**입니다. 제안은 이미 반영되어
+> 개별 Effect 30여 종이 `MoveEffect` / `BuffEffect` / `DamageEffect` / `BattlefieldEffect` /
+> `CompositeEffect` 등으로 통합됐습니다. 설계 의도를 이해할 때만 읽으세요.
+>
+> 현재 효과 목록은 `Assets/TCG_Project/Scripts/Effects/`와 `HANDOFF.md` 섹션 4를 봅니다.
+
+---
+
 # 카드 효과 시스템 재설계 제안서
 
 작성일: 2026-03-02  

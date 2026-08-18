@@ -1,354 +1,187 @@
-# C# 환경 테스트 (ConsoleRunner.cs 를 실행할 경우) _ VS code 기준
+# 전투! 용병의 시대 — 모바일 TCG
 
-- 빌드: `dotnet build`, 실행: `dotnet run --project ./TCG_Project.csproj`
+실물 보드게임 **"전투! 용병의 시대"**를 Unity 모바일 온라인 게임으로 구현하는 프로젝트입니다.
 
----
-
-# 🎮 TCG 프로젝트: Core 로직 연동 가이드 (UI 개발팀용)
-
-TCG 코어 로직과 UI 연출을 연결하기 위한 가이드라인입니다.
-우리 게임은 코어 엔진과 화면 연출이 완벽하게 분리된 **이벤트 기반 아키텍처(Event-Driven Architecture)**를 사용합니다.
-
-UI 팀은 게임의 상태(HP, 덱의 남은 장수 등)를 직접 수정해서는 안 되며, 오직 `EventManager`가 쏘아주는 방송(Event)을 구독(Subscribe)하여 애니메이션과 이펙트를 재생하는 역할만 담당합니다.
+최종 갱신: 2026-08-18 · 현재 브랜치: `M2_milestone`
 
 ---
 
-## 📌 1. 이벤트 구독 및 해제 기본 수칙 (중요)
+## 1. 이 프로젝트가 무엇인가
 
-유니티에서 이벤트를 다룰 때 가장 중요한 것은 **메모리 누수(Memory Leak) 방지**입니다.
-이벤트를 구독할 때는 반드시 `OnEnable`에서 등록(`+=`)하고, `OnDisable`이나 `OnDestroy`에서 해제(`-=`)해야 합니다.
+용병 2명을 골라 20장짜리 덱을 짜고, 6페이즈로 진행하며 상대의 라이프 5개를 먼저 0으로 만들면 이기는 카드 게임입니다.
 
-```csharp
-using UnityEngine;
-using TCG_Project.Scripts.Managers;
+**목표는 서버를 경유하는 실시간 온라인 1대1 단판제 대전입니다.**
 
-public class BattleUIManager : MonoBehaviour
-{
-    private void OnEnable()
-    {
-        // 구독: 방송국 주파수를 맞춥니다.
-        EventManager.OnLifeChange += UpdateHealthBar;
-        EventManager.OnCardMove += AnimateCardFly;
-    }
+### 구조 한눈에 보기
 
-    private void OnDisable()
-    {
-        // 해제: 오브젝트가 꺼지거나 파괴될 때 반드시 주파수를 끊어야 합니다! (누수 방지)
-        EventManager.OnLifeChange -= UpdateHealthBar;
-        EventManager.OnCardMove -= AnimateCardFly;
-    }
+```
+Assets/TCG_Project/          게임 로직 (엔진). Unity 없이도 콘솔에서 돌아간다
+  Scripts/Core                카드·플레이어·존·게임 상태
+  Scripts/Systems             6페이즈 해결, 데미지, 봇 AI, 데이터 로딩
+  Scripts/Effects             카드 효과 (JSON 키워드 → 효과 객체)
+  Scripts/Abilities           용병 고유 능력 4종
+  Scripts/Managers            BattleManager(Unity 진입점) · EventManager(UI 계약)
+  Data/*.json                 카드 40종 + 용병 4종 + 규칙값  ← 정본(SSOT)
 
-    // 실제 연출 함수들
-    private void UpdateHealthBar(Player player, int currentLife) 
-    { 
-        /* 체력바 게이지가 줄어드는 애니메이션 재생 */ 
-    }
+Assets/Scripts/              Unity 표현 계층
+  InGameCard/                 인게임 보드 UI (카드 GO 풀, 손패, 존, 팝업)
+  BuildDeck/                  덱 빌더
+  MainMenu/                   메뉴·덱 선택
+  Server Scripts/             Firebase 온라인 대전 (별도 담당자)
 
-    private void AnimateCardFly(Card card, Player fromPlayer, ZoneType fromZone, Player toPlayer, ZoneType toZone) 
-    { 
-        /* 카드가 A 위치에서 B 위치로 스르륵 날아가는 연출 */ 
-    }
-}
+TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화된다 (직접 편집 금지)
+```
 
+### 세 가지 실행 경로
+
+| 실행 | 방법 | 용도 |
+| ---- | ---- | ---- |
+| 콘솔 (헤드리스) | `cd TCG_Project && dotnet run` | 엔진 회귀 테스트. 강화학습 확장의 기반 |
+| Unity 로컬 | `TestGameScene` 재생 | 사람 vs 봇 / 봇 vs 봇 |
+| Unity 온라인 | 메인 메뉴 → 랜덤 매칭 | 사람 vs 사람 (같은 씬이 세션 유무로 갈린다) |
+
+---
+
+## 2. 지금 어디까지 왔나
+
+### 모드별 상태
+
+| 모드 | 상태 |
+| ---- | ---- |
+| 봇 vs 봇 | ✅ 완성. 회귀 테스트 기준선으로 쓴다 |
+| 사람 vs 봇 | ✅ 플레이 가능. 입력·표시·항복·결과까지 동작 |
+| **사람 vs 사람 (온라인)** | 🔶 **한 판이 끝까지 진행된다.** 아래 제약이 남아 있다 |
+
+### 온라인 대전 계층별
+
+| 계층 | 상태 |
+| ---- | ---- |
+| 전송·프로토콜 (Firebase) | ✅ 실전 검증됨 |
+| 호스트 진행(엔진) · 화면 | ✅ 동작 |
+| 게스트 화면 | ✅ 보드 미러링·진행 로그 (용병 슬롯 제외) |
+| 게스트 입력 | 🔶 세트·오픈만. 카드 선택·예/아니오·스택 응답은 미연결 |
+| 덱·용병 주입 | ❌ **덱이 하드코딩**이고 캐릭터 ID가 비어 있어 **용병 능력 4종이 발동하지 않는다** |
+| 끊김·재접속 | 🔶 상대 이탈 감지·방 정리만. 재접속 없음 |
+
+### 지금 상태에서 "정상인데 이상해 보이는 것"
+
+- 어떤 덱을 골라도 **같은 덱으로 대전**한다 (덱 주입 미완)
+- **용병 카드 4장이 안 보이고 용병 능력이 안 나온다** (캐릭터 ID 미주입)
+- 게스트의 진행 로그는 호스트와 내용이 다르다 (호스트 엔진 로그를 중계하지 않는다)
+- **한 판으로 끝난다** — 단판제가 기획 결정이다
+
+---
+
+## 3. 남은 일 (역할별)
+
+### 서버 담당
+
+1. **덱·용병 주입** — `session_game_manage.HostGameSetupRoutine`이 덱을 하드코딩하고 있고
+   `CharacterCardId` / `SecondaryCharacterId`를 넣지 않는다. 업로드된 `decks/{role}`을 읽어
+   `PlayerSetupData` 경유로 통일할 것. **용병 능력이 안 도는 원인이 여기 하나다**
+2. **알림 도착 훅** — 게스트가 카드 선택·예/아니오·스택에 답하려면 알림이 왔다는 것을 알아야 한다.
+   전송 API(`SubmitCardPickFromUI` 등)는 이미 공개돼 있으므로 아래 한 줄이면 UI 쪽에서 바로 붙인다
+   ```csharp
+   public event Action<RequireCardPickNotification> OnCardPickRequested;
+   ```
+3. `LogNotification` 발행 — 게스트에게 엔진 로그 중계
+4. 항복 DTO, `onDisconnect` 기반 세션 정리, 재접속
+
+> 📌 **이번 작업에서 서버 파일을 4곳 최소 수정했습니다. 확인해 주세요.**
+> `ServerGameManager` — 단판제 적용 / `OnGameStart`를 시작 드로우 **앞으로** 이동
+> `session_manage` — 덱 경로 한 줄 / `IsHost` 읽기 전용 접근자
+
+### 클라이언트·UI 담당
+
+1. **용병 2종 선택 UI** — 덱 빌더에 없다. 지금은 덱에 담긴 카드로 테마를 역산한다
+2. 게스트 입력 3종 연결 (위 서버 항목 2번이 선행)
+3. 덱 빌딩 → 대전 연결 (`DataManager.selectedDeckList`를 읽는 곳이 없다)
+4. 자원존 가시화 (현재 의도적 미구현)
+
+### 로직 담당
+
+1. 콘솔 실행 환경 정리 — `.csproj`에 `<RollForward>LatestMajor</RollForward>` 추가 또는 TFM 변경.
+   지금은 환경변수 없이 `dotnet run`이 실패한다 (**강화학습 확장의 선행 조건**)
+2. 죽은 계약 2개 정리 — `OnRequireStackResponse` / `OnRequireCardChoice` (발행처 0곳)
+
+### 공통 · 출시 전
+
+| 항목 | 내용 |
+| ---- | ---- |
+| **Firebase 인증** | 현재 **인증이 전혀 없다.** DB가 전면 공개 상태이고, 테스트 규칙이면 만료 시 접속이 통째로 끊긴다 |
+| **Android 패키지명** | `google-services.json`은 `com.Ttakji.server`인데 ProjectSettings에 Android 항목이 없다. 실기에서 Firebase 초기화 실패 |
+| **임시 설정 되돌리기** | `choose_wait_time` 2분(원래 10초), `OnlineMatchStarter.UnlimitedInputForTesting = true` |
+| 터치 입력 | 현재 UI는 마우스 전제(호버 미리보기 등) |
+
+---
+
+## 4. 모두가 알아야 할 규칙
+
+### 4-1. 편집 위치 — 사본이 3벌이다
+
+| 위치 | 역할 | 편집 |
+| ---- | ---- | ---- |
+| `Assets/TCG_Project/` | **정본(SSOT)** | ✅ 여기만 편집 |
+| `TCG_Project/` | 콘솔 미러 | ❌ 빌드 시 덮어써짐 |
+| `Assets/Resources/GameData/*.json` | Unity 런타임용 | ❌ 동기화 대상 |
+
+`tools/sync-tcg-project.ps1`이 정본 → 나머지로 복사하며, 콘솔 빌드 시 자동 실행됩니다.
+검증: `powershell -File tools/sync-tcg-project.ps1 -Check`
+
+### 4-2. 로직 레이어에 `using UnityEngine` 금지
+
+`Core / Systems / Effects / Conditions / Abilities / Interfaces / Utils`는 Unity에 의존하지 않습니다.
+예외는 정확히 2개(`BattleManager.cs`, `UnityResourceLoader.cs`)이며, 둘 다 콘솔 빌드에서 제외돼 있습니다.
+
+이건 코드 위생이 아니라 **강화학습 확장의 전제 조건**입니다. 헤드리스로 고속 반복 실행이 가능해야 합니다.
+
+### 4-3. UI는 이벤트만 구독한다
+
+게임 상태를 UI에서 직접 고치지 마세요. `EventManager` 이벤트를 구독해 화면에 반영만 합니다.
+구독은 `OnEnable`에서 `+=`, `OnDisable`에서 `-=` (누수 방지).
+
+**이벤트 시그니처는 팀 간 계약입니다.** 바꾸면 구독 코드가 일제히 깨지므로 공지 후 진행하고,
+`EVENTMANAGER_CONTRACT.md`를 함께 갱신하세요.
+
+> ⚠️ **엔진 이벤트를 흉내 내는 코드는 "골라 쏘면" 안 됩니다.** 같은 존 전이에는 같은 세트를 전부 발행하세요.
+> 실제로 `OnCardMove`만 쏘고 `OnCardStacked`를 빠뜨려 게스트 화면의 스택존이 깨진 적이 있습니다.
+
+### 4-4. 소스는 UTF-8(BOM 없음)
+
+`.editorconfig`가 선언합니다. CP949로 저장하면 한글이 전부 깨지고, 실제로 깨진 에러 메시지가
+덱 빌딩 팝업에 그대로 노출된 적이 있습니다.
+
+### 4-5. 지우면 안 되는 것들
+
+| 대상 | 이유 |
+| ---- | ---- |
+| 콘솔 빌드(`ConsoleRunner`, `TCG_Project.csproj`) | 강화학습 확장 기반 |
+| `OptionalActionEffect` | 앞으로 추가할 **용병 특수 기믹용**. 쓰는 카드가 0장이라고 dead code가 아니다 |
+| `DeckValidator`의 주석 처리된 "10종류 × 2장" 검증 | 팀 협의 중. 현재 1장도 허용하는 방침 |
+| `BattleManager`의 `p1TestIds` 주석 블록 | 카드 조합 충돌 재현용 QA 자료 |
+| 단판제(`Bot_single_game: 1`) | 룰북은 3판 2선승이지만 **기획상 단판제 유지** |
+
+### 4-6. 변경 후 확인 절차
+
+```bash
+dotnet build ./TCG_Project/TCG_Project.csproj        # 엔진
+dotnet build ./Assembly-CSharp.csproj                # Unity 스크립트
+powershell -File tools/sync-tcg-project.ps1 -Check   # 사본 동기화
+cd TCG_Project && DOTNET_ROLL_FORWARD=LatestMajor dotnet run   # 봇 회귀 (★ MATCH SET ★ 확인)
 ```
 
 ---
 
-## 📡 2. 이벤트 리스트 (Event Dictionary)
-
-UI 연출을 위해 `EventManager`에서 제공하는 핵심 이벤트 목록입니다. 용도에 맞게 구독하여 사용하세요.
-
-### ⚔️ A. 게임 흐름 및 상태 변경
-
-| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
-| --- | --- | --- |
-| `OnGameStart` | `Player p1, Player p2` | 게임 시작. 양측 플레이어 프로필 스폰, 초기 체력바/덱 UI 세팅 |
-| `OnTurnStart` | `int turn, string subject` | 매 라운드 시작. 화면 중앙에 "ROUND 1" 텍스트 애니메이션 |
-| `OnGameSet` | `Player winner` | 누군가의 HP가 0이 되어 게임 종료. 승리/패배 결과창 팝업 |
-| `OnGameDraw` | `Player p1, Player p2, int turn` | 동시 타격 등으로 무승부 처리 시 호출. 무승부 연출 |
-| `OnLifeChange` | `Player p, int newValue` | 체력 변동 시 호출. HP바 애니메이션 및 피격 화면 이펙트 재생 |
-| `OnTiebreaker` | `Player p1, Player p2` | 타이브레이커 상황 진입 시 호출. 타이브레이커 연출 (예: 카드 카운트) |
-
-### 🎴 B. 카드 이동 및 액션 (가장 중요)
-
-카드가 화면에서 움직이거나 효과가 터질 때 호출됩니다.
-| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
-|---|---|---|
-| `OnCardMove` | `Card c, Player p1, Zone z1, Player p2, Zone z2` | 카드가 존을 이동할 때. (예: 세트존 -> 전장존). 궤적 이동 애니메이션 |
-| `OnCardDraw` | `Card c, Player p, Zone z` | 덱에서 카드를 뽑을 때 호출. 덱에서 카드가 튀어나와 패로 들어가는 연출 |
-| `OnPlayCard` | `Player p, Card c` | 메인 페이즈나 스택 반응으로 카드가 '발동'될 때. 카드 일러스트 컷인 및 타격 이펙트 |
-| `OnCardStateChange` | `Card c` | 카드의 상태가 변할 때. (앞뒷면 변경) |
-| `OnPlayFailed` | `Card c` | 카드 발동 실패 시. (자원 부족, 조건 불만족 등) |
-| `OnCardDiscard` | `Card c, Player p`, `Zone z` | 카드가 버려질 때 호출. 카드가 Zone에서 버려지는 연출(아직은 사용 X) |
-| `OnCardSet` | `Player p, Card c` | 카드가 세트 존에 놓일 때. 카드가 세트 존에 안착하는 연출(OnCardMove 선행) |
-| `OnCardStacked` | `Player p, Card c` | 카드가 스택으로 쌓일 때. 카드가 스택 존에 추가되는 연출(OnCardMove 선행) |
-| `OnCardUnstacked` | `Player p, Card c` | 카드가 스택에서 제거될 때. 카드의 효과가 다하는 연출(OnCardMove 후행) |
-| `OnCardBattlefield` | `Player p, Card c` | 카드가 전장에 배치될 때. 필드가 펼쳐지는 연출(OnCardMove 선행) |
-| `OnCardUnbattlefield` | `Player p, Card c` | 카드가 전장에서 제거될 때. 필드가 사라지는 연출(OnCardMove 후행) |
-| `OnCardResourceAdded` | `Player p, Card c` | 카드가 자원으로 추가될 때. 자원 코인/에너지 UI 갱신 준비(OnCardMove 선행) |
-
-
-### 🔄 C. 페이즈 전환 알림
-
-화면 상단의 "현재 페이즈 UI"를 빛나게 하거나 갱신할 때 사용합니다.
-| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
-|---|---|---|
-| `OnResourcePhase` | `string subject, int turn` | 자원 페이즈 시작 시. 자원 코인/에너지 UI 갱신 준비 |
-| `OnDrawPhase` | `string subject, int turn` | 드로우 페이즈 시작 시 |
-| `OnSetPhase` | `string subject, int turn` | 세트 페이즈 시작 시 |
-| `OnOpenPhase` | `string subject, int turn` | 오픈 페이즈 시작 시 |
-| `OnMainPhase` | `string subject, int turn` | 메인 페이즈 시작 시. 전투 시작 연출 (VS 마크 등) |
-
----
-
-## ✋ 3. 플레이어 입력 처리 (Human Input)
-
-코어 엔진은 봇(Bot)의 행동은 스스로 결정하지만, **사람(Human)**의 차례가 오면 UI 쪽에 **"유저가 버튼을 누를 때까지 기다릴게!"** 라며 콜백(Callback)을 던져줍니다.
-UI 팀은 해당 이벤트를 구독하여 화면에 버튼을 띄우고, 유저가 선택을 마치면 **반드시 콜백 함수를 실행(`Invoke`)하여 엔진에 답을 돌려줘야 합니다.** (돌려주지 않으면 게임이 멈춥니다!)
-
-| 이벤트명 | 파라미터 (전달받는 값) | 호출 시점 및 UI 연출 권장 사항 |
-| --- | --- | --- |
-| `OnRequireSetPhaseAction` | `Player, GameContext, Action<Card>` | **세트 페이즈:** 내 패를 클릭할 수 있게 활성화. 유저가 카드를 고르면 `콜백(고른카드)` 호출 |
-| `OnRequireOpenPhaseAction` | `Player, Card, int, GameContext, Action<OpenPhaseChoice>` | **오픈 페이즈:** '공개' / '폐기' 2개 버튼 UI 팝업. 선택 시 `콜백(OpenPhaseChoice.Open 또는 Abandon)` 호출 |
-| `OnRequireStackResponse` | `Player, Card(내카드), Card(상대카드), Action<bool>` | **스택 발동:** 상대가 날 때렸을 때! 내 스택 카드를 발동할지 '예/아니오' 버튼 팝업. 선택 시 `콜백(true/false)` 호출 |
-
-### 📝 입력 처리 구현 예시 (오픈 페이즈)
-
-```csharp
-private void OnEnable()
-{
-    EventManager.OnRequireOpenPhaseAction += ShowOpenAbandonUI;
-}
-
-private void ShowOpenAbandonUI(Player p, Card c, int cost, GameContext ctx, Action<OpenPhaseChoice> callback)
-{
-    // 1. 화면에 [공개(비용: cost)] / [폐기] 버튼 패널을 띄웁니다.
-    uiPanel.SetActive(true);
-
-    // 2. 버튼에 임시로 이벤트를 달아줍니다. (유저 클릭 대기)
-    btnOpen.onClick.AddListener(() => 
-    {
-        uiPanel.SetActive(false);
-        callback.Invoke(OpenPhaseChoice.Open); // ★ 코어 엔진으로 대답 전송! (게임 진행 재개)
-    });
-
-    btnAbandon.onClick.AddListener(() => 
-    {
-        uiPanel.SetActive(false);
-        callback.Invoke(OpenPhaseChoice.Abandon); // ★ 코어 엔진으로 대답 전송!
-    });
-}
-
-```
-
----
-
-## ⚠️ 4. 기타 주의사항 (Caveats)
-
-1. **절대 데이터 직접 수정 금지:** UI 스크립트에서 `Player.LifeTokens -= 1` 처럼 코어 데이터를 직접 조작하지 마세요. 모든 로직 연산은 이미 엔진이 끝마친 상태입니다. UI는 전달받은 값(`newValue`)을 화면의 텍스트 컴포넌트에 반영하기만 하면 됩니다.
-2. **연출 딜레이 (코루틴 대기):** 로직은 눈 깜짝할 새에 연산되지만 시각적 연출은 시간이 필요합니다. `BattleManager.cs` 내부에 페이즈 전환이나 카드 사용 시 `ActionDelay` 셋팅값이 있으니, UI 애니메이션 시간에 맞춰 유니티 인스펙터에서 이 시간을 조절해 주세요.
-3. **이펙트 종류 확인:**
-`OnPlayCard` 가 호출될 때, 해당 카드의 `Type` 이나 이름(`Name`)을 읽어서 공격 카드면 총알 이펙트, 방어 카드면 방패 이펙트 등 어셋을 분기하여 스폰하시면 됩니다.
-
----
-
-
----
-
-# 개발 진행 사항 기록
-
-## 26.01.30 진행사항
-
-Card // Effect 간 분리, Card는 Effect의 id를 호출
-
-Cards.json 에서 각종 수식 파싱 후, Eval 하게 하여 게임 내 변수 활용
-
-Rules.json 으로 게임 내 세부 수치 관리
-
-각 카드별 발동 조건 설정 -> 사용 가능 여부 판별
-
-카드의 효과 분기 설정 -> 한 카드가 다른 타입의 효과를 2개 이상 포함 가능
-
-
-## 26.01.31 진행사항
-
-Targeting 시스템 구현(N개의 데이터베이스에서 M개 지정)
-
-MoveCardEffect(카드 이동 효과)으로 각종 카드 이동 효과 구현 및 대체
-
-ModifyCardEffect(카드 수정 효과)으로 각종 카드 스탯 수정 효과 구현
-
-현재 과도기로 사용하지 않는 Effect.cs 들이 혼재되어 있음. 추후 정리 필요.
-
-
-## 26.02.10 진행사항
-
-유닛의 소환 시 효과 발동 조건을 json에 기입
-
-애벌레(1 드로우) : "on_play_condition_type": "DeckNotEmpty",
-
-폭탄벌(1 파괴) : "on_play_condition_type": "EnemyUnitExist"
-
-픽시드래곤(200 너프) : "on_play_condition_type": "EnemyUnitExist"
-
-변경된 룰로 시뮬레이션 테스트 성공
-
-최신화된 json사용 중, 이전 버전 사용 시 오류 발생
-
-
-## 26.02.15 진행사항
-
-unity에 사용될 이벤트 로직 초안 구성 (노트북 사양 문제로 테스트 못함_아직 작동 안될 수 있음)
-
-데이터 파일 경로 수정했으나 추후 재검 필요
-
-룰 파일 CommonConfig.json 로딩 구현 예정 (현재 임시로 고정값 사용 중)
-
-당장은 이벤트 로그와 콘솔 로그를 동시 송출하게 구성, 진도에 맞춰 콘솔은 차차 없앨 예정
-
-
-## 26.02.27 진행사항
-
-### ✅ 1. 완료된 핵심 시스템
-페이즈 체인 & 비동기 엔진: 코루틴과 콜백(Action) 기반으로 턴 흐름이 재설계되어, 카드 효과 처리가 끝날 때까지 시스템이 스스로 대기(WaitUntil)합니다.
-
-아키텍처 분리: 카드의 '소환 조건(PlayCondition)'과 '효과 발동 조건(EffectCondition)'이 완벽히 분리되어 동작합니다.
-
-안전한 스탯 파이프라인: 모든 스탯 변동과 파괴 로직이 ModifyPower라는 단일 창구로 통합됩니다.
-
-디스플레이 디커플링: 코어 로직은 EventManager로 신호와 Rich Text(색상 태그)만 던지며, 유니티와 콘솔 양쪽에서 완벽히 호환됩니다.
-
-
-### ⚠️ 2. 유니티 팀 인계 전/후 확인 사항 (TODO)
-[ ] JSON 데이터 최신화 (가장 중요)
-
-사용자의 직접 선택(HumanChoice), 가장 높은 공격력(HighestPower), 랜덤(Random) 의 타겟팅 모드를 지원하기 위해 CardEffectData 클래스에 target_mode 필드가 추가되었습니다.
-코드는 target_mode을 파싱하는데 기본값으로 "HighestPower"를 사용하도록 되어 있습니다. (즉, JSON에 target_mode이 명시되지 않으면 자동으로 가장 높은 공격력을 가진 적을 타겟으로 삼습니다.)
-
-
-[ ] 수동 타겟팅(HumanChoice) 임시 봉인 (Soft-Lock 주의)
-
-현재 백엔드는 target_mode가 Manual일 때 UI의 선택을 무한정 기다리도록 설계되었습니다.
-
-그래서 유니티 UI 쪽에 타겟을 클릭해서 콜백을 돌려주는 로직이 필요합니다.
-
-조치: 당장은 JSON 데이터의 target_mode를 일괄적으로 HighestPower로 설정해 두어 게임이 멈추지 않게 했습니다.
-
-
-[ ] 유니티 리소스 경로(Path) 검증
-
-1차적으로 유니티 프로젝트 내의 폴더(Assets/Resources/GameData)가 존재하고 JSON 파일들이 그 안에 들어있는지 점검합니다.
-없다면 2차로 이 폴더의 Data 폴더의 백업 파일을 사용합니다. (로그 출력으로 어느 경로의 데이터인지 알 수 있습니다.)
-
-[ ] UI의 이벤트 메모리 누수(Leak) 방지
-
-유니티에서 EventManager를 구독하여 연출을 만들 때, 반드시 유니티의 OnEnable()에서 +=로 구독하고, OnDisable()이나 OnDestroy()에서 -=로 해지하도록 해야 합니다. (이거 안 하면 씬 전환 시 100% 에러가 터집니다.)
-
-
-## 26.02.28 진행사항
-
-LegacyEffect 제거 및 코드 정리
-
-파일 로딩 시스템 롤백
-
-MoveCardEffect 역할 분리: 단발성 카드 이동 효과는 MoveCardEffect로, 조건부 기간 이동은 RevertControllerEffect로 분리
-
-RevertStatusEffect 추가: 유닛의 상태 이상을 일정 턴 후 자동으로 해제하는 효과 구현 (구현 중)
-
-SwapCardEffect 추가: 카드의 위치를 동시에 서로 바꾸는 효과 구현 (복원 중)
-
-
-## 26.03.09 진행사항
-
-이전 버전 코드 완전 제거 및 리펙토링 (전투! 용병의 시대 룰로 재이식)
-
-현재까지 발매된 카드 4+40장 모두 구현 완료 (검증은 공격, 방어만 완료)
-
-EventManager 설명서 업데이트
-
-DeckValidator.cs 새 룰에 맞춰 업데이트 (덱 유효성 검사)
-
-Scripts/UI 폴더 안에 유니티 전용 임시 파일들 생성. 덮어써도 무방함.
-
-
-## 26.03.14 진행사항
-
-전체 카드 4 + 40 장 검증 완료
-
-레거시 코드 리팩토링
-
-ConsoleRunner.cs의 118번, BattleManager.cs의 218번 줄에 봇의 덱을 직접 고를 수 있게 업데이트, RileBookCard.json 의 카드 ID로 구성
-
-BattleManager.cs의 86번 줄에서 플레이어/봇 생성. 콜백 로직이 완료되지 않았다면 User.Type을 Bot으로 통일해야 함(자동 진행 모드)
-
-엘리의 "격추 시스템" 카드 기획 의도와 맞게 수정 (표기상 스택 격발 시에 패를 버리지만 발동 즉시 버리게 수정, 설계 상 오타)
-
-세트 존을 단일 카드 변수 대신 리스트로 관리하는 것에 대한 논의 중 (다이나의 "기뢰" 처럼 세트 존 외 카드 효과 발동에 대한 재정)
-
-스택의 종류를 방어뿐 아니라 무적, 반격, 화력 등 추가 구현
-
-
-## 26.03.20 진행사항
-
-RulebookCards.json 의 카드 항목 이름 Card 로 변경 (UI 요청사항 반영)
-
-RulebookCards.json 의 경로를 Assets/Resources/GameData 로 변경
-
-스택 발동 관련 버그 수정 (스택이 상대의 자해 데미지에도 터지는 버그 수정)
-
-QA 에서 쉽게 상황을 테스트할 게임 상태 주입 로직 생성. (ConsoleRunner, BattleManager 덱 세팅 부분의 주석 참고)
-
-
-## 26.03.22 진행사항
-
-03.21 일자에 M1 에 CardManual.md 파일 올라갔습니다
-
-Assets 폴더 안에 TCG_Project 폴더 옮겨놨습니다
-
-json 파일 4개도 Assets/Resources/GameData 로 경로 바꿔놨고
-
-카드 이미지 경로는 임시로  다음처럼 설정했습니다 (01 이 캐릭터, 02~11 이 해당 테마 카드)
-
-
-GameDesign/card_image/ELLI/ELLI-01.png
-
-GameDesign/card_image/VERONICA/VERO-01.png 
-
-GameDesign/card_image/DAINA/DAIN-01.png
-
-GameDesign/card_image/SONIA/SONI-01.png
-
-
-## 26.03.28 진행사항
-
-유니티에서 스택이 콜백되지 않아 게임이 무한 대기 상태로 추정, 일정 시간 대기 후 자동으로 콜백이 실행되도록 임시 조치
-
-
-## 26.03.31 진행사항
-
-전반적인 로직에 타임아웃 10초 - 이후 자동 콜백 실행 로직 추가 (스택 발동, 세트 카드 선택 등 유저 입력 대기 상황에서)
-
-모든 용병, 카드 효과의 콜백 대기 상황에 타임아웃 로직 적용 완료, 타임아웃 발생 시 콘솔에 "시간 초과 - 자동으로 선택이 이루어집니다" 메시지 출력
-
-유니티의 C# 9.0 버전 지원 문제로 일부 최신 문법(예: 레코드 타입, 패턴 매칭 등)을 사용하지 않고 호환되는 방식으로 코드 수정 완료
-
-Utils 폴더에 AsyncTimeout.cs 파일 추가 - 비동기 메서드에 타임아웃 기능을 제공하는 유틸리티 클래스
-
-세트/오픈 페이즈의 처리 순서 동시 처리로 변경
-
-기타 버그 수정 완료
-
-
-## 26.04.04 진행사항
-
-BattleManager 내부의 테스트용 하드코딩 덱/용병 설정 완전 제거. 외부 로비 및 매치메이킹 시스템에서 조립된 명세서(PlayerSetupData DTO)를 주입받아 매치를 시작하도록 의존성 주입(DI) 구조로 개편
-
-DeckValidator.cs 에서 타이브레어커 로직을 TieBreakerChecker.cs 라는 별도의 클래스로 분리, 기존 타이브레이커 버그 수정
-
-유니티 작업과 배포 간의 파일 입출력(System.IO) 경로 충돌 방지를 위해 IJsonLoader 인터페이스 도입, 모든 JSON 로딩이 이 인터페이스를 통해 이루어지도록 리펙토링. UnityJsonLoader와 FileJsonLoader 두 가지 구현체 생성
-
-카드의 "뒷면 상태(default_card_back)" 를 CommonConfig.json 에 뒷면 이미지 경로로(GameDesign/card_image/Back_Common.png) 추가, 뒷면 카드는 별개의 카드가 아니라 카드의 상태로 관리하도록 설계 변경 (카드가 뒤집힐 때마다 카드 데이터의 default_card_back 필드를 참조하여 이미지 변경)
-
-카드는 이제 뒷면 상태(isFaceUp) 을 bool 값으로 가짐, 기본값은 True(앞면)
-
-각종 이벤트 추가(구현 우선순위 낮음)
+## 5. 문서 지도
+
+| 문서 | 내용 |
+| ---- | ---- |
+| **`Assets/TCG_Project/HANDOFF.md`** | **가장 중요.** 상세 인수인계 — 아키텍처 원칙, 작업 이력, 알려진 버그, 남은 작업 |
+| `Assets/TCG_Project/EVENTMANAGER_CONTRACT.md` | 이벤트 계약 정본 (UI 팀 온보딩) |
+| `Assets/TCG_Project/CardManual.md` | 카드 40종 상세 |
+| `Assets/TCG_Project/PROJECT_DIAGNOSIS.md` | 2026-03 시점 로직팀 진단서 (과거 기록) |
+| `Assets/TCG_Project/EFFECT_SYSTEM_PROPOSAL.md` | Effect 통합 설계 제안서 (과거 기록) |
+| `BattleManager-ServerGameManager-FunctionList.md` | 두 매니저의 함수 전수 목록 |
+| `docs/개발_기록.md` | 구 README — 날짜별 개발 일지 + 초기 UI 연동 가이드 (과거 기록) |
+
+새로 합류하셨다면 **이 README → `HANDOFF.md` 섹션 1~2(개요·원칙) → 담당 영역** 순서를 권합니다.

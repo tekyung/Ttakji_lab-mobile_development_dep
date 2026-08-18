@@ -173,13 +173,20 @@ public class ServerGameManager : MonoBehaviour
         _hostPlayer.ResetForNewGame(CloneDeck(_hostMainDeckTemplate), CloneDeck(_hostResourceDeckTemplate));
         _guestPlayer.ResetForNewGame(CloneDeck(_guestMainDeckTemplate), CloneDeck(_guestResourceDeckTemplate));
 
+        EventManager.OnLogMessage?.Invoke("[서버] 게임이 시작되었습니다!");
+        EventManager.OnLogMessage?.Invoke($"[서버][매치] 게임 {_currentGameIndex} 시작");
+
+        // ★ OnGameStart는 반드시 '시작 드로우보다 먼저' 쏴야 한다.
+        //   보드 UI는 이 이벤트에서 player.Deck으로 카드 GO 풀을 만든다(CardBoardRegistry.BuildPool).
+        //   드로우 뒤에 쏘면 이미 손패로 간 5장이 풀에서 빠져 GO가 없고,
+        //   이후 그 카드의 모든 이동이 "[CardBoardRegistry] GO 없음" 경고만 남기고 화면에 안 나온다.
+        //   (BattleManager.InitializeSingleGame도 OnGameStart → 드로우 순서다. 덱 정보 패널의
+        //    20장 스냅샷도 이 순서를 전제로 한다.)
+        EventManager.OnGameStart?.Invoke(_hostPlayer, _guestPlayer);
+
         // 시작 패 드로우
         GameLogicHelpers.DrawCards(_hostPlayer, GameRules.StartingHands, context);
         GameLogicHelpers.DrawCards(_guestPlayer, GameRules.StartingHands, context);
-
-        EventManager.OnLogMessage?.Invoke("[서버] 게임이 시작되었습니다!");
-        EventManager.OnLogMessage?.Invoke($"[서버][매치] 게임 {_currentGameIndex} 시작");
-        EventManager.OnGameStart?.Invoke(_hostPlayer, _guestPlayer);
 
         // 첫 번째 턴, 자원 페이즈부터 시작!
         StartPhase(GamePhase.ResourcePhase);

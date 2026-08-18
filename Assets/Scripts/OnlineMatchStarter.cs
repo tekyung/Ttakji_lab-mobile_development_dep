@@ -19,6 +19,8 @@
 //    같은 씬이 세션 유무에 따라 로컬 봇전 / 온라인 대전으로 갈리게 했다.
 //    나중에 씬을 분리하더라도 이 컴포넌트는 그대로 쓸 수 있다.
 using ServerScripts.EventScripts;
+using TCG_Project.Scripts.Core;
+using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -26,6 +28,12 @@ using UnityEngine.SceneManagement;
 public class OnlineMatchStarter : MonoBehaviour
 {
     private static OnlineMatchStarter _instance;
+
+    /// <summary>
+    /// ⚠️ 임시 테스트 스위치 (2026-08-17). 온라인에서도 사람 입력을 무제한 대기로 둔다.
+    /// 출시 전 <c>false</c>로 되돌릴 것 — 상대가 응답하지 않으면 양쪽이 멈춘다.
+    /// </summary>
+    private const bool UnlimitedInputForTesting = true;
 
     /// <summary>매칭을 거쳐 들어온 온라인 대전인지.</summary>
     public static bool IsOnlineSessionActive => !string.IsNullOrEmpty(GameData.SessionCode);
@@ -64,21 +72,45 @@ public class OnlineMatchStarter : MonoBehaviour
     {
         if (!IsOnlineSessionActive) return; // 로컬 봇전 — 할 일 없음
 
-        var client = FindFirstObjectByType<session_game_manage>();
+        // ★ 비활성 오브젝트까지 찾아야 한다.
+        //   TestGameScene의 GameManage(= session_game_manage + firebase_network + session_ui)는
+        //   씬에 **비활성으로 저장돼 있다**(로컬 봇전에서 파이어베이스를 건드리지 않으려는 조치로 보인다).
+        //   기본 FindFirstObjectByType은 비활성 오브젝트를 건너뛰므로 그냥 찾으면 null이 나온다.
+        var client = FindFirstObjectByType<session_game_manage>(FindObjectsInactive.Include);
         if (client == null) return;         // 온라인 클라이언트가 없는 씬(메인 메뉴 등)
 
-        // ★ 사람 입력 무제한 대기를 끈다.
-        //   로컬에서는 사람이 얼마든지 생각해도 되지만, 온라인에서 한쪽이 응답하지 않으면
-        //   호스트 코루틴의 WaitUntil이 영원히 풀리지 않아 양쪽 모두 정지한다.
-        GameLogicHelpers.AllowUnlimitedHumanInput = false;
+        // 꺼져 있으면 Start()가 돌지 않는다 → 덱 업로드·이벤트 구독·호스트 매치 시작이 전부 일어나지 않는다.
+        // 온라인으로 들어온 이상 반드시 켜 준다.
+        if (!client.gameObject.activeSelf)
+        {
+            client.gameObject.SetActive(true);
+            Debug.Log("[OnlineMatchStarter] 온라인 클라이언트(GameManage)가 꺼져 있어 활성화했다.");
+        }
+        client.enabled = true;
+
+        // 사람 입력 제한 시간.
+        //   원칙은 false(=제한 시간 적용)다. 온라인에서 한쪽이 응답하지 않으면
+        //   호스트 코루틴의 WaitUntil이 영원히 풀리지 않아 양쪽 모두 정지하기 때문이다.
+        //
+        // ⚠️ 지금은 UnlimitedInputForTesting = true 라서 온라인도 무제한이다 (2026-08-17, 테스트 편의).
+        //    출시 전에 반드시 false로 되돌릴 것. 함께 되돌릴 것:
+        //      Data/CommonConfig.json 의 choose_wait_time (지금 120000ms = 2분, 원래 10000ms)
+        //
+        // ⚠️ choose_wait_time을 '무한'으로 두면 안 된다.
+        //    게스트가 아직 답할 수 없는 요청(스택 발동·카드 선택)이 오면 그 시간만큼 양쪽이 멈춘다.
+        //    그래서 넉넉하되 반드시 끝나는 값으로 둔다.
+        //    → 서버의 세트/오픈/스택 대기는 이 헬퍼가 아니라 choose_wait_time을 직접 쓴다.
+        GameLogicHelpers.AllowUnlimitedHumanInput = UnlimitedInputForTesting;
 
         bool isHost = GameData.MyRole == "HOST";
-        var network = FindFirstObjectByType<firebase_network>();
+        var network = FindFirstObjectByType<firebase_network>(FindObjectsInactive.Include);
 
         if (isHost)
         {
             EnsureHostRuntime(network);
         }
+
+        WatchSessionExit(network);
 
         Debug.Log(
             $"[OnlineMatchStarter] 온라인 대전 준비 — 세션 {GameData.SessionCode} / 역할 {GameData.MyRole} / " +
@@ -92,8 +124,8 @@ public class OnlineMatchStarter : MonoBehaviour
     private void EnsureHostRuntime(firebase_network network)
     {
         // 이미 씬에 배치돼 있으면(TestServerConnect 등) 그대로 쓴다
-        var host = FindFirstObjectByType<ServerGameManager>();
-        var bridge = FindFirstObjectByType<EventService>();
+        var host = FindFirstObjectByType<ServerGameManager>(FindObjectsInactive.Include);
+        var bridge = FindFirstObjectByType<EventService>(FindObjectsInactive.Include);
         if (host != null && bridge != null)
         {
             LinkNetwork(bridge, network);
@@ -116,6 +148,67 @@ public class OnlineMatchStarter : MonoBehaviour
 
     private const string RuntimeObjectName = "OnlineServerRuntime";
 
+    // ─── 상대 이탈 감지 ─────────────────────────────────────────────────
+    //
+    // 호스트가 나가면 session_manage가 세션 노드를 통째로 지운다.
+    // 그걸 감지하지 못하면 남은 쪽은 아무 일도 없는 빈 보드를 계속 보게 된다.
+    //
+    // ⚠️ 한계: 게스트가 나가면 세션은 남고 guest 칸만 비므로 이 감시로는 잡히지 않는다.
+    //    그 경우 호스트는 입력 제한 시간이 지나며 자동 진행된다.
+
+    private bool _exitWatchAttached;
+
+    private void WatchSessionExit(firebase_network network)
+    {
+        if (_exitWatchAttached || network == null) return;
+
+        try
+        {
+            network.ListenForSessionExit(GameData.SessionCode, HandleSessionDestroyed);
+            _exitWatchAttached = true;
+        }
+        catch (System.Exception)
+        {
+            // 파이어베이스 초기화 전이면 다음 씬 로드 때 다시 시도한다
+        }
+    }
+
+    private void HandleSessionDestroyed()
+    {
+        if (!IsOnlineSessionActive) return;
+
+        Debug.Log("[OnlineMatchStarter] 세션이 사라졌다 — 상대가 나갔거나 방이 종료되었다.");
+        EventManager.OnLogMessage?.Invoke("<color=#ffd479>상대가 대전을 떠났습니다.</color>");
+
+        if (GameStatusPanelUI.Instance != null)
+            GameStatusPanelUI.Instance.ShowNotice("상대가 나갔습니다", "대전이 종료되었습니다.");
+    }
+
+    // ─── 끝난 방 정리 ───────────────────────────────────────────────────
+    //
+    // 방을 지우지 않으면 state가 PLAYING인 채 DB에 영구히 쌓인다(실제로 그렇게 쌓여 있었다).
+    // 호스트가 나가면 세션 전체 삭제, 게스트가 나가면 guest 칸만 비운다 — firebase_network.ExitSession이 알아서 갈라 준다.
+
+    private static void ReleaseSession()
+    {
+        string code = GameData.SessionCode;
+        string id = GameData.MyID;
+        if (string.IsNullOrEmpty(code)) return;
+
+        var network = FindFirstObjectByType<firebase_network>(FindObjectsInactive.Include);
+        if (network == null) return;
+
+        try
+        {
+            _ = network.ExitSession(code, id);
+            Debug.Log($"[OnlineMatchStarter] 세션 {code} 정리 요청");
+        }
+        catch (System.Exception e)
+        {
+            Debug.Log($"[OnlineMatchStarter] 세션 정리 생략: {e.Message}");
+        }
+    }
+
     /// <summary>
     /// 온라인 매치를 떠날 때 세션 흔적을 지운다.
     /// <see cref="GameData"/>는 static이라 씬을 옮겨도 남는다. 남겨 두면 같은 실행 안에서
@@ -123,12 +216,58 @@ public class OnlineMatchStarter : MonoBehaviour
     /// </summary>
     public static void ClearSession()
     {
+        ReleaseSession(); // 나가기 전에 방을 정리한다 (세션 코드가 아직 살아 있어야 한다)
+
         GameData.SessionCode = null;
         GameData.MyRole = null;
         GameData.MyID = null;
 
         // 로컬 플레이로 돌아가므로 사람 입력 제한 시간을 다시 푼다
         GameLogicHelpers.AllowUnlimitedHumanInput = true;
+    }
+
+    // ─── UI → 네트워크 전송 ─────────────────────────────────────────────
+    //
+    // ★ 온라인에서는 호스트도 자기 입력을 네트워크로 보낸다.
+    //   ServerGameManager는 OnRequireSetPhaseAction / OnRequireOpenPhaseAction을 쏠 때
+    //   **콜백에 null을 넣고**(L520, L661) 응답은 파이어베이스 요청으로 받도록 만들어져 있다.
+    //   그래서 로컬처럼 콜백을 부르면 안 되고, 아래 경로로 보내야 한다.
+    //   (게스트는 OnlineGuestBoardAdapter가 진짜 콜백을 주므로 이 경로를 타지 않는다)
+
+    private static session_game_manage _clientCache;
+
+    private static session_game_manage ResolveClient()
+    {
+        if (_clientCache == null)
+            _clientCache = FindFirstObjectByType<session_game_manage>(FindObjectsInactive.Include);
+
+        return _clientCache;
+    }
+
+    /// <summary>세트할 카드를 호스트(서버)에 보낸다. 온라인이 아니면 false.</summary>
+    public static bool SendSetChoice(Card card)
+    {
+        if (!IsOnlineSessionActive || card == null) return false;
+
+        session_game_manage client = ResolveClient();
+        if (client == null) return false;
+
+        Debug.Log($"[OnlineMatchStarter] 세트 전송: {card.Name}");
+        client.SendSetPhaseChoice(card.InstanceId, true);
+        return true;
+    }
+
+    /// <summary>공개/폐기 선택을 호스트(서버)에 보낸다. 온라인이 아니면 false.</summary>
+    public static bool SendOpenChoice(Card setCard, bool reveal)
+    {
+        if (!IsOnlineSessionActive || setCard == null) return false;
+
+        session_game_manage client = ResolveClient();
+        if (client == null) return false;
+
+        Debug.Log($"[OnlineMatchStarter] 오픈 전송: {setCard.Name} → {(reveal ? "Open" : "Abandon")}");
+        client.SendOpenPhaseChoice(setCard.InstanceId, reveal ? "Open" : "Abandon");
+        return true;
     }
 
     private static void LinkNetwork(EventService bridge, firebase_network network)

@@ -18,7 +18,7 @@
     },
     {
       "Name": "choose_wait_time",
-      "Value": "10000"
+      "Value": "120000"
     },
     {
       "Name": "gain_prize_by_direct",

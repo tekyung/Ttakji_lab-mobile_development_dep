@@ -53,6 +53,9 @@ public class PlayerUIManager : MonoBehaviour
     private GameObject pendingCardObj;
     private bool pendingIsReveal = true;
 
+    /// <summary>이번 세트 선택을 엔진 콜백이 아니라 네트워크로 보내야 하는가 (온라인 호스트).</summary>
+    private bool _sendSetOverNetwork;
+
     private GameObject _setGhost;
     private CanvasGroup _setGhostGroup;
     private Image _setGhostBorder;
@@ -307,6 +310,13 @@ public class PlayerUIManager : MonoBehaviour
         ClearPendingSelection();
 
         pendingSetCallback = callback;
+
+        // ★ 온라인 호스트는 콜백이 null로 온다.
+        //   ServerGameManager가 OnRequireSetPhaseAction을 쏠 때 콜백 자리에 null을 넣고
+        //   응답은 파이어베이스 요청으로 받도록 만들어져 있기 때문이다.
+        //   콜백이 없다고 입력을 막으면 호스트는 카드를 아예 고를 수 없다.
+        _sendSetOverNetwork = callback == null && OnlineMatchStarter.IsOnlineSessionActive;
+
         if (readyButtonObj != null) readyButtonObj.SetActive(false);
     }
 
@@ -318,7 +328,7 @@ public class PlayerUIManager : MonoBehaviour
     /// </summary>
     public void ConfirmSetCard(string instanceId, GameObject cardObj, bool isReveal)
     {
-        if (pendingSetCallback == null || localPlayer == null)
+        if ((pendingSetCallback == null && !_sendSetOverNetwork) || localPlayer == null)
             return;
 
         Card selected = ResolveHandCard(instanceId, cardObj);
@@ -340,7 +350,7 @@ public class PlayerUIManager : MonoBehaviour
 
     public void OnClickReadyButton()
     {
-        if (pendingSetCallback != null && pendingCardToSet != null)
+        if ((pendingSetCallback != null || _sendSetOverNetwork) && pendingCardToSet != null)
         {
             if (readyButtonObj != null) readyButtonObj.SetActive(false);
 
@@ -351,7 +361,16 @@ public class PlayerUIManager : MonoBehaviour
 
             var callback = pendingSetCallback;
             pendingSetCallback = null;
-            callback.Invoke(pendingCardToSet);
+
+            if (callback != null)
+            {
+                callback.Invoke(pendingCardToSet);   // 로컬 플레이 / 게스트(어댑터가 준 콜백)
+            }
+            else
+            {
+                _sendSetOverNetwork = false;
+                OnlineMatchStarter.SendSetChoice(pendingCardToSet); // 온라인 호스트
+            }
         }
     }
 
@@ -506,7 +525,16 @@ public class PlayerUIManager : MonoBehaviour
     {
         if (!LocalPlayerContext.IsMine(player)) return;
 
-        callback.Invoke(pendingIsReveal ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon);
+        // ★ 온라인 호스트는 콜백이 null이다(위 세트 페이즈와 같은 이유).
+        //   그대로 Invoke하면 NullReferenceException이 나고, 그 예외가 서버 코루틴을 죽여
+        //   오픈 페이즈에서 게임이 통째로 멈춘다.
+        if (callback != null)
+        {
+            callback.Invoke(pendingIsReveal ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon);
+            return;
+        }
+
+        OnlineMatchStarter.SendOpenChoice(card, pendingIsReveal);
     }
 
     public void CancelSet()

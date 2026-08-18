@@ -5,7 +5,8 @@ using UnityEngine;
 
 public static class CardMoveTween
 {
-    private const float Duration = 0.18f;
+    // 카드 이동 시간. 눈으로 따라갈 수 있도록 0.18 → 0.36으로 늘렸다(이동 속도 절반, 2026-08-17).
+    private const float Duration = 0.36f;
     private static CardMoveTweenRunner _runner;
 
     public static void Play(Transform card, Vector2 fromAnchored, Vector2 toAnchored, Action onComplete = null)
