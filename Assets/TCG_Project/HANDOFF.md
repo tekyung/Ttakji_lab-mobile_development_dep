@@ -489,6 +489,278 @@ Assets/Scripts/
 
 ## 5. Phase별 완료 현황
 
+### [2026-08-17 후속 7] 온라인 무한 대기 교착 해소 (F-4 5단계) ✅ 완료
+
+섹션 11 F-1 **#5** 해결. **서버 스크립트를 건드리지 않고** 끝냈다.
+
+**문제:** 온라인에서 용병 능력·카드 선택 프롬프트는 **제한 시간이 없었다.**
+`GameLogicHelpers.GetChooseTimeoutMs`가 Human이면 무조건 `NoTimeout(-1)`을 돌려주고,
+`AsyncTimeoutHelper`는 `Task.Delay(-1)`로 영원히 기다린다.
+호스트 코루틴은 `WaitUntil(done || IsGameOver)`에 걸려 있는데 응답이 없으면 둘 다 성립하지 않아
+**양쪽 모두 영구 정지**한다. (`ServerGameManager` L400·424·464·819·869 — 타임아웃이 있는 곳은 세트·오픈·스택 3곳뿐)
+
+**해결:** 정책 스위치 하나를 엔진에 두고 Unity 쪽에서 전환한다.
+
+```csharp
+// GameLogicHelpers (Zero Unity Dependency 유지 — 그냥 static bool이다)
+public static bool AllowUnlimitedHumanInput { get; set; } = true;   // 로컬 기본
+
+public static int GetChooseTimeoutMs(Player player)
+{
+    bool isHuman = player != null && player.Type == UserType.Human;
+    return isHuman && AllowUnlimitedHumanInput ? NoTimeout : GameRules.ChooseWaitTime;
+}
+```
+
+| 전환 지점 | 값 |
+| --------- | -- |
+| `OnlineMatchStarter.PrepareOnlineRuntime` (온라인 진입) | **false** → `ChooseWaitTime`(10초) 적용 |
+| `OnlineMatchStarter.ClearSession` (메인 메뉴 복귀) | true |
+| `LocalMatchStarter` 매치 시작 | true (정적 값이 이전 세션에서 남는 경우 대비) |
+
+> **`ServerGameManager`를 고치지 않아도 되는 이유:** 타임아웃이 걸리면 `AsyncTimeoutHelper`가
+> 기본값 콜백을 호출하고, 그러면 `done`이 true가 되어 호스트의 `WaitUntil`이 자연히 풀린다.
+> 즉 **타임아웃 값 하나만 유한하게 만들면 5곳의 무한 대기가 모두 해소된다.**
+> 기본 동작은 이미 코딩되어 있다(카드 선택=무작위, 용병 능력=미발동).
+
+**로컬 동작 변화 없음:** 봇은 종전처럼 `ChooseWaitTime`, 로컬 사람은 여전히 무제한이다.
+콘솔 봇 회귀도 `★ [MATCH SET] ★` 정상 완주했다.
+
+**남은 구멍 1개 (지금은 무해):** `OptionalActionEffect`는 `AsyncTimeoutHelper`를 쓰지 않고
+`EventManager.OnRequireOptionalAction`을 직접 부른다 → **타임아웃이 아예 없다.**
+다만 **현재 `RulebookCards.json`에서 이 타입을 쓰는 카드가 0장**이라 실제로는 도달하지 않는다.
+
+> ⚠️ **이 클래스는 지우지 말 것.** 앞으로 추가할 용병의 특수 기믹을 위해 미리 만들어 둔 것이다
+> (2026-08-17 확인). "쓰는 카드가 없으니 dead code"라며 정리하면 안 된다.
+> 다만 이 효과를 쓰는 카드를 **실제로 추가할 때는 먼저 `AsyncTimeoutHelper` 경유로 바꿔야 한다.**
+> 그러지 않으면 온라인에서 그 카드가 나오는 순간 양쪽이 영구 정지한다.
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 봇 회귀 정상.
+**미검증:** 실제 2인 온라인에서 한쪽이 응답하지 않을 때 10초 뒤 진행되는지.
+
+---
+
+### [2026-08-17 후속 6] 덱 저장 — 덮어쓰기 안 됨 + 용병 3종 이상 통과 ✅ 완료
+
+#### 1. [덱 저장하기]가 매번 새 덱을 만들던 문제
+
+**증상:** 기존 덱을 편집하고 저장하면 덮어쓰지 않고 `my_deck_1`, `_2` … 가 계속 생겼다(실제로 9번까지 늘어남).
+
+**원인:** `SaveDeckToJson`이 **같은 이름의 파일이 있으면 무조건 자동 번호를 붙였다.**
+"지금 편집 중인 덱"이라는 개념이 없어서, 방금 불러온 그 덱조차 남으로 취급했다.
+
+**해결:** `_editingDeckName` 필드로 편집 대상을 추적한다.
+
+| 시점 | 처리 |
+| ---- | ---- |
+| 덱을 불러왔을 때(`LoadDeckFromJson`) | 그 이름으로 설정 → 이후 저장은 **덮어쓰기** |
+| 저장 성공 | 방금 저장한 이름으로 갱신 |
+| [새 덱](`OnConfirmNewDeck`) | **비운다** — 아직 파일이 없으므로 첫 저장은 새로 만드는 게 맞다 |
+| 편집 중이던 덱 삭제 | 비운다 |
+
+이름을 바꿔 저장했는데 그게 **다른** 덱과 겹칠 때만 종전처럼 자동 번호가 붙는다(남의 덱을 덮어쓰지 않기 위해).
+로그도 `저장 완료(덮어쓰기)` / `저장 완료(새 덱)`으로 구분된다.
+
+> 씬 시작 시 `RefreshDeckList`가 첫 덱을 자동으로 불러오므로(L153) 편집 대상은 자동으로 잡힌다.
+
+#### 2. 용병 3종 이상이 섞여도 저장되던 문제
+
+`OnClickSaveDeck`은 **20장인지만** 봤다. 룰북은 용병 2종을 골라 그 테마로 덱을 짜는데 아무 제한이 없었다.
+카드의 `characterId`로 테마 수를 세어 **2종 초과면 저장을 막고** 어떤 용병이 섞였는지 팝업으로 알린다.
+
+```
+용병은 최대 2종까지만 섞을 수 있습니다.
+현재 3종: ELLIE, DAINA, SONIA
+```
+
+> **카드당 장수는 강제하지 않았다.** 룰북은 "10종류 × 2장"이지만 **현재 1장도 허용하는 방침**이다(2026-08-17 확인).
+> `AddCard`의 상한 2장은 그대로 두고(상한일 뿐 강제가 아님), 저장 시 "각 2장" 검사는 넣지 않았다.
+> 이는 `DeckValidator`에서 같은 검사가 주석 처리된 것과 같은 맥락이다 (섹션 6 참조).
+>
+> 용병 **선택 UI**는 아직 없다. 지금은 덱에 담긴 카드로부터 테마를 역산한다.
+> 선택 UI가 생기면 `DeckValidator.ValidateFullDeckSet(mainDeck, resourceDeck, char1Id, char2Id)`로 넘길 것.
+
+**검증:** Assembly-CSharp 오류 0. **미검증:** 에디터에서 덮어쓰기·용병 3종 차단 실동작.
+
+---
+
+### [2026-08-17 후속 5] 덱 편집 불가 — 카드 추가 버튼이 죽어 있던 문제 ✅ 완료
+
+**증상:** 덱 빌더에서 **카드 제거는 되는데 추가 버튼이 아무 반응이 없다.** 그래서 20장을 채울 수 없고 저장도 막힌다.
+
+**원인:** `RulebookCards.json`에 **`max_deck_count` 필드가 아예 없었다.**
+덱 빌더는 `Resources/GameData/RulebookCards`를 `JsonUtility`로 읽는데, 없는 필드는 **0으로 채워진다.**
+그래서 `DeckBuilderManager.AddCard`의
+
+```csharp
+if (currentCount < data.max_deck_count)   // 0 < 0 → false
+```
+
+가 항상 거짓이 되어 **로그 한 줄 없이 조용히 반환**했다. `RemoveCard`에는 같은 검사가 없어서 제거만 됐다.
+(경로 이전 작업과는 무관한 기존 버그다.)
+
+**조치 2가지:**
+
+| 대상 | 내용 |
+| ---- | ---- |
+| `Data/RulebookCards.json` (정본) | 카드 **40장 전부**에 `"max_deck_count": 2` 추가. 룰북대로 10종류 × 각 2장 = 20장이므로 상한은 2다. `"cost": N,` 뒤에 끼워 넣어 기존 손 정렬을 유지했다(diff 최소화). sync로 미러 2곳에 반영 |
+| `DeckBuilderManager.AddCard` | 값이 없거나 0이면 **룰북 기본값 2**로 보고, 상한에 걸리면 **로그를 남기고** 반환한다. 카드 데이터를 못 찾을 때도 경고를 남긴다 — 다시는 조용히 죽지 않게 |
+
+> **왜 둘 다 했나:** JSON 쪽이 정석(데이터 주도)이지만, 필드 하나 빠졌다고 버튼이 말없이 죽는 구조를
+> 그대로 두면 같은 사고가 반복된다. 코드에 기본값과 로그를 함께 넣었다.
+
+**엔진 영향 없음:** 엔진(`GameDataManager`)은 Newtonsoft로 읽고 모르는 필드는 무시한다.
+콘솔 봇 회귀도 `★ [MATCH SET] ★` 정상 완주했다.
+
+**검증:** JSON 40장 파싱 확인 / `Resources/GameData`에 40건 반영 / Assembly-CSharp 오류 0 /
+엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 회귀 정상.
+**미검증:** 에디터에서 실제 카드 추가·20장 채우기·저장.
+
+---
+
+### [2026-08-17 후속 4] 덱 저장 경로를 persistentDataPath로 이전 ✅ 완료
+
+**문제:** 덱 저장·읽기가 전부 `Application.dataPath/MyDeck`을 쓰고 있었다(**8곳**).
+에디터에서는 그게 `Assets/MyDeck`이라 잘 됐지만 **안드로이드에서 `Application.dataPath`는 APK 내부**다.
+읽기 전용인 데다 일반 디렉터리도 아니라서 **실기에서는 덱 빌더 자체가 동작하지 않는다.**
+
+**해결:** `Assets/Scripts/Utils/DeckStorage.cs`(신규)를 단일 창구로 두고 8곳을 전부 경유시켰다.
+
+| API | 용도 |
+| --- | ---- |
+| `EnsureFolder()` | 폴더 보장 + 경로 반환 (최초 1회 구 폴더에서 덱 이전) |
+| `GetDeckPath(name)` | 덱 파일 경로. 확장자는 있어도 없어도 된다 |
+| `GetDeckFiles()` | 저장된 덱 목록 |
+| `DeckExists(name)` | 존재 확인 |
+
+교체한 곳: `DeckBuilderManager` 5곳 / `DeckSelect` 1곳 / `MyHandManager` 1곳 /
+**`session_manage` 1곳(서버 파일 — 안 바꾸면 온라인 덱 업로드가 파일을 못 찾는다)**.
+
+**기존 덱은 자동으로 옮겨 온다.** `Assets/MyDeck`에 커밋돼 있는 덱 5개(`MyDeck`, `MyDeck_1`, `MyDeck_2`,
+`TestDeck`, `new`)가 경로 변경만으로 사라진 것처럼 보이므로, 새 폴더에 같은 이름이 없을 때만 한 번 복사한다.
+안드로이드에서는 구 폴더를 읽을 수 없어 조용히 건너뛴다(예외를 삼키고 로그만 남긴다).
+
+> 새 코드에서 `Application.dataPath`를 직접 부르지 말 것. 현재 이 경로를 아는 곳은 `DeckStorage` 하나뿐이다.
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok.
+**미검증:** 에디터에서 덱 저장·불러오기·삭제 실동작, 실기 빌드.
+
+---
+
+### [2026-08-17 후속 3] 온라인 단판제 적용 (F-4 3단계) ✅ 완료
+
+섹션 11 F-1 **#1** 해결. **서버 스크립트를 이번에만 한 곳 손댔다**(사용자 승인).
+
+`ServerGameManager.StartMultiplayerGame`이 `new MatchManager(gamesToWin: 2, maxGames: 3)`을
+**하드코딩**하고 있어 온라인만 3판 2선승으로 돌았다. `ConsoleRunner`·`BattleManager`와 같은 관용구로 맞췄다:
+
+```csharp
+int maxGames = 3, gamesToWin = 2;
+if (GameRules.BotSingleGame == 1) { maxGames = 1; gamesToWin = 1; }
+```
+
+확인한 것:
+
+- `CommonConfig.json`의 `Bot_single_game = 1` → **단판제로 동작**
+- `GameRules.LoadRules`는 `BuildServerDataManager`(L889)에서 호출되고 이는 `StartMultiplayerGame`(L871)보다
+  **먼저** 실행된다 → 값을 읽는 시점에 룰이 이미 로드돼 있다
+- `MatchManager.IsMatchOver()`는 `_gamesPlayed >= _maxGames`도 보므로 `maxGames: 1`이면 **첫 게임 종료 즉시 매치 종료**.
+  `HandleGameOverFlow`가 `OnMatchSet`을 쏘고 끝나며 2게임째로 넘어가지 않는다 (L230~249)
+
+> 단판제는 기획 결정이다. "룰북은 3판 2선승인데?"라며 되돌리지 말 것 (섹션 6 참조).
+> 3판으로 되돌리려면 코드가 아니라 `CommonConfig.json`의 `Bot_single_game`을 0으로 바꾼다.
+
+**검증:** Assembly-CSharp 오류 0. **미검증:** 실제 2인 온라인 접속.
+
+---
+
+### [2026-08-17 후속 2] 역할 필터 — "내 플레이어" 판정 일원화 (F-4 2단계) ✅ 완료
+
+섹션 11 F-1 **#4** 해결. 서버 스크립트는 건드리지 않았다.
+
+**문제:** 로컬은 사람이 한 명뿐이라 UI 전 계층이 `UserType.Human`으로 "나"를 판정해 왔다.
+그런데 온라인은 **호스트·게스트 둘 다 `UserType.Human`**이다(`session_game_manage` L839~840). 그래서
+
+- 호스트 화면에 **게스트에게 물어야 할 다이얼로그가 뜨고 호스트가 대신 답해 버린다**
+- 상대 보드(`EnemyVisualTester`)는 `Type != UserType.Bot`으로 걸러서 **아무것도 그리지 않는다**
+
+**해결:** 판정 창구를 `Assets/Scripts/Utils/LocalPlayerContext.cs`(신규) 하나로 모았다.
+
+| API | 판정 |
+| --- | ---- |
+| `IsMine(player)` | 온라인이면 `player.Name == GameData.MyRole`("HOST"/"GUEST"), 로컬이면 `Type == Human` |
+| `IsOpponent(player)` | `player != null && !IsMine(player)` — 봇 vs 봇 관전에서는 **양쪽 다 true**(종전 `Type == Bot`과 동일) |
+| `ResolveMine(p1, p2)` | 내가 조작하는 플레이어. 없으면 null(봇 vs 봇) |
+
+적용 범위:
+
+| 파일 | 변경 |
+| ---- | ---- |
+| `PlayerUIManager` | 소유 판정 12곳 → `IsMine`. `ResolveHumanPlayer`는 시그니처를 유지한 채 `ResolveMine`에 위임(호출처 4곳이 자동으로 역할 인식) |
+| `EnemyVisualTester` | 상대 보드 판정 4곳 → `IsOpponent`. **봇 vs 봇 관전 판정(`IsBotVsBot`, L190)은 진짜 '봇' 이야기라 그대로 뒀다** |
+| `HumanChoiceDialogUI` | `IsHuman` → `IsMine` 위임 |
+| `CardBoardInvariantChecker` | 5곳 → `IsMine` |
+
+> ★ **로컬 모드의 판정 결과는 종전과 완전히 같다** (사람=나 / 봇=상대 / 봇vs봇=조작 주체 없음).
+> 그래서 봇 vs 봇 회귀 기준선에 영향이 없다. 실제로 콘솔 회귀도 그대로 통과했다.
+
+**부수 효과(개선):** 호스트의 **상대 보드가 처음으로 그려진다.** 종전에는 게스트가 봇이 아니라는 이유로
+`EnemyVisualTester`가 통째로 무시하고 있었다.
+
+**진단:** 온라인인데 `GameData.MyRole`이 비어 있으면 내 보드·입력이 전부 죽으므로
+`[LocalPlayerContext] 온라인 세션인데 GameData.MyRole이 비어 있다` 경고를 한 번 남긴다.
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 봇 회귀 `★ [MATCH SET] ★` 정상.
+**미검증:** 실제 2인 온라인 접속.
+
+---
+
+### [2026-08-17 후속] 온라인 대전 진입 경로 확보 (F-4 1단계) ✅ 완료
+
+섹션 11 F-4의 **1번(온라인 대전 씬)** 작업. 서버 스크립트(`Assets/Scripts/Server Scripts/**`)는
+담당자가 따로 있어 **한 줄도 건드리지 않았다.** 씬 진입·부트스트랩 쪽만 손봤다.
+
+#### ★ 씬을 새로 파지 않았다 — 이유
+
+원안은 "온라인 대전 씬 신설"이었지만 **보드 UI가 통째로 든 `TestGameScene`(약 11,000줄)을 복제하면
+보드를 고칠 때마다 두 벌을 맞춰야 한다.** 게다가 `LocalMatchStarter`는 `BattleManager`·`CharacterFieldUI`와
+**같은 GameObject**에 붙어 있어 오브젝트를 통째로 끌 수도 없었다(컴포넌트만 도려내는 YAML 수술이 필요).
+
+대신 **같은 씬이 세션 유무에 따라 로컬 봇전 / 온라인 대전으로 갈리게** 했다.
+씬을 나중에 분리하더라도 아래 컴포넌트는 그대로 쓸 수 있다.
+
+| 파일 | 변경 |
+| ---- | ---- |
+| `LocalMatchStarter` (수정) | `GameData.SessionCode`가 있으면 **Awake에서 즉시 물러난다.** 이 가드가 F-1의 핵심 블로커를 없앤다 — 종전에는 매칭 후 이 씬에 오면 `session_game_manage`를 꺼 버려 온라인 세션이 죽고 봇전이 시작됐다 |
+| `OnlineMatchStarter` (신규) | 온라인 쪽 짝. 세션이 있을 때만 동작하며 **호스트에 한해** `ServerGameManager` / `EventService`를 붙이고 `EventService.networkService`를 씬의 `firebase_network`로 이어 준다. 준비 상태를 한 줄 로그로 남긴다 |
+| `GameStatusPanelUI` (수정) | [메인 메뉴로] 시 `OnlineMatchStarter.ClearSession()` — `GameData`는 static이라 안 지우면 같은 실행에서 로컬 봇전이 계속 막힌다. 온라인에서는 [다시 하기]가 **씬 재로드 대신 메인 메뉴로** 간다(같은 세션 재입장은 덱 재업로드 + 과거 이벤트 재생을 부른다) |
+| `BattleManager` (수정) | `HandleGameSet`/`HandleGameDraw`에 **null 컨텍스트 가드**. `context`는 `StartMatch` 때만 생기는데 온라인 씬에서는 이 매니저가 카드 데이터 제공자(`CardData`)로만 올라가므로, `ServerGameManager`가 쏘는 `OnGameSet`에 얹혀 **매치 종료 시 NullReferenceException**이 났다 |
+
+**부트스트랩 타이밍:** `RuntimeInitializeOnLoadMethod`는 게임 시작 때 한 번만 돈다.
+매칭 후 씬을 갈아탈 때도 준비해야 하므로 `SceneManager.sceneLoaded`를 계속 구독한다.
+이 콜백은 씬 오브젝트의 Awake 뒤 · 첫 `Start()` 앞에 오므로
+`session_game_manage.Start()`(호스트면 `HostGameSetupRoutine`)가 도는 시점에는 준비가 끝나 있다.
+
+**`MainMenu.nextSceneName`은 그대로 `TestGameScene`이다.** 그 씬이 이제 온라인에서도 안전해졌으므로 바꿀 필요가 없다.
+`session_game_manage`의 `networkService`/`uiManager`도 이미 인스펙터에 배선돼 있음을 확인했다.
+
+#### 이번 작업으로 기대할 수 있는 것 / 없는 것
+
+`ServerGameManager`의 이벤트 발행을 세어 보면 호스트 보드가 어디까지 살아날지 가늠할 수 있다:
+
+| 이벤트 | 발행 | 의미 |
+| ---- | ---- | ---- |
+| `OnGameStart` / `OnTurnStart` / `OnPlayCard` | 각 1회 | 카드 GO 풀 생성·턴 표시가 뜬다 |
+| `OnCardMove` | 4회 | 존 이동 트윈이 돈다 |
+| `OnLifeChange` / `OnCardSet` / `OnCharacterFieldSync` | **0회** | 라이프 표기·세트 연출·용병 슬롯은 **호스트에서도 안 뜬다** |
+| `CharacterFieldBroadcast` | **미연동** | 용병 필드가 비어 있다 (F-1 #3과 같은 뿌리) |
+
+즉 **1단계는 "온라인 진입이 봇전으로 새지 않게 만든 것"까지**다. 실제 화면이 제대로 도는지는
+F-4 2~6번(역할 필터 → 단판제 → 덱·용병 주입 → 타임아웃 → 게스트 화면)을 마쳐야 판가름 난다.
+
+**검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok / 콘솔 봇 회귀 `★ [MATCH SET] ★` 정상.
+**미검증:** 실제 온라인 접속(서버 담당자와 2인 테스트 필요).
+
 ### [2026-08-17] 손패 호버 미리보기 + 버튼 우선순위 + 폐기존 패널 UX + 소니아 능력 이벤트 누락 ✅ 완료
 
 | 항목 | 파일 | 내용 |
@@ -1396,6 +1668,18 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | 미러의 유령 BattleManager | `TCG_Project/Scripts/Managers/BattleManager.cs` | 동기화·컴파일 모두 제외된 옛 사본이 남아 혼란을 준다. sync 스크립트 `$deleteFromMirror`에 추가하면 정리됨 | 낮음 |
 | 줄바꿈 혼재 | 전체 | `.cs` 기준 CRLF 43 / LF 57. `.editorconfig`에서 일부러 규정하지 않음(강제 시 diff 오염). 정리하려면 `.gitattributes`와 함께 별도 작업 | 낮음 |
 
+### ⏸ 안드로이드 실기 대응 — 보류 중 (2026-08-17 결정)
+
+**지금은 손대지 않는다.** 나중에 몰아서 처리할 것. 착수할 때 아래부터 보면 된다.
+
+| 항목 | 내용 |
+| ---- | ---- |
+| 패키지명 불일치 | `google-services.json` = `com.Ttakji.server` ↔ `ProjectSettings`에 Android 항목 없음(`Standalone: com.DefaultCompany.2DProject`). 이대로 빌드하면 **Firebase 초기화 실패** |
+| 기호 폰트 OS 의존 | `UiFontResolver.EnsureSymbolFallback`가 OS 폰트(맑은 고딕 등)를 찾아 폴백한다. 후보에 없는 기기에서는 `★ ♬ →` 등이 다시 ㅁ로 깨진다. 확실히 하려면 기호용 폰트 에셋을 프로젝트에 포함 |
+| 입력 방식 | 현재 UI는 마우스 전제(호버 미리보기, 두 번째 클릭 확대). 터치에서는 호버가 없으므로 손패 열람 동선을 다시 정해야 한다 |
+| 해상도·세이프에어리어 | 코드 생성 UI(패널·다이얼로그)가 고정 픽셀값을 쓴다. 노치/다양한 종횡비 검증 필요 |
+| ✅ 덱 저장 경로 | **해결됨** — `DeckStorage`가 `persistentDataPath`를 쓴다 (2026-08-17) |
+
 **✅ 2026-08-16 해결됨**
 
 | 항목 | 처리 |
@@ -1419,6 +1703,7 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | "10종류 × 2장" 검증 주석 처리 | `DeckValidator.ValidateFullDeckSet` | 룰북상으로는 맞지만 **팀 내 협의가 진행 중**이라 의도적으로 강제하지 않는 상태. 협의 종료 후 주석 해제. 임의로 지우지 말 것 |
 | `BattleManager`의 `p1TestIds` 주석 블록 | `InitializeSingleGame()` | 카드 조합 충돌 재현용 QA 참고 자료 |
 | 자원존 가시 UI 미구현 | `CardBoardRegistry` hiddenPool | GO는 풀에 있으나 화면에 표시하지 않는다 |
+| **`OptionalActionEffect` (사용 카드 0장)** | `Scripts/Effects/OptionalActionEffect.cs` | 앞으로 추가할 **용병 특수 기믹용**으로 미리 만들어 둔 클래스다. 미사용이라며 지우지 말 것 (2026-08-17 확인) |
 
 ### Unity 보드 UI 잔여 (TestGameScene 이후)
 
@@ -1688,8 +1973,8 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | 문제 | 내용 | 심각도 |
 | ---- | ---- | ---- |
 | **인증이 아예 없다** | `Firebase.Auth.dll`은 있는데 **코드에서 사용처 0건**. 익명 로그인조차 없다. 그래서 DB 규칙이 전면 개방 상태이고, **URL만 알면 누구나 전체 세션을 읽고 쓰고 지울 수 있다**(읽기는 실제로 확인함). 테스트 모드 규칙이라면 **만료일이 지나는 순간 전부 차단**되어 접속이 통째로 끊긴다 | **높음** |
-| **Android 패키지명 불일치** | `google-services.json`은 `com.Ttakji.server`인데 `ProjectSettings`에는 Android 항목이 없고 `Standalone: com.DefaultCompany.2DProject`뿐이다. **실기 빌드에서 Firebase 초기화가 실패한다** | **높음**(모바일 마일스톤) |
-| **덱 저장 경로가 `Application.dataPath`** | 덱 빌더·덱 선택·온라인 덱 업로드까지 **8곳 전부** `Application.dataPath/MyDeck`을 쓴다. 안드로이드에서 이 경로는 APK 내부라 **쓰기 불가**. `Application.persistentDataPath`로 옮겨야 한다 | **높음**(모바일 마일스톤) |
+| **Android 패키지명 불일치** | `google-services.json`은 `com.Ttakji.server`인데 `ProjectSettings`에는 Android 항목이 없고 `Standalone: com.DefaultCompany.2DProject`뿐이다. **실기 빌드에서 Firebase 초기화가 실패한다** | ⏸ **보류**(2026-08-17 결정 — 안드로이드 작업은 나중에 몰아서) |
+| ~~**덱 저장 경로가 `Application.dataPath`**~~ | ✅ **해결(2026-08-17).** `DeckStorage`로 일원화하고 `persistentDataPath`로 이전 + 기존 덱 자동 이관. 섹션 5 참조 | — |
 | 세션 청소 없음 | 끝나거나 끊긴 방이 `PLAYING`인 채 영구히 남는다. 로비 목록은 `WAITING`만 보여 줘 눈에 안 띌 뿐 계속 쌓인다 | 중 |
 | `dbRef` null 가드 부재 | `GetPublicSession`만 확인한다. `Initialize()` 실패 후 다른 메서드를 부르면 `NullReferenceException` | 중 |
 | `ServerSenderManager.cs` | 어떤 씬·프리팹에도 없다 (dead code, 128줄) | 낮음 |
@@ -1755,6 +2040,49 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | 덱 빌딩 → 대전 연결 | ❌ `DataManager.selectedDeckList`를 읽는 곳이 없다. 용병 선택 UI도 없다 |
 | 죽은 계약 2개 정리 | ⏸ 회의 중 (`OnRequireStackResponse` / `OnRequireCardChoice`) |
 | 자원존 가시화 | ❌ 의도적 미구현 |
+
+### F. 목표 "서버 경유 실시간 온라인 1:1 단판제"까지 남은 것 (2026-08-17 분석)
+
+전송 계층은 실전 검증됐다(A-2 참조). 남은 것은 **Unity·게임 로직 쪽**이며, 아래 6개가 직접 블로커다.
+
+#### F-1. 반드시 고쳐야 하는 것
+
+| # | 결함 | 근거 (코드 위치) | 영향 |
+| - | ---- | ---------------- | ---- |
+| 1 | ~~**온라인이 단판제가 아니다**~~ ✅ **해결(2026-08-17)** | `ServerGameManager.StartMultiplayerGame`이 `GameRules.BotSingleGame`을 참조하도록 수정 | — |
+| 2 | **덱·용병이 하드코딩** | `session_game_manage.HostGameSetupRoutine` L846~855에 ConsoleRunner 테스트 ID가 그대로 박혀 있다. `UploadDeck`으로 올라간 `decks/{role}`을 **읽는 코드가 0곳**, `GameData.MyDeck`도 업로드에만 쓰인다 | 누가 어떤 덱을 골라도 항상 같은 덱으로 대전한다 |
+| 3 | **온라인에서 용병 능력이 전부 미작동** | 위 L839~840이 `new Player { Name, Type }`만 세팅하고 **`CharacterCardId`/`SecondaryCharacterId`를 넣지 않는다.** `CharacterAbilityRegistry.GetPlayerAbilities`는 ID가 비면 **빈 리스트**를 반환. `BoardState.Character1_ID`/`2_ID`도 DTO에 선언만 있고 **대입하는 코드가 없다** | 엘리·베로니카·다이나·소니아 능력 4종이 전부 죽는다. 게스트는 상대 용병도 알 수 없다 |
+| 4 | ~~**호스트 UI가 게스트 몫까지 응답한다**~~ ✅ **해결(2026-08-17)** — `LocalPlayerContext`로 판정 일원화 | `PlayerUIManager.HandleRequireSet` L307과 `HumanChoiceDialogUI.IsHuman` L202는 **`UserType.Human`만 확인**한다. 온라인은 호스트·게스트 **양쪽 다 `UserType.Human`**(L839~840) | 호스트 화면에 게스트에게 물어야 할 다이얼로그가 뜨고, 호스트가 대신 답해 버린다. **UI 전 계층에 `GameData.MyRole` 기준 "내 것인가" 판정이 필요하다** |
+| 5 | ~~**인간 입력 무한 대기 → 교착**~~ ✅ **해결(2026-08-17)** — `GameLogicHelpers.AllowUnlimitedHumanInput` | 타임아웃이 있는 곳은 세트(L512)·오픈(L652)·스택(L948) **3곳뿐**. 용병 능력(L400·424·464·869)과 카드 효과(L819)는 `WaitUntil(done \|\| IsGameOver)`로 **무한 대기**. 그 안에서 쓰는 `GameLogicHelpers.GetChooseTimeoutMs`는 **Human이면 -1(무제한)**을 돌려준다(주석에 "온라인에서 쓰지 말 것"이라 적혀 있으나 강제 장치 없음) | 상대가 카드 선택 창을 안 닫거나 끊기면 **양쪽 모두 영구 정지**. 실제 08-13 로그에도 `RequireCardPickNotification` 2건이 남아 있다 |
+| 6 | **게스트에게 게임 화면이 없다** | 게스트에는 `Player` 객체 자체가 없다(`HostGameSetupRoutine`은 호스트 전용). 보드 UI는 `EventManager` 구독으로 도는데 `session_game_manage`의 발행은 **3곳뿐**(`OnCardMove`/`OnCardDraw`/`OnPlayCard`). 조작 수단은 인스펙터 `Test_*` 17개 | **작업량이 가장 큰 항목.** 게스트는 `board_state` 스냅샷에서 로컬 `Player`를 복원하고 이벤트를 되쏘는 어댑터가 필요하다 |
+
+#### F-2. 온라인이라 새로 필요한 것 (지금 0%)
+
+| 항목 | 현황 |
+| ---- | ---- |
+| 연결 끊김 / 재접속 | `OnDisconnect`·재접속 처리 **코드 0건**. 상대가 앱을 끄면 방이 `PLAYING`인 채 영원히 남는다(실제로 7개 방치) |
+| `events` 누적 | `Push()`만 하고 **지우는 코드가 없다.** 게다가 수신은 `ChildAdded`라 리스너를 다시 붙이면 **과거 이벤트가 전부 재생된다**. 씬 재로드·재접속·2게임째에서 사고 난다 |
+| 항복 | `BattleManager.SurrenderBy`는 로컬 전용. 온라인 경로에 대응 DTO·처리 없음 |
+| 턴 제한 시간 표시 | 서버는 `ChooseWaitTime`으로 자르는데 **남은 시간을 보여 주는 UI가 없다** |
+
+#### F-3. 이미 갖춰져 재사용 가능한 것 (다시 만들지 말 것)
+
+- `ServerGameManager` 6페이즈 루프 + `EventManager` **85곳 발행** → **호스트 보드는 컴포넌트만 한 씬에 모으면 상당 부분 살아난다**
+- `ActionValidator` 20종 이상 검증, `EventDTO` 요청·알림 타입 완비, `EventService` 브리지 10개 이벤트
+- 매칭·세션·카운트다운·`GameData` 인계까지 완성 (`session_manage`)
+- `TiebreakerResolver`는 온라인에서도 이미 호출된다
+
+#### F-4. 권장 착수 순서
+
+1. ~~**온라인 대전 씬 신설**~~ → ✅ **완료(2026-08-17, 방식 변경).** 씬을 복제하는 대신 `LocalMatchStarter`에
+   "온라인이면 비켜라" 가드를 넣고 `OnlineMatchStarter`가 호스트 런타임을 붙이도록 했다. 섹션 5 참조
+2. ~~**F-1 #4 역할 필터**~~ → ✅ **완료(2026-08-17).** `LocalPlayerContext`로 판정 일원화. 섹션 5 참조
+3. ~~**F-1 #1 단판제**~~ → ✅ **완료(2026-08-17).** `GameRules.BotSingleGame` 참조로 통일. 섹션 5 참조
+4. **F-1 #2·#3 덱·용병 주입** — `decks/{role}` 읽기 + 용병 2종을 세션에 싣고 `PlayerSetupData` 경유로 통일(원칙 6-1)
+5. ~~**F-1 #5 타임아웃**~~ → ✅ **완료(2026-08-17).** `AllowUnlimitedHumanInput` 스위치로 해결.
+   `WaitUntil` 5곳은 손대지 않아도 타임아웃 콜백이 대기를 풀어 준다. 섹션 5 참조
+6. **F-1 #6 게스트 화면** — `board_state` → 로컬 `Player` 복원 어댑터. 가장 오래 걸린다
+7. F-2 안정성 (끊김·이벤트 청소·항복·타이머 표시)
 
 ### E. 기타
 

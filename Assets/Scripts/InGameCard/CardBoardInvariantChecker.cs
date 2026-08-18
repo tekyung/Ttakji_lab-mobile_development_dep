@@ -162,7 +162,7 @@ public class CardBoardInvariantChecker : MonoBehaviour
         foreach (GameObject extra in extras)
             CardBoardRegistry.PlaceHidden(extra, repairPool);
 
-        if (player.Type == UserType.Human && PlayerUIManager.Instance != null)
+        if (LocalPlayerContext.IsMine(player) && PlayerUIManager.Instance != null)
             PlayerUIManager.Instance.SyncPhysicalStacks(player);
         else
             FindFirstObjectByType<EnemyVisualTester>()?.SyncPhysicalStacks(player);
@@ -173,7 +173,7 @@ public class CardBoardInvariantChecker : MonoBehaviour
         if (player == null)
             return null;
 
-        if (player.Type == UserType.Human && PlayerUIManager.Instance != null)
+        if (LocalPlayerContext.IsMine(player) && PlayerUIManager.Instance != null)
             return PlayerUIManager.Instance.mySetZoneTransform;
 
         EnemyVisualTester tester = FindFirstObjectByType<EnemyVisualTester>();
@@ -185,7 +185,7 @@ public class CardBoardInvariantChecker : MonoBehaviour
         if (player == null)
             return null;
 
-        if (player.Type == UserType.Human && PlayerUIManager.Instance != null)
+        if (LocalPlayerContext.IsMine(player) && PlayerUIManager.Instance != null)
             return PlayerUIManager.Instance.myDeckTransform;
 
         EnemyVisualTester tester = FindFirstObjectByType<EnemyVisualTester>();
@@ -197,7 +197,7 @@ public class CardBoardInvariantChecker : MonoBehaviour
         if (player == null)
             return null;
 
-        if (player.Type == UserType.Human && PlayerUIManager.Instance != null)
+        if (LocalPlayerContext.IsMine(player) && PlayerUIManager.Instance != null)
             return PlayerUIManager.Instance.myGraveyardTransform;
 
         EnemyVisualTester tester = FindFirstObjectByType<EnemyVisualTester>();
@@ -206,7 +206,7 @@ public class CardBoardInvariantChecker : MonoBehaviour
 
     private static Transform ResolveHiddenPool(Player player)
     {
-        if (player != null && player.Type == UserType.Human && PlayerUIManager.Instance != null)
+        if (LocalPlayerContext.IsMine(player) && PlayerUIManager.Instance != null)
             return PlayerUIManager.Instance.HiddenPool;
 
         EnemyVisualTester tester = FindFirstObjectByType<EnemyVisualTester>();

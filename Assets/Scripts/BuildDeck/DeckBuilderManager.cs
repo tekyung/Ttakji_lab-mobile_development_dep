@@ -34,6 +34,12 @@ public class DeckBuilderManager : MonoBehaviour
 
     private string deckToDelete = "";
 
+    /// <summary>
+    /// 지금 편집 중인(= 파일에서 불러왔거나 방금 저장한) 덱 이름. 새 덱이면 비어 있다.
+    /// 저장 시 이 이름과 같으면 덮어쓰고, 다르면 이름 충돌로 보아 자동 번호를 붙인다.
+    /// </summary>
+    private string _editingDeckName = "";
+
     [Header("카드 확대 팝업")]
     public GameObject cardZoomPopup; // 팝업창
     public CardUI zoomedCardUI;
@@ -96,8 +102,8 @@ public class DeckBuilderManager : MonoBehaviour
         deckListDropdown.ClearOptions();
 
         // 2. 해당 폴더의 모든 .json 파일 경로를 가져옴
-        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
-        string[] filePaths = Directory.GetFiles(folderPath, "*.json");
+        string folderPath = DeckStorage.EnsureFolder();
+        string[] filePaths = DeckStorage.GetDeckFiles();
 
         Debug.Log("검색 중인 폴더 위치: " + folderPath);
         Debug.Log("발견된 JSON 파일 개수: " + filePaths.Length + "개");
@@ -217,6 +223,9 @@ public class DeckBuilderManager : MonoBehaviour
     // 카드 추가/제거 로직
     // ---------------------------------------------------
 
+    /// <summary>룰북 기본값 — 메인덱은 10종류 × 각 2장 = 20장이므로 카드당 상한은 2다.</summary>
+    private const int DEFAULT_MAX_COPIES = 2;
+
     public void AddCard(string id)
     {
         // 1. 전체 20장 제한 체크
@@ -226,15 +235,27 @@ public class DeckBuilderManager : MonoBehaviour
             return;
         }
 
-        // 2. 카드별 2장 제한 체크
-        int currentCount = myDeck.Count(x => x == id);
-        CardData data = CardDataManager.Instance.GetCard(id);
-
-        if (currentCount < data.max_deck_count)
+        CardData data = CardDataManager.Instance != null ? CardDataManager.Instance.GetCard(id) : null;
+        if (data == null)
         {
-            myDeck.Add(id);
-            RefreshAllUI(); // 화면 갱신
+            Debug.LogWarning($"[DeckBuilder] 카드 데이터를 찾을 수 없다: {id}");
+            return;
         }
+
+        // 2. 카드별 장수 제한 체크
+        // ★ JSON에 max_deck_count가 없으면 0으로 파싱돼 "0 < 0"이 되고,
+        //   추가 버튼이 아무 반응 없이 죽는다(실제로 그랬다). 값이 없으면 룰북 기본값으로 본다.
+        int maxCopies = data.max_deck_count > 0 ? data.max_deck_count : DEFAULT_MAX_COPIES;
+        int currentCount = myDeck.Count(x => x == id);
+
+        if (currentCount >= maxCopies)
+        {
+            Debug.Log($"[DeckBuilder] '{data.name}'은(는) 최대 {maxCopies}장까지만 넣을 수 있다.");
+            return;
+        }
+
+        myDeck.Add(id);
+        RefreshAllUI(); // 화면 갱신
     }
 
     public void RemoveCard(string id)
@@ -326,6 +347,9 @@ public class DeckBuilderManager : MonoBehaviour
         return myDeck;
     }
 
+    /// <summary>메인덱에 들어갈 수 있는 용병 테마 수. 룰북상 용병 2종을 골라 그 테마로만 덱을 짠다.</summary>
+    private const int MAX_DECK_CHARACTERS = 2;
+
     //저장 버튼 클릭
     public void OnClickSaveDeck()
     {
@@ -340,8 +364,38 @@ public class DeckBuilderManager : MonoBehaviour
             return;
         }
 
-        // 2. 20장이면 저장 진행
+        // 2. 용병 테마 체크 (2종까지)
+        //    카드당 장수는 강제하지 않는다 — 룰북은 2장씩이지만 현재 1장도 허용하는 방침이다.
+        List<string> characters = GetDeckCharacters();
+        if (characters.Count > MAX_DECK_CHARACTERS)
+        {
+            ShowMessagePopup(
+                $"용병은 최대 {MAX_DECK_CHARACTERS}종까지만 섞을 수 있습니다.\n" +
+                $"현재 {characters.Count}종: {string.Join(", ", characters)}");
+            Debug.Log($"저장 실패: 용병 {characters.Count}종 ({string.Join(", ", characters)})");
+            return;
+        }
+
+        // 3. 저장 진행
         SaveDeckToJson();
+    }
+
+    /// <summary>현재 덱에 들어 있는 용병 테마 목록 (카드의 characterId 기준).</summary>
+    private List<string> GetDeckCharacters()
+    {
+        var characters = new List<string>();
+        if (CardDataManager.Instance == null) return characters;
+
+        foreach (string id in myDeck)
+        {
+            CardData data = CardDataManager.Instance.GetCard(id);
+            string owner = data != null ? data.characterId : null;
+
+            if (!string.IsNullOrEmpty(owner) && !characters.Contains(owner))
+                characters.Add(owner);
+        }
+
+        return characters;
     }
 
     // JSON 저장
@@ -361,15 +415,19 @@ public class DeckBuilderManager : MonoBehaviour
         string json = JsonUtility.ToJson(data, true);
 
         // 저장할 경로, 이름 설정 (PC, 모바일 모두 작동하는 경로)
-        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
-        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath); // 폴더 없으면 생성
+        string folderPath = DeckStorage.EnsureFolder();
 
         string originalName = deckNameInput.text;
         string finalName = originalName;
         string fileName = finalName + ".json";
         string path = Path.Combine(folderPath, fileName);
 
-        if (File.Exists(path))
+        // ★ 지금 편집 중인 그 덱이면 덮어쓴다.
+        //   이 분기가 없으면 [덱 저장하기]를 누를 때마다 my_deck_1, _2, _3 … 이 새로 생긴다.
+        //   이름을 바꿔서 저장했는데 그게 '다른' 덱과 겹칠 때만 아래 자동 번호가 붙는다.
+        bool isOverwritingEditedDeck = File.Exists(path) && originalName == _editingDeckName;
+
+        if (File.Exists(path) && !isOverwritingEditedDeck)
         {
             string baseName = originalName;
             // 3-1. 이름 뒤에 이미 "_숫자"가 붙어있는지 분석 (예: "Deck_1")
@@ -420,7 +478,12 @@ public class DeckBuilderManager : MonoBehaviour
         // 파일 쓰기
         File.WriteAllText(path, json);
 
-        Debug.Log("저장 완료! 이름: " + fileName);
+        // 방금 저장한 덱이 이제 편집 대상이다. 이어서 또 저장하면 이 파일을 덮어쓴다
+        _editingDeckName = finalName;
+
+        Debug.Log(isOverwritingEditedDeck
+            ? $"저장 완료(덮어쓰기): {finalName}"
+            : $"저장 완료(새 덱): {finalName}");
 
         if (deckNameInput != null)
         {
@@ -437,7 +500,7 @@ public class DeckBuilderManager : MonoBehaviour
     bool LoadDeckFromJson(string fileName)
     {
         // 1. 경로 설정 (Assets 폴더 기준)
-        string path = Path.Combine(Application.dataPath, "MyDeck", fileName);
+        string path = DeckStorage.GetDeckPath(fileName);
 
         Debug.Log("파일 찾는 중: " + path);
 
@@ -458,10 +521,14 @@ public class DeckBuilderManager : MonoBehaviour
         myDeck = new List<string>(data.cardIdList);
 
         // 6. 덱 이름 입력칸도 파일 이름으로 맞춰주기 (확장자 .json 제거)
+        string loadedName = fileName.Replace(".json", "");
         if (deckNameInput != null)
         {
-            deckNameInput.text = fileName.Replace(".json", "");
+            deckNameInput.text = loadedName;
         }
+
+        // 이제부터 [덱 저장하기]는 이 덱을 덮어쓴다
+        _editingDeckName = loadedName;
 
         // 7. 화면 갱신 (중요!)
         RefreshAllUI();
@@ -501,15 +568,16 @@ public class DeckBuilderManager : MonoBehaviour
     public void OnConfirmDelete()
     {
         // 아까 기억해둔 이름으로 파일 경로 찾기
-        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
-        string fileName = deckToDelete + ".json";
-        string path = Path.Combine(folderPath, fileName);
+        string path = DeckStorage.GetDeckPath(deckToDelete);
 
         // 파일 삭제
         if (File.Exists(path))
         {
             File.Delete(path);
         }
+
+        // 편집 중이던 덱을 지웠다면 더 이상 덮어쓸 대상이 없다
+        if (_editingDeckName == deckToDelete) _editingDeckName = "";
 
         // 확인 팝업 닫기
         ClosePopup();
@@ -550,7 +618,7 @@ public class DeckBuilderManager : MonoBehaviour
         //if (deckNameInput != null) deckNameInput.text = "새 덱";  // 기존꺼
 
         // 2. [핵심] "새 덱" 이름 중복 검사 및 자동 번호 매기기
-        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
+        string folderPath = DeckStorage.EnsureFolder();
         string baseName = "새 덱";
         string finalName = baseName;
 
@@ -585,6 +653,9 @@ public class DeckBuilderManager : MonoBehaviour
 
         // 3. 결정된 이름을 입력칸에 넣기
         if (deckNameInput != null) deckNameInput.text = finalName;
+
+        // 아직 파일로 존재하지 않는 덱이다. 첫 저장은 새로 만드는 것이 맞다
+        _editingDeckName = "";
 
         RefreshAllUI();
 

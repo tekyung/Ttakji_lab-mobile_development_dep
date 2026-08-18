@@ -115,7 +115,19 @@ public class ServerGameManager : MonoBehaviour
     {
         _hostPlayer = host;
         _guestPlayer = guest;
-        _matchManager = new MatchManager(gamesToWin: 2, maxGames: 3);
+
+        // 판 수는 CommonConfig.json의 Bot_single_game을 따른다 (ConsoleRunner·BattleManager와 동일한 규칙).
+        // 룰북은 3판 2선승이지만 기획상 단판제를 유지 중이라, 온라인만 3판으로 돌면 안 된다.
+        int maxGames = 3;
+        int gamesToWin = 2;
+
+        if (GameRules.BotSingleGame == 1) // 단판제
+        {
+            maxGames = 1;
+            gamesToWin = 1;
+        }
+
+        _matchManager = new MatchManager(gamesToWin: gamesToWin, maxGames: maxGames);
         _currentGameIndex = 1;
 
         // 첫 게임 시작 전 덱 원본 스냅샷을 저장해 다음 게임 초기화에 재사용합니다.

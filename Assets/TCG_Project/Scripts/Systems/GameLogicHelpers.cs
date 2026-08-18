@@ -17,17 +17,28 @@ namespace TCG_Project.Scripts.Systems
         public const int NoTimeout = -1;
 
         /// <summary>
-        /// 입력 대기 제한 시간(밀리초)을 플레이어 유형에 따라 결정한다.
+        /// 사람 입력에 제한 시간을 두지 않을지 여부. 기본값은 <c>true</c>(로컬 플레이).
         ///
-        /// - Human: 제한 없음(<see cref="NoTimeout"/>). 사람은 얼마든지 생각할 수 있어야 한다.
+        /// ★ <b>온라인에서는 반드시 <c>false</c>여야 한다.</b>
+        ///   한쪽이 카드 선택 창을 닫지 않거나 접속이 끊기면 <b>양쪽 모두 영구 정지</b>한다.
+        ///   용병 능력·카드 선택 대기는 호스트 코루틴의 <c>WaitUntil(done || IsGameOver)</c>에 걸려 있는데,
+        ///   응답이 없으면 <c>done</c>도 <c>IsGameOver</c>도 되지 않기 때문이다.
+        ///
+        ///   전환은 <c>OnlineMatchStarter</c>가 매치 준비 시 자동으로 한다. 직접 만질 일은 거의 없다.
+        /// </summary>
+        public static bool AllowUnlimitedHumanInput { get; set; } = true;
+
+        /// <summary>
+        /// 입력 대기 제한 시간(밀리초)을 플레이어 유형과 <see cref="AllowUnlimitedHumanInput"/>에 따라 결정한다.
+        ///
+        /// - Human + 로컬: 제한 없음(<see cref="NoTimeout"/>). 사람은 얼마든지 생각할 수 있어야 한다
+        /// - Human + 온라인: <c>GameRules.ChooseWaitTime</c> — 상대를 무한정 기다리게 할 수 없다
         /// - Bot 및 그 외: <c>GameRules.ChooseWaitTime</c> (CommonConfig.json의 choose_wait_time)
-        ///
-        /// 온라인(사람 vs 사람)에서는 상대를 무한정 기다리게 할 수 없으므로 이 헬퍼를 쓰지 말고
-        /// 별도의 서버 제한 시간을 적용해야 한다.
         /// </summary>
         public static int GetChooseTimeoutMs(Player player)
         {
-            return player != null && player.Type == UserType.Human ? NoTimeout : GameRules.ChooseWaitTime;
+            bool isHuman = player != null && player.Type == UserType.Human;
+            return isHuman && AllowUnlimitedHumanInput ? NoTimeout : GameRules.ChooseWaitTime;
         }
 
         /// <summary>

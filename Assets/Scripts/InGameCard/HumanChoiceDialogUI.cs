@@ -199,7 +199,13 @@ public class HumanChoiceDialogUI : MonoBehaviour
         HidePanelImmediate();
     }
 
-    private static bool IsHuman(Player p) => p != null && p.Type == UserType.Human;
+    /// <summary>
+    /// 이 요청에 내가 답해야 하는가.
+    /// ★ 온라인은 호스트·게스트 둘 다 <c>UserType.Human</c>이라 사람 여부만 보면
+    ///   호스트 화면에 게스트에게 물어야 할 창이 뜨고 호스트가 대신 답해 버린다.
+    ///   판정은 <see cref="LocalPlayerContext"/>에 맡긴다.
+    /// </summary>
+    private static bool IsHuman(Player p) => LocalPlayerContext.IsMine(p);
 
     private void Enqueue(Request request)
     {

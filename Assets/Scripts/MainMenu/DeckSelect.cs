@@ -31,7 +31,7 @@ public class DeckSelector : MonoBehaviour
         List<string> options = new List<string>();
 
         // 2. 덱 폴더 경로 (DeckManager랑 똑같은 경로!)
-        string folderPath = Path.Combine(Application.dataPath, "MyDeck");
+        string folderPath = DeckStorage.EnsureFolder();
 
         if (!Directory.Exists(folderPath))
         {

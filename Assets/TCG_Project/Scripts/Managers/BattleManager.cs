@@ -80,14 +80,23 @@ public class BattleManager : MonoBehaviour
         CharacterFieldBroadcast.EmitSlotUpdate(owner, characterCardId);
     }
 
+    // ★ context는 로컬 매치를 시작해야(StartMatch) 만들어진다. Start()에서는 만들지 않는다.
+    //   온라인 대전 씬에는 이 매니저가 카드 데이터 제공자(CardData)로만 함께 올라가는데,
+    //   그때 매치를 끝내는 쪽은 ServerGameManager다. 가드가 없으면 그 OnGameSet에 얹혀
+    //   null 컨텍스트를 건드려 예외가 난다.
+
     private void HandleGameSet(Player winner)
     {
+        if (context == null) return; // 이 매니저가 돌리는 매치가 아니다
+
         _currentGameWinner = winner;
         context.IsGameOver = true;
     }
 
     private void HandleGameDraw(Player p1, Player p2, int turn)
     {
+        if (context == null) return; // 이 매니저가 돌리는 매치가 아니다
+
         context.IsGameOver = true;
     }
 

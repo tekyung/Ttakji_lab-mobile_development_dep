@@ -105,7 +105,7 @@ public class PlayerUIManager : MonoBehaviour
     {
         myDeckTransform = DeckGraveyardStackUI.EnsureDeckCardAnchor(myDeckTransform);
 
-        if (human == null || human.Type != UserType.Human || myCardPrefab == null)
+        if (!LocalPlayerContext.IsMine(human) || myCardPrefab == null)
             return;
 
         localPlayer = human;
@@ -126,7 +126,7 @@ public class PlayerUIManager : MonoBehaviour
 
     private void RefreshHumanStatus(Player human)
     {
-        if (human == null || human.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(human))
             return;
 
         HandleLifeChange(human, human.LifeTokens);
@@ -142,16 +142,13 @@ public class PlayerUIManager : MonoBehaviour
         ClearPendingSelection();
     }
 
+    /// <summary>
+    /// 이 클라이언트가 조작하는 플레이어(= 하단 보드 주인). 없으면 null(봇 vs 봇 관전).
+    /// 판정은 <see cref="LocalPlayerContext"/>가 맡는다 — 온라인은 양쪽 다 Human이라
+    /// <c>UserType</c>만으로는 가를 수 없기 때문이다.
+    /// </summary>
     public static Player ResolveHumanPlayer(Player p1, Player p2)
-    {
-        if (p1 != null && p1.Type == UserType.Human)
-            return p1;
-
-        if (p2 != null && p2.Type == UserType.Human)
-            return p2;
-
-        return null;
-    }
+        => LocalPlayerContext.ResolveMine(p1, p2);
 
     public bool CanPlaceCardInSetZone()
     {
@@ -198,22 +195,22 @@ public class PlayerUIManager : MonoBehaviour
 
     private void HandleLifeChange(Player player, int currentLife)
     {
-        if (player.Type == UserType.Human && myLifeText != null)
+        if (LocalPlayerContext.IsMine(player) && myLifeText != null)
             myLifeText.text = $"♥ : {currentLife}";
     }
 
     private void HandleResourceChange(Player player, int currentResource)
     {
-        if (player.Type == UserType.Human && myResourceText != null)
+        if (LocalPlayerContext.IsMine(player) && myResourceText != null)
             myResourceText.text = $"♣ : {currentResource}";
 
-        if (player.Type == UserType.Human)
+        if (LocalPlayerContext.IsMine(player))
             RefreshDeckCounts(player);
     }
 
     private void HandleCardDraw(Card card, Player owner, ZoneType sourceZone)
     {
-        if (owner == null || owner.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(owner))
             return;
 
         RefreshDeckCounts(owner);
@@ -221,7 +218,7 @@ public class PlayerUIManager : MonoBehaviour
 
     private void HandleCardMove(Card card, Player owner, ZoneType fromZone, Player target, ZoneType toZone)
     {
-        if (owner.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(owner))
             return;
 
         localPlayer = owner;
@@ -304,7 +301,7 @@ public class PlayerUIManager : MonoBehaviour
 
     private void HandleRequireSet(Player player, GameContext context, Action<Card> callback)
     {
-        if (player.Type != UserType.Human) return;
+        if (!LocalPlayerContext.IsMine(player)) return;
 
         // 새 세트 페이즈 시작 — 지난 턴의 잔상/흐림이 남아 있으면 정리한다
         ClearPendingSelection();
@@ -361,7 +358,7 @@ public class PlayerUIManager : MonoBehaviour
     /// <summary>엔진이 실제로 카드를 세트존에 올린 시점. 잔상을 지우고 진짜 카드에 자리를 넘긴다.</summary>
     private void HandleCardSet(Card card, Player owner)
     {
-        if (owner == null || owner.Type != UserType.Human) return;
+        if (!LocalPlayerContext.IsMine(owner)) return;
 
         DestroySetGhost();
 
@@ -507,7 +504,7 @@ public class PlayerUIManager : MonoBehaviour
 
     private void HandleRequireOpen(Player player, Card card, int cost, GameContext context, Action<OpenPhaseChoice> callback)
     {
-        if (player.Type != UserType.Human) return;
+        if (!LocalPlayerContext.IsMine(player)) return;
 
         callback.Invoke(pendingIsReveal ? OpenPhaseChoice.Open : OpenPhaseChoice.Abandon);
     }
@@ -558,7 +555,7 @@ public class PlayerUIManager : MonoBehaviour
 
     private void HandleCardStacked(Card card, Player player)
     {
-        if (player.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(player))
             return;
 
         SyncMyStack(player, null);
@@ -597,7 +594,7 @@ public class PlayerUIManager : MonoBehaviour
         if (localPlayer == null || card == null || !card.IsFaceUp)
             return;
 
-        if (localPlayer.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(localPlayer))
             return;
 
         if (!CardBoardRegistry.TryGet(card, out GameObject cardObj))
@@ -635,7 +632,7 @@ public class PlayerUIManager : MonoBehaviour
 
     public void SyncPhysicalStacks(Player owner, string skipLayoutInstanceId = null)
     {
-        if (owner == null || owner.Type != UserType.Human)
+        if (!LocalPlayerContext.IsMine(owner))
             return;
 
         DeckGraveyardStackUI.Sync(new DeckGraveyardSyncContext

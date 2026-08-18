@@ -99,7 +99,7 @@ public class EnemyVisualTester : MonoBehaviour
 
     private void RefreshBotStatus(Player player)
     {
-        if (player == null || player.Type != UserType.Bot)
+        if (!LocalPlayerContext.IsOpponent(player))
             return;
 
         HandleEnemyLifeChange(player, player.LifeTokens);
@@ -125,7 +125,7 @@ public class EnemyVisualTester : MonoBehaviour
 
     private void TryBuildBotPool(Player player)
     {
-        if (player == null || player.Type != UserType.Bot || cardFrontPrefab == null)
+        if (!LocalPlayerContext.IsOpponent(player) || cardFrontPrefab == null)
             return;
 
         var poolCards = new List<Card>();
@@ -184,7 +184,7 @@ public class EnemyVisualTester : MonoBehaviour
     {
         board = default;
 
-        if (player == null || player.Type != UserType.Bot)
+        if (!LocalPlayerContext.IsOpponent(player))
             return false;
 
         if (_p1 != null && player == _p1 && _p2 != null && _p1.Type == UserType.Bot && _p2.Type == UserType.Bot
@@ -404,7 +404,7 @@ public class EnemyVisualTester : MonoBehaviour
 
     private void TryRevealSetZoneCard(Player player, Card card)
     {
-        if (player == null || player.Type != UserType.Bot || player.SetZoneCard == null)
+        if (!LocalPlayerContext.IsOpponent(player) || player.SetZoneCard == null)
             return;
 
         if (!IsSameEngineCard(player.SetZoneCard, card))

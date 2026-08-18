@@ -286,7 +286,7 @@ public class session_manage : MonoBehaviour
       
         if (!string.IsNullOrEmpty(selectedName) && selectedName != "덱 없음" && selectedName != "덱이 없습니다.")
         {
-            string filePath = System.IO.Path.Combine(Application.dataPath, "MyDeck", selectedName + ".json");
+            string filePath = DeckStorage.GetDeckPath(selectedName);
 
             if (System.IO.File.Exists(filePath))
             {

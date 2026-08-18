@@ -33,8 +33,23 @@ public class LocalMatchStarter : MonoBehaviour
         "SONI-02", "SONI-03", "SONI-05", "SONI-06", "SONI-07"
     };
 
+    /// <summary>
+    /// 매칭을 거쳐 들어온 온라인 대전인지. `session_manage`가 매칭 성사 시 `GameData`를 채운다.
+    /// </summary>
+    public static bool IsOnlineSessionActive => !string.IsNullOrEmpty(GameData.SessionCode);
+
     private void Awake()
     {
+        // ★ 온라인 대전으로 진입한 경우에는 로컬 봇전이 절대 끼어들면 안 된다.
+        //   이 가드가 없으면 매칭이 성사돼 이 씬으로 넘어왔을 때 아래에서 session_game_manage를 꺼 버려
+        //   온라인 세션이 죽고 봇전이 자동 시작된다. (온라인 준비는 OnlineMatchStarter가 맡는다)
+        if (IsOnlineSessionActive)
+        {
+            enabled = false;
+            Debug.Log($"[LocalMatchStarter] 온라인 세션({GameData.SessionCode}) 진행 중 — 로컬 봇전을 시작하지 않는다.");
+            return;
+        }
+
         session_game_manage sessionGameManage = FindFirstObjectByType<session_game_manage>();
         if (sessionGameManage != null)
         {
@@ -45,6 +60,8 @@ public class LocalMatchStarter : MonoBehaviour
 
     private void Start()
     {
+        if (IsOnlineSessionActive) return;
+
         if (autoStart)
             StartCoroutine(StartMatchAfterBattleManagerReady());
     }
@@ -63,6 +80,10 @@ public class LocalMatchStarter : MonoBehaviour
         }
 
         _started = true;
+
+        // 로컬에서는 사람이 얼마든지 생각할 수 있어야 한다.
+        // 정적 값이라 앞선 온라인 매치(또는 도메인 리로드를 끈 에디터의 이전 플레이)의 설정이 남을 수 있어 명시적으로 되돌린다.
+        TCG_Project.Scripts.Systems.GameLogicHelpers.AllowUnlimitedHumanInput = true;
 
         PlayerSetupData p1Setup = BuildPlayerSetup(
             playerName: mode == LocalMatchMode.HumanVsBot ? "Player" : "Bot_Red",

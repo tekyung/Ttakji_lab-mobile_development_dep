@@ -43,7 +43,7 @@ public class MyHandManager : MonoBehaviour
         }
 
         // 2. 파일 경로 찾기 (MainDeckSelector랑 똑같은 경로!)
-        string filePath = Path.Combine(Application.dataPath, "MyDeck", deckName + ".json");
+        string filePath = DeckStorage.GetDeckPath(deckName);
 
         if (File.Exists(filePath))
         {

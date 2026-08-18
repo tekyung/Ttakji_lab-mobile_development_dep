@@ -374,12 +374,26 @@ public class GameStatusPanelUI : MonoBehaviour
     private void RestartMatch()
     {
         HideOverlay();
+
+        // 온라인 대전은 같은 세션으로 다시 들어가면 안 된다.
+        // 씬을 재로드하면 덱을 다시 올리고 이벤트 리스너를 다시 붙여 과거 이벤트가 전부 재생된다.
+        if (OnlineMatchStarter.IsOnlineSessionActive)
+        {
+            GoToMainMenu();
+            return;
+        }
+
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     private void GoToMainMenu()
     {
         HideOverlay();
+
+        // 온라인 매치를 떠나므로 세션 흔적을 지운다.
+        // 남겨 두면 같은 실행 안에서 로컬 봇전을 시작할 때 LocalMatchStarter가 계속 비켜선다.
+        OnlineMatchStarter.ClearSession();
+
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
