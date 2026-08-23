@@ -69,7 +69,11 @@ public class session_ui : MonoBehaviour
 
     public void UpdateStatus(string status) //세션상태업데이트
     {
-        session_status.text = status;
+        // ★ 이 텍스트는 'server ui' 디버그 화면에만 있다. 대전 씬에서는 비어 있는 것이 정상이므로
+        //   반드시 확인하고 쓴다. 게스트는 알림이 올 때마다 이 메서드를 타므로,
+        //   막지 않으면 첫 알림에서 NullReference로 진행이 끊긴다.
+        if (session_status != null) session_status.text = status;
+
         Debug.Log(status);
     }
 

@@ -4,16 +4,16 @@ using TMPro;
 
 public class RandomMatchUI : MonoBehaviour
 {
-    [Header("?? ?? ??")]
+    [Header("랜덤 매칭 팝업")]
     public GameObject popupRandomMatching;
 
-    [Header("?? ?? ?? ??")]
+    [Header("랜덤 매칭 성사 팝업")]
     public GameObject popupRandomMatched;
 
-    [Header("???")]
+    [Header("타이머")]
     public TMP_Text timerText;
 
-    [Header("?? ???")]
+    [Header("세션 매니저")]
     [SerializeField] private session_manage matchManager;
 
     private float timer = 0f;
@@ -54,7 +54,7 @@ public class RandomMatchUI : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[RandomMatchUI] matchManager? ???? ?????.");
+            Debug.LogError("[RandomMatchUI] matchManager가 연결되지 않았습니다.");
         }
     }
 
@@ -93,7 +93,7 @@ public class RandomMatchUI : MonoBehaviour
     private void HandleMatchedAndReady()
     {
         isMatching = false;
-        Debug.Log("?? ??!");
+        Debug.Log("매칭 성공!");
 
         if (popupRandomMatching != null)
             popupRandomMatching.SetActive(false);

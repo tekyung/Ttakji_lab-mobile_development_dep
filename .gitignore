@@ -14,6 +14,10 @@ obj/
 /[Mm]emoryCaptures/
 /[Uu]serSettings/
 
+# 유니티 크래시 복구본 — 에디터가 자동으로 남기는 씬 백업이라 소스가 아니다.
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+
 # Visual Studio 프로젝트 파일들
 *.csproj
 *.unityproj
