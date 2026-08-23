@@ -25,7 +25,7 @@ namespace TCG_Project.Scripts.Effects
     ///   shuffleAfter : bool (to:Deck 이후 ShuffleDeck 여부)
     ///   excludeSelf  : bool (ActivePlayer.PlayingCard 를 후보에서 제외 — ReturnFromDiscard 용)
     /// </summary>
-    public class MoveEffect : ICardEffect
+    public class MoveEffect : ICardEffect, IConditionalEffect
     {
         private ZoneType _from;
         private ZoneType _to;
@@ -36,7 +36,15 @@ namespace TCG_Project.Scripts.Effects
         private bool _excludeSelf = false;
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
-        private bool _isStrict = true; // 엄격 모드 or 최선 진행 모드 선택 (기본값은 가능한 실행)
+        /// <summary>
+        /// 100% 이행해야 성공인가.
+        ///
+        /// ★ 기본값은 false — <b>가능한 최대 이행</b>이 원칙이다.
+        ///   true는 "그 후," 연쇄의 <b>선행 조건 자리</b>일 때뿐이고,
+        ///   그 판단은 카드 구조를 아는 <see cref="Card"/>가 발동 직전에 내려 준다.
+        ///   (예전에는 존 조합을 보고 추측했는데, 같은 MoveEffect라도 카드마다 의미가 달라 맞지 않았다)
+        /// </summary>
+        public bool RequireFullExecution { get; set; } = false;
 
         private Dictionary<string, object> _cachedParams;
 
@@ -88,22 +96,58 @@ namespace TCG_Project.Scripts.Effects
                 IsStackAction = Convert.ToBoolean(isStackObj.ToString());
             }
 
-            // 엄격하게 지켜져야 하는가? 여부 ("그 후," 등)
-            if (parameters.ContainsKey("isStrict"))
-                _isStrict = Convert.ToBoolean(parameters["isStrict"]);
-            else
-            {
-                // JSON에 명시되지 않았을 때의 스마트 기본값:
-                // 드로우(Deck->Hand)이거나 전체 버리기(All)면 유연하게(false), 그 외(조건 지불 등)는 엄격하게(true)
-                if ((_from == ZoneType.Deck && _to == ZoneType.Hand) || _mode == SelectMode.All)
-                    _isStrict = false;
-                else
-                    _isStrict = true; 
-            }
+            // ★ 엄격성은 여기서 정하지 않는다.
+            //   "가능한 최대 이행"이 기본이고, 100% 이행이 필요한 자리인지는
+            //   뒤따르는 효과에 requirePreviousSuccess가 있는지로만 갈린다.
+            //   그건 카드 전체를 봐야 알 수 있으므로 Card.Play가 정해 준다.
         }
 
         // ★ 비동기(async void)로 전환하여 유저 선택 대기 지원
+        /// <summary>
+        /// 지금 이 이동을 요구 수량만큼 온전히 할 수 있는가. 상태는 건드리지 않는다.
+        /// </summary>
+        public bool CanFullySatisfy(GameContext context)
+        {
+            if (_mode == SelectMode.All) return true;   // "전부"는 0장이어도 논리적으로 성립한다
+            if (_count <= 0) return true;
+
+            Player self = context?.ActivePlayer;
+            if (self == null) return false;
+
+            var probe = new CardSelector
+            {
+                From = _from,
+                Owner = "Self",
+                Filter = _filter,
+                Count = _count,
+                Mode = SelectMode.All   // 후보 전체를 세기만 한다 (선택창을 띄우지 않는다)
+            };
+
+            int available = probe
+                .SelectCards(self, context.TargetPlayer, _excludeSelf ? self.PlayingCard : null)
+                .Count;
+
+            return available >= _count;
+        }
+
         public async void Execute(GameContext context, Action onComplete)
+        {
+            // async void라 여기서 예외가 나면 조용히 삼켜지고 onComplete가 영영 불리지 않는다.
+            // 호출부는 WaitUntil(effectDone)으로 기다리므로 그대로 게임이 멈춘다.
+            // 그래서 무슨 일이 있어도 콜백은 반드시 돌려준다.
+            try
+            {
+                await ExecuteInternal(context, onComplete);
+            }
+            catch (Exception e)
+            {
+                EventManager.OnLogMessage?.Invoke($"  [효과 오류] {_from}→{_to} 처리 중 예외: {e.Message}");
+                if (context != null) context.LastEffectSucceeded = false;
+                onComplete?.Invoke();
+            }
+        }
+
+        private async Task ExecuteInternal(GameContext context, Action onComplete)
         {
             Player self = context.ActivePlayer;
             Player opponent = context.TargetPlayer;
@@ -134,15 +178,21 @@ namespace TCG_Project.Scripts.Effects
                 else if (self.Type == UserType.Bot)
                 {
                     // 🤖 봇: 랜덤하게 N장 즉시 선택
-                    finalSelected = candidates.OrderBy(c => Guid.NewGuid()).Take(_count).ToList();
+                    // 후보가 모자라면 있는 만큼만 고른다
+                    finalSelected = candidates.OrderBy(c => Guid.NewGuid())
+                                              .Take(Math.Min(_count, candidates.Count)).ToList();
                     EventManager.OnLogMessage?.Invoke($" 🤖 [Bot AI] {self.Name}: {_from}에서 {finalSelected.Count}장 자동 선택");
                 }
                 else
                 {
                     // 👤 사람: 비동기 타임아웃 선택
+                    // 후보보다 많이 요구하지 않는다. 100% 이행이 필요한 자리라면
+                    // 애초에 Card.Play의 선행 조건 검사에서 걸러져 여기까지 오지 않는다.
+                    int askFor = Math.Min(_count, candidates.Count);
+
                     var result = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<List<Card>>(
-                        cb => EventManager.OnRequireCardPick?.Invoke(self, candidates, _count, cb),
-                        () => candidates.OrderBy(c => Guid.NewGuid()).Take(_count).ToList(), // 타임아웃 시 랜덤
+                        cb => EventManager.OnRequireCardPick?.Invoke(self, candidates, askFor, default, cb),
+                        () => candidates.OrderBy(c => Guid.NewGuid()).Take(askFor).ToList(), // 타임아웃 시 랜덤
                         GameLogicHelpers.GetChooseTimeoutMs(self)
                     );
                     finalSelected = result ?? new List<Card>();
@@ -156,24 +206,26 @@ namespace TCG_Project.Scripts.Effects
                 finalSelected = selector.SelectCards(self, opponent, exclude);
             }
 
-            // 3. 엄격성 검사
+            // 3. 이행 정도 판정
+            //
+            //  · 선행 조건 자리(RequireFullExecution) → 100%가 아니면 실패. 뒷 효과까지 불발시킨다.
+            //    정상 경로라면 Card.Play가 미리 걸러 내므로 여기 오는 건 예외적인 경우다.
+            //  · 그 외                                → 가능한 만큼 했으면 그것으로 성공이다.
             bool isAllMode = _mode == SelectMode.All;
-            if (!isAllMode)
+
+            if (RequireFullExecution && !isAllMode && finalSelected.Count < _count)
             {
-                if (_isStrict && finalSelected.Count < _count)
-                {
-                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에 카드가 부족합니다. (요구: {_count}, 현재: {finalSelected.Count})");
-                    context.LastEffectSucceeded = false;
-                    onComplete?.Invoke();
-                    return;
-                }
-                else if (finalSelected.Count == 0 && _count > 0)
-                {
-                    EventManager.OnLogMessage?.Invoke($"  [효과 실패] {_from}에서 이동할 카드가 없습니다.");
-                    context.LastEffectSucceeded = false;
-                    onComplete?.Invoke();
-                    return;
-                }
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [효과 실패] {_from}에 카드가 부족합니다. (요구: {_count}, 현재: {finalSelected.Count})");
+                context.LastEffectSucceeded = false;
+                onComplete?.Invoke();
+                return;
+            }
+
+            if (!isAllMode && finalSelected.Count < _count)
+            {
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [부분 이행] {_from}에서 {finalSelected.Count}장만 이동합니다. (요구: {_count})");
             }
 
             // 4. 실제 이동 처리

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
@@ -18,5 +18,26 @@ public class CardData
     public class CardDataWrapper
     {
         public List<CardData> Card;
+    }
+}
+
+/// <summary>
+/// 용병(캐릭터) 카드. Character.json에서 읽는다.
+/// 덱 편집 화면의 용병 슬롯이 이름·그림을 보여 주려면 필요하다
+/// (RulebookCards.json에는 효과 카드 40종만 있고 용병 카드는 없다).
+/// </summary>
+[System.Serializable]
+public class CharacterData
+{
+    public string id;           // "ELLI-01"
+    public string characterId;  // "ELLIE" — 효과 카드의 characterId와 이걸로 짝짓는다
+    public string name;
+    public string description;
+    public string imagePath;
+
+    [System.Serializable]
+    public class CharacterDataWrapper
+    {
+        public List<CharacterData> Characters;
     }
 }

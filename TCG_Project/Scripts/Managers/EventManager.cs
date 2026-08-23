@@ -9,6 +9,32 @@ namespace TCG_Project.Scripts.Managers
     /// 게임 로직은 Unity/UI를 직접 호출하지 않고 이 클래스의 이벤트를 통해 방송한다.
     /// UI(또는 ConsoleRunner)는 이벤트를 구독하여 반응한다.
     /// </summary>
+    /// <summary>
+    /// 카드 선택 요청의 성격. 문구만 단단히 넘기던 것을 구조체로 묶었다
+    /// — 앞으로 항목이 늘어도 이벤트 시그니처를 다시 손대지 않기 위해서다.
+    ///
+    /// 유니티 의존이 없는 순수 구조체라 콘솔·강화학습 빌드에도 그대로 올라간다.
+    /// </summary>
+    public readonly struct CardPickPrompt
+    {
+        /// <summary>선택창에 띄울 문구. 비어 두면 수신쪽이 기본 문구를 만든다.</summary>
+        public string Message { get; }
+
+        /// <summary>
+        /// true면 <b>고르는 순서가 결과를 바꿘다</b>(베로니카의 되돌리기 순서).
+        /// UI는 이때만 선택 카드에 1·2·… 번호를 띄운다.
+        /// '패 3장 버리기'처럼 순서가 무의미한 요청에 번호를 띄우면
+        /// "순서가 중요한가?"라는 오해를 주므로 기본값은 false다.
+        /// </summary>
+        public bool Ordered { get; }
+
+        public CardPickPrompt(string message, bool ordered = false)
+        {
+            Message = message;
+            Ordered = ordered;
+        }
+    }
+
     public static class EventManager
     {
         // ─── 1. 디버깅 / 로그 ──────────────────────────────────────────────────
@@ -151,8 +177,11 @@ namespace TCG_Project.Scripts.Managers
         /// <summary>
         /// 제시된 카드 목록에서 선택: "이 목록 중 N장을 선택해 주세요" 요청.
         /// 예: VERONICA 덱 탑 3장 중 1장 선택.
+        ///
+        /// 네 번째 인자는 요청의 성격을 담는 <see cref="CardPickPrompt"/>다.
+        /// <c>default</c>를 넘기면 수신쪽이 기본 문구를 만든다(예전 동작).
         /// </summary>
-        public static Action<Player, List<Card>, int, Action<List<Card>>> OnRequireCardPick;
+        public static Action<Player, List<Card>, int, CardPickPrompt, Action<List<Card>>> OnRequireCardPick;
 
         /// <summary>
         /// 존에서 카드 선택: "이 존에서 조건에 맞는 카드 N장을 선택해 주세요" 요청.

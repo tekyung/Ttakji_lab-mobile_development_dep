@@ -107,6 +107,7 @@ namespace ServerScripts.EventScripts
         public string[] PresentedCardDataIds;     // 화면 표시용 카드 데이터 ID들
         public int RequiredCount;                 // 몇 장을 골라야 하는지
         public string Message;                    // 예: "카드 1장을 선택하세요."
+        public bool Ordered;                      // true면 고르는 순서가 결과를 바꾸는 요청(베로니카)
     }
 
     // 예시: 서버가 선택적 행동(예/아니오)을 요구할 때 보내는 DTO
@@ -182,6 +183,10 @@ namespace ServerScripts.EventScripts
     {
         public string Character1_ID;    
         public string Character2_ID;   
+
+        /// <summary>이미 고유 능력을 쓴 용병 카드 ID들.
+        /// 상대 화면에서 용병 카드를 180도 돌려 "사용함"을 표시하는 근거다.</summary>
+        public string[] UsedCharacterCardIds;
         public int LifeToken;           
         
         public int DeckCount;         // 메인덱 장수 (20장 시작)

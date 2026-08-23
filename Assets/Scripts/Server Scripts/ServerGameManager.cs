@@ -42,6 +42,12 @@ public class ServerGameManager : MonoBehaviour
     private List<Card> _hostResourceDeckTemplate = new List<Card>();
     private List<Card> _guestMainDeckTemplate = new List<Card>();
     private List<Card> _guestResourceDeckTemplate = new List<Card>();
+    /// <summary>응답을 기다리는 '폐기 시 발동' 용병 능력 수 (다이나).</summary>
+    private int _pendingAbandonAbilities = 0;
+
+    /// <summary>응답을 기다리는 자원페이즈 전장 기동 효과 수 (ELLI-11).</summary>
+    private int _pendingBattlefieldEffects = 0;
+
     private bool _isResolvingGameOver = false;
     private bool _hasRecordedCurrentGameResult = false;
     private int _currentGameIndex = 0;
@@ -76,6 +82,25 @@ public class ServerGameManager : MonoBehaviour
     private void HandleLogMessage(string msg)
     {
         Debug.Log(msg);
+    }
+
+    /// <summary>
+    /// UI의 [항복] 버튼용(호스트 전용). 항복한 쪽의 상대를 승자로 확정하고 게임을 끝낸다.
+    ///
+    /// OnGameSet을 발행하면 <see cref="HandleGameSet"/>가 결과를 확정하고
+    /// HandleGameOverFlow가 board_state 동기화까지 처리한다 (BattleManager와 같은 모양).
+    /// 게스트의 항복은 GameSetRequest로 들어와 EventService가 같은 곳으로 모인다.
+    /// </summary>
+    public void SurrenderBy(Player quitter)
+    {
+        if (quitter == null || context == null || context.IsGameOver) return;
+
+        Player winner = context.Players.Find(p => p != null && !ReferenceEquals(p, quitter));
+        if (winner == null) return;
+
+        EventManager.OnLogMessage?.Invoke(
+            $"<color=red>[항복] {quitter.Name}이(가) 항복했습니다. {winner.Name} 승리.</color>");
+        EventManager.OnGameSet?.Invoke(winner);
     }
 
     private void HandleGameSet(Player winner)
@@ -292,10 +317,17 @@ public class ServerGameManager : MonoBehaviour
         switch (phase)
         {
             case GamePhase.ResourcePhase:
-                ExecuteResourcePhaseRoutine();
-                // ResourcePhase 결과가 반영된 board_state를 먼저 동기화한 뒤 DrawPhase로 넘어갑니다.
-                StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.DrawPhase));
+            {
+                // 전장 기동 효과(ELLI-11)가 사람에게 예/아니오를 묻으므로 코루틴으로 기다린다.
+                System.Collections.IEnumerator ResourcePhaseThenSyncToDraw()
+                {
+                    yield return StartCoroutine(ExecuteResourcePhaseRoutine());
+                    // ResourcePhase 결과가 반영된 board_state를 먼저 동기화한 뒤 DrawPhase로 넘어갑니다.
+                    yield return StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.DrawPhase));
+                }
+                StartCoroutine(ResourcePhaseThenSyncToDraw());
                 break;
+            }
 
             case GamePhase.DrawPhase:
             {
@@ -334,7 +366,7 @@ public class ServerGameManager : MonoBehaviour
     // ==========================================================
     //  클라이언트 응답 수신부 (EventService에서 호출됨)
     // ==========================================================
-    private void ExecuteResourcePhaseRoutine() //동기화
+    private System.Collections.IEnumerator ExecuteResourcePhaseRoutine() //동기화
     {
         Player p1 = context.Players[0];
         Player p2 = context.Players[1];
@@ -354,13 +386,39 @@ public class ServerGameManager : MonoBehaviour
         context.TargetPlayer = p2;
         p1.TakeResourceCard();
 
-        bool p1PhaseCut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context);
-        if (p1PhaseCut || context.IsGameOver) return;
+        _pendingBattlefieldEffects = 0;
+
+        bool p1PhaseCut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(
+            p1, context, out int p1Started, () => _pendingBattlefieldEffects--);
+        _pendingBattlefieldEffects += p1Started;
+        yield return WaitForBattlefieldEffects();
+        if (p1PhaseCut || context.IsGameOver) yield break;
 
         context.ActivePlayer = p2;
         context.TargetPlayer = p1;
         p2.TakeResourceCard();
-        GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context);
+
+        GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(
+            p2, context, out int p2Started, () => _pendingBattlefieldEffects--);
+        _pendingBattlefieldEffects += p2Started;
+        yield return WaitForBattlefieldEffects();
+    }
+
+    /// <summary>
+    /// 전장 기동 효과의 응답을 자원 페이즈 안에서 받는다.
+    /// 응답이 안 와도 게임이 멈추지 않도록 상한을 둔다.
+    /// </summary>
+    private System.Collections.IEnumerator WaitForBattlefieldEffects()
+    {
+        float waited = 0f;
+        float limit = GameRules.ChooseWaitTime / 1000f;
+        while (_pendingBattlefieldEffects > 0 && waited < limit
+               && context != null && !context.IsGameOver)
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+        _pendingBattlefieldEffects = 0;
     }
 
     
@@ -626,6 +684,18 @@ public class ServerGameManager : MonoBehaviour
         _p2RevealedCard = ApplyOpenChoice(context.Players[1], p2Choice, p2Cost);
         context.OpenPhaseStates[context.Players[1].Name] = new PlayerOpenPhaseState{HasOpened = (_p2RevealedCard != null),RevealedCard = _p2RevealedCard};
 
+        // 폐기 시 발동 능력(다이나)의 응답을 이 페이즈 안에서 받는다.
+        // 상한을 두어 응답이 없어도 게임이 멈추지는 않게 한다.
+        float abandonWait = 0f;
+        float abandonLimit = GameRules.ChooseWaitTime / 1000f;
+        while (_pendingAbandonAbilities > 0 && abandonWait < abandonLimit
+               && context != null && !context.IsGameOver)
+        {
+            abandonWait += Time.deltaTime;
+            yield return null;
+        }
+        _pendingAbandonAbilities = 0;
+
         yield return new WaitForSeconds(ActionDelay);
         StartCoroutine(SyncBoardStateThenStartPhase(GamePhase.MainPhase));
     }
@@ -716,12 +786,18 @@ public class ServerGameManager : MonoBehaviour
             player.AbandonSetCard();
             GameLogicHelpers.DrawCards(player, 1, context);
 
+    // ★ 다이나 능력(폐기 시 라이프 +1)은 사람에게 예/아니오를 묻는 **비동기** 훅이다.
+    //   예전에는 "즉발 효과라 대기 불필요"라며 던져 놓고 바로 다음으로 넘어갔는데,
+    //   그건 묻지 않고 즉시 회복하던 구버전 기준의 주석이었다.
+    //   그대로 두면 오픈 페이즈가 먼저 끝나 버려 라이프 회복이 메인 페이즈 도중에 적용된다
+    //   (그 사이에 데미지를 맞으면 회복 전에 죽을 수 있다).
+    //   그래서 발동한 능력 수를 세고, 오픈 페이즈가 그 응답을 기다린다.
             foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
             {
-                if (ability.CanUse(player, context))
-                {
-                    ability.OnOpenPhaseAbandon(player, context, _ => { });
-                }
+                if (!ability.CanUse(player, context)) continue;
+
+                _pendingAbandonAbilities++;
+                ability.OnOpenPhaseAbandon(player, context, _ => _pendingAbandonAbilities--);
             }
             return null;
         }
@@ -914,6 +990,20 @@ public class ServerGameManager : MonoBehaviour
 
         if (incomingHits == 0) yield break;
 
+        // ★ 불발될 카드에는 스택을 소진하지 않는다.
+        //   "그 후," 선행 조건을 못 채우면 카드 전체가 불발인데(Card.Play),
+        //   스택 발동은 그보다 먼저 일어나 상대 방어 카드만 태워 버렸다.
+        //
+        //   ⚠️ 이 시점엔 cardPlayer.PlayingCard가 아직 설정되기 전이라,
+        //   excludeSelf를 쓰는 효과는 후보를 한 장 더 세게 된다.
+        //   즉 관대한 쪽으로만 틀린다 — "멀짱한 공격인데 스택을 안 태우는" 일은 없다.
+        if (!playedCard.WillResolve(context))
+        {
+            EventManager.OnLogMessage?.Invoke(
+                $"  [스택 보류] '{playedCard.Name}'은(는) 불발될 카드라 스택을 발동하지 않습니다.");
+            yield break;
+        }
+
         List<Card> validStackCards = new List<Card>();
         foreach (var stackCard in stackOwner.StackZone)
         {
@@ -955,7 +1045,7 @@ public class ServerGameManager : MonoBehaviour
             bool done = false;
             bool timeOutOccurred = false;
 
-            EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, chosenCards =>
+            EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, default, chosenCards =>
             {
                 if (timeOutOccurred) return;
                 selectedCards = chosenCards ?? new List<Card>();

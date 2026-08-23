@@ -89,7 +89,84 @@ namespace TCG_Project.Scripts.Core
             string triggerType = isStackTrigger ? "[스택 발동]" : "[오픈 즉발]"; // 로그 메시지에 트리거 유형 명시
             EventManager.OnLogMessage?.Invoke($"--- {triggerType} {Name} / Cost:{Cost} / {Description} ---");
 
+            // ★ 이행 원칙을 카드 구조에서 결정한다 (효과 하나만 봐서는 알 수 없다)
+            ApplyExecutionPolicy();
+
+            // ★ "그 후," 카드의 선행 조건은 100% 이행할 수 있어야 한다.
+            //   못 하면 **화면을 띄우기도 전에** 카드 전체가 불발이다.
+            //   (예전에는 일단 선택창을 띄우고 고르게 한 뒤 실패시켰다 —
+            //    베로니카 "계획대로"를 패 2장으로 쓰면 3장을 요구하는 창이 떠 진행이 막혔다)
+            if (!CanSatisfyPreconditions(context, out string blockedBy))
+            {
+                EventManager.OnLogMessage?.Invoke(
+                    $"    🚫 [불발] '{Name}' — 선행 조건을 만족할 수 없어 카드 효과가 발동하지 않습니다. ({blockedBy})");
+                context.LastEffectSucceeded = false;
+                onPlayComplete?.Invoke();
+                return;
+            }
+
             ExecuteEffectsSequentially(0, context, onPlayComplete, isStackTrigger);
+        }
+
+        /// <summary>
+        /// index 자리의 효과가 뒤따르는 "그 후," 효과의 <b>선행 조건</b>인가.
+        /// </summary>
+        private bool IsPreconditionAt(int index)
+            => index + 1 < Effects.Count
+               && Effects[index + 1] != null
+               && Effects[index + 1].RequirePreviousSuccess;
+
+        /// <summary>
+        /// 각 효과에 "100% 이행이 필요한가"를 알려 준다.
+        ///
+        /// 판단 기준은 <b>오직 requirePreviousSuccess의 유무</b>다 —
+        /// 그 앞자리면 100% 이행이 조건이고, 나머지는 전부 가능한 최대 이행이다.
+        /// </summary>
+        private void ApplyExecutionPolicy()
+        {
+            for (int i = 0; i < Effects.Count; i++)
+            {
+                if (Effects[i] is IConditionalEffect conditional)
+                    conditional.RequireFullExecution = IsPreconditionAt(i);
+            }
+        }
+
+        /// <summary>
+        /// 지금 발동하면 이 카드의 효과가 실제로 적용되는가.
+        /// "그 후," 선행 조건을 만족하지 못하면 카드는 통째로 불발이므로 false다.
+        ///
+        /// 발동 전에 "이 공격이 정말 유효한가"를 물어야 하는 곳이 쓴다
+        /// — 스택 방어 카드를 태우기 전에 반드시 확인해야 한다.
+        /// </summary>
+        public bool WillResolve(GameContext context) => CanSatisfyPreconditions(context, out _);
+
+        /// <summary>
+        /// 선행 조건 자리의 효과들을 지금 100% 이행할 수 있는지 미리 본다. 상태는 바꾸지 않는다.
+        ///
+        /// ⚠️ 발동 시점 기준이라, 앞선 효과가 상태를 바꾼 뒤에야 판정할 수 있는 선행 조건
+        ///   (= 선행 조건이 첫 효과가 아닌 카드)까지는 완전히 보지 못한다.
+        ///   현재 룰북 40종은 모두 선행 조건이 첫 효과라 문제가 없고,
+        ///   그런 카드가 생기면 <see cref="ExecuteEffectsSequentially"/>의 런타임 검사가 받아 준다.
+        /// </summary>
+        private bool CanSatisfyPreconditions(GameContext context, out string blockedBy)
+        {
+            blockedBy = null;
+
+            for (int i = 0; i < Effects.Count; i++)
+            {
+                if (!IsPreconditionAt(i)) continue;
+
+                // ⚠️ 스택 카드는 트리거 종류에 따라 일부 효과만 실행되는데, 여기서는 그걸 가리지 않는다.
+                //   현재 룰북에 requirePreviousSuccess를 쓰는 스택 카드가 없어 문제가 없지만,
+                //   생기면 트리거(isStackTrigger)까지 보고 걸러야 한다.
+                if (Effects[i] is IConditionalEffect conditional && !conditional.CanFullySatisfy(context))
+                {
+                    blockedBy = $"{i + 1}번째 효과";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         // ★ 효과를 1번부터 순서대로 끝날 때까지 기다리며 실행하는 릴레이 함수

@@ -115,8 +115,19 @@ namespace TCG_Project.Scripts.Systems
         /// <summary>
         /// 자원 페이즈: 전장 카드의 자원페이즈 기동 효과 적용 (ELLI-11 무작위 노획 등)
         /// </summary>
-        public static bool ApplyBattlefieldResourcePhaseEffects(Player p, GameContext ctx)
+        /// <param name="startedCount">
+        /// 이번 호출에서 실제로 발동시킨 기동 효과 수. 호출부는 이 수만큼
+        /// <paramref name="onEffectDone"/>가 불리길 기대하고 대기하면 된다.
+        /// </param>
+        /// <param name="onEffectDone">
+        /// 기동 효과 하나가 끝났을 때 불린다. ELLI-11처럼 사람에게 예/아니오를 묻는
+        /// 효과는 응답이 돌아오기 전에 이 함수가 먼저 반환된다.
+        /// 기다리지 않으면 회수 카드가 다음 페이즈 도중에 들어온다.
+        /// </param>
+        public static bool ApplyBattlefieldResourcePhaseEffects(
+            Player p, GameContext ctx, out int startedCount, Action onEffectDone = null)
         {
+            startedCount = 0;
             if (p.BattlefieldCard == null) return false;
 
             foreach (var eff in p.BattlefieldCard.Effects)
@@ -128,13 +139,19 @@ namespace TCG_Project.Scripts.Systems
                     ctx.TargetPlayer = ctx.GetOpponent(p);
                     ctx.LastEffectSucceeded = true;
 
-                    // 기동 효과는 1회성 스탯이 아니라 실제 카드 이동/효과이므로 정상 실행
-                    bf.PerResourcePhaseEffect.Execute(ctx, () => { });
+                    startedCount++;
+                    bf.PerResourcePhaseEffect.Execute(ctx, () => onEffectDone?.Invoke());
                     if (ctx.IsGameOver) return true;
                 }
             }
             return false;
         }
+
+        /// <summary>
+        /// 대기가 필요 없는 호출부(봇 전용 콘솔 러너 등)를 위한 편의 오버로드.
+        /// </summary>
+        public static bool ApplyBattlefieldResourcePhaseEffects(Player p, GameContext ctx)
+            => ApplyBattlefieldResourcePhaseEffects(p, ctx, out _, null);
 
         /// <summary>
         /// 덱에서 패로 N장 드로우. OnCardDraw 및 OnCardMove 이벤트 발행.

@@ -136,8 +136,14 @@ public class GameStatusPanelUI : MonoBehaviour
 
     // ─── 이벤트 핸들러 ──────────────────────────────────────────────────
 
+    private Player _p1;
+    private Player _p2;
+
     private void HandleGameStart(Player p1, Player p2)
     {
+        _p1 = p1;
+        _p2 = p2;
+
         EnsureUI();
         _logLines.Clear();
         if (_logText != null) _logText.text = "";
@@ -198,7 +204,7 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void HandleRequireSetTimer(Player p, GameContext c, Action<Card> cb) => StartInputTimer(p, "세트");
     private void HandleRequireOpenTimer(Player p, Card card, int cost, GameContext c, Action<OpenPhaseChoice> cb) => StartInputTimer(p, "공개/폐기");
-    private void HandleRequireCardPickTimer(Player p, List<Card> cards, int count, Action<List<Card>> cb) => StartInputTimer(p, "카드 선택");
+    private void HandleRequireCardPickTimer(Player p, List<Card> cards, int count, CardPickPrompt prompt, Action<List<Card>> cb) => StartInputTimer(p, "카드 선택");
     private void HandleRequireOptionalTimer(Player p, string msg, GameContext c, Action<bool> cb) => StartInputTimer(p, "선택");
     private void HandleCardSetTimer(Card card, Player owner)
     {
@@ -298,8 +304,20 @@ public class GameStatusPanelUI : MonoBehaviour
     private void HandleMatchDraw(Player p1, Player p2) =>
         ShowOverlay("매치 무승부", "", drawColor);
 
-    private static Player ResolveHuman()
+    /// <summary>
+    /// 이 화면의 주인(= 승패를 판정할 기준 플레이어).
+    ///
+    /// ★ 예전에는 <c>BattleManager.HumanPlayer</c>를 봤는데, 온라인에서는 BattleManager가
+    ///   매치를 돌리지 않으므로 **항상 null**이었다. 그 결과 이긴 쪽에도 "매치 패배"가,
+    ///   게스트에는 "게임 종료"가 떴다(승패 판정이 통째로 무너진 상태였다).
+    ///   지금은 매치 시작 때 받은 두 플레이어에서 LocalPlayerContext로 고른다.
+    /// </summary>
+    private Player ResolveHuman()
     {
+        Player mine = LocalPlayerContext.ResolveMine(_p1, _p2);
+        if (mine != null) return mine;
+
+        // 로컬 봇전 등 조작 주체가 없을 때의 폴백
         return BattleManager.Instance != null ? BattleManager.Instance.HumanPlayer : null;
     }
 

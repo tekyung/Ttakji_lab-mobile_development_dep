@@ -58,7 +58,7 @@ namespace TCG_Project.Scripts.Abilities
             else
             {
                 var selectedList = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<System.Collections.Generic.List<Card>>(
-                    cb => EventManager.OnRequireCardPick?.Invoke(me, validCards, 1, cb),
+                    cb => EventManager.OnRequireCardPick?.Invoke(me, validCards, 1, default, cb),
                     () => new System.Collections.Generic.List<Card> { validCards.OrderBy(c => Guid.NewGuid()).First() },
                     GameLogicHelpers.GetChooseTimeoutMs(me)
                 );
@@ -134,7 +134,7 @@ namespace TCG_Project.Scripts.Abilities
             }
             else
             {
-                EventManager.OnRequireCardPick?.Invoke(me, validCards, 1, cards =>
+                EventManager.OnRequireCardPick?.Invoke(me, validCards, 1, default, cards =>
                 {
                     doRecover(cards?.FirstOrDefault());
                 });

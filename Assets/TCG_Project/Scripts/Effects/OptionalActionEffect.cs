@@ -16,6 +16,12 @@ namespace TCG_Project.Scripts.Effects
     {
         public string Description { get; private set; }
         public ICardEffect ActionToPerform { get; private set; } // Yes 시 수행할 실제 효과 (예: 덱 4장 폐기)
+
+        /// <summary>
+        /// 질문하기 전에 검사하는 선행 조건. false면 묻지 않고 실패로 넘어간다. (null 가능)
+        /// 얻을 것이 없는데 매 턴 팝업을 띄우는 걸 막는다 (ELLI-11 폐기존이 비어 있는 경우).
+        /// </summary>
+        public Func<GameContext, bool> Precondition { get; set; }
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
         public void Initialize(Dictionary<string, object> parameters)
@@ -38,6 +44,15 @@ namespace TCG_Project.Scripts.Effects
         public void Execute(GameContext context, Action onComplete)
         {
             Player me = context.ActivePlayer;
+
+            // 선행 조건 미충족이면 아예 묻지 않는다.
+            if (Precondition != null && !Precondition(context))
+            {
+                EventManager.OnLogMessage?.Invoke($"  ▶ [{me?.Name}] '{Description}' — 대상이 없어 건너뜁니다.");
+                context.LastEffectSucceeded = false;
+                onComplete?.Invoke();
+                return;
+            }
 
             // 플레이어의 선택을 처리하는 로컬 콜백 함수
             Action<bool> handleChoice = (choice) =>
@@ -89,6 +104,7 @@ namespace TCG_Project.Scripts.Effects
             {
                 Description = this.Description,
                 ActionToPerform = this.ActionToPerform?.Clone(),
+                Precondition = this.Precondition,
                 RequirePreviousSuccess = this.RequirePreviousSuccess,
                 IsStackAction = this.IsStackAction
             };

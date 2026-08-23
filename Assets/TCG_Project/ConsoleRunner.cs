@@ -727,6 +727,16 @@ namespace TCG_Project
             // 데미지가 없는 카드라면 스택을 아낍니다.
             if (incomingHits == 0) return;
 
+            // ★ 불발될 카드에는 스택을 소진하지 않는다.
+            //   "그 후," 선행 조건을 못 채우면 카드 전체가 불발인데(Card.Play),
+            //   스택 발동은 그보다 먼저 일어나 상대 방어 카드만 태워 버렸다.
+            if (!playedCard.WillResolve(context))
+            {
+                EventManager.OnLogMessage?.Invoke(
+                    $"  [스택 보류] '{playedCard.Name}'은(는) 불발될 카드라 스택을 발동하지 않습니다.");
+                return;
+            }
+
             // 2. 발동 "가능한" 방어 카드 모두 추리기 (수집)
             List<Card> validStackCards = new List<Card>();
             foreach (var stackCard in stackOwner.StackZone)

@@ -52,9 +52,10 @@ namespace TCG_Project.Scripts.UI
 
         private void HandleCardPick(
             Player player, List<Card> candidates, int count,
-            Action<List<Card>> onPicked)
+            CardPickPrompt prompt, Action<List<Card>> onPicked)
         {
-            Open("카드를 선택하세요", candidates, count, onPicked);
+            Open(string.IsNullOrWhiteSpace(prompt.Message) ? "카드를 선택하세요" : prompt.Message,
+                 candidates, count, onPicked);
         }
 
         // ─── OnRequireCardChoice: 존(ZoneType)에서 N장 선택 ─────────────

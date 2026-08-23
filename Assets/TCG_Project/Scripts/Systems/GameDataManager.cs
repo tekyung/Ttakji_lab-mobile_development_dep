@@ -109,6 +109,44 @@ namespace TCG_Project.Scripts.Systems
         }
 
         /// <summary>
+        /// 카드가 속한 용병의 <b>용병 카드 ID</b>를 찾는다. (예: <c>"ELLIE"</c> 또는 <c>"ELLI-05"</c> → <c>"ELLI-01"</c>)
+        ///
+        /// ★ 문자열을 직접 조립하지 말고 반드시 이 메서드를 쓸 것.
+        ///   카드의 <c>characterId</c>는 <c>"ELLIE"</c>인데 카드 ID 접두사는 <c>"ELLI"</c>라 서로 다르다.
+        ///   이 불일치를 호출부마다 처리하면 반드시 어딘가에서 틀린다(이미 전례가 있다).
+        ///   Character.json이 <c>id</c>와 <c>characterId</c>를 함께 갖고 있으므로 데이터로 해결된다.
+        /// </summary>
+        /// <param name="themeOrCardId">용병 테마명(<c>characterId</c>) 또는 그 테마의 카드 ID</param>
+        public bool TryResolveCharacterCardId(string themeOrCardId, out string characterCardId)
+        {
+            characterCardId = null;
+            if (string.IsNullOrEmpty(themeOrCardId)) return false;
+
+            // 1) 테마명으로 직접 조회 ("ELLIE" → ELLI-01)
+            if (_characterCards.TryGetValue(themeOrCardId, out var byTheme) && !string.IsNullOrEmpty(byTheme?.id))
+            {
+                characterCardId = byTheme.id;
+                return true;
+            }
+
+            // 2) 카드 ID 접두사로 조회 ("ELLI-05" → 접두사 "ELLI" → ELLI-01)
+            string prefix = themeOrCardId.Contains("-")
+                ? themeOrCardId.Split('-')[0]
+                : themeOrCardId;
+
+            foreach (var raw in _characterCardsById.Values)
+            {
+                if (raw == null || string.IsNullOrEmpty(raw.id)) continue;
+                if (!raw.id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+                characterCardId = raw.id;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// 용병(캐릭터) 카드를 UI 표시용 Card 객체로 만들어 반환한다. 없으면 null.
         ///
         /// 캐릭터 카드는 <see cref="AllCards"/>에 등록되지 않고 내부 사전에만 보관된다
@@ -480,7 +518,9 @@ namespace TCG_Project.Scripts.Systems
                 case "RecoverFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "Hand";
-                    p["mode"] = "Random";
+                    // 선택 UI가 없던 시절 "Random"으로 박아 둔 곳이다.
+                    // 폐기존은 공개 정보이고 카드 설명에 "랜덤"이 없으므로 플레이어가 고른다.
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     if (!string.IsNullOrEmpty(raw.filter)) p["filter"] = raw.filter;
                     break;
@@ -488,7 +528,8 @@ namespace TCG_Project.Scripts.Systems
                 case "ShuffleReturnEffect":
                     p["from"] = "Hand";
                     p["to"] = "Deck";
-                    p["mode"] = "Random";
+                    // JSON은 "mode": "choose"라고 말하는데 여기서 "Random"으로 덮어쓰고 있었다.
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
                     p["count"] = raw.count != 0 ? raw.count : 1;
                     p["shuffleAfter"] = true;
                     break;
@@ -513,8 +554,9 @@ namespace TCG_Project.Scripts.Systems
                 case "ResourceFromDiscardEffect":
                     p["from"] = "Graveyard";
                     p["to"] = "ResourceZone";
-                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Choose" : Capitalize(raw.mode);
-                    // p["mode"] = "Top";
+                    // 자원카드는 전부 RES-01의 동일 복제본이라 무엇을 골라도 결과가 같다.
+                    // 구별되지 않는 카드에 선택창을 띄우는 건 조작 비용만 늘린다.
+                    p["mode"] = string.IsNullOrEmpty(raw.mode) ? "Top" : Capitalize(raw.mode);
                     p["count"] = raw.count != 0 ? raw.count : 99;  // 기본 전부
                     p["filter"] = "type:Resource";
                     break;
@@ -578,7 +620,25 @@ namespace TCG_Project.Scripts.Systems
                         };
                         var moveEff = new MoveEffect();
                         moveEff.Initialize(moveParams);
-                        bf.PerResourcePhaseEffect = moveEff;
+
+                        // "랜덤으로 가져올 수 있다" — 랜덤은 카드 설계가 맞지만,
+                        // "할 수 있다"는 거부권이므로 매 자원페이즈 의사를 묻는다.
+                        var optionalRecover = new OptionalActionEffect();
+                        optionalRecover.Initialize(new Dictionary<string, object>
+                        {
+                            ["description"] = "폐기존에서 공격 카드 1장을 무작위로 가져오시겠습니까?",
+                            ["action"] = moveEff
+                        });
+
+                        // 폐기존에 가져올 카드가 없으면 아예 묻지 않는다.
+                        optionalRecover.Precondition = ctx =>
+                        {
+                            Player owner = ctx?.ActivePlayer;
+                            if (owner == null) return false;
+                            return CardSelector.ApplyFilter(owner.Graveyard.ToList(), filter).Count > 0;
+                        };
+
+                        bf.PerResourcePhaseEffect = optionalRecover;
                         break;
                     }
 

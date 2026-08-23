@@ -1,9 +1,11 @@
 using System;
 using ServerScripts.EventScripts;
 using System.Collections;
+using System.Threading.Tasks;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
+using TCG_Project.Scripts.Utils;
 using UnityEngine;
 using System.Reflection;
 using System.Collections.Generic;
@@ -19,6 +21,14 @@ public class session_game_manage : MonoBehaviour
     private string sessionRoom;
     private string myRole;
     private BoardState latestBoardState;
+    // ─── 알림 도착 훅 (UI 연결용) ────────────────────────────────────────
+    // 서버가 "카드를 고르라 / 예·아니오로 답하라"고 보낸 알림이 도착했음을 화면 쪽에 알린다.
+    // 응답 전송 API(SubmitCardPickFromUI / SendPendingOptionalResponse / SendPendingStackResponse)는
+    // 이미 공개돼 있으므로, 이 훅만 있으면 UI가 붙을 수 있다.
+    public event System.Action<RequireCardPickNotification> OnCardPickRequested;
+    public event System.Action<RequireOptionalNotification> OnOptionalRequested;
+    public event System.Action<RequireStackNotification> OnStackRequested;
+
     private RequireStackNotification pendingStackNotification;
     private RequireOptionalNotification pendingOptionalNotification;
     private RequireCardPickNotification pendingCardPickNotification;
@@ -41,6 +51,7 @@ public class session_game_manage : MonoBehaviour
         {
             DeckSaveData myData = new DeckSaveData();
             myData.cardIdList = GameData.MyDeck;
+            myData.characterIdList = GameData.MyCharacters; // 고른 용병도 함께 올린다
 
             // 2. JSON 문자열로 변환
             string jsonDeck = JsonUtility.ToJson(myData);
@@ -55,7 +66,10 @@ public class session_game_manage : MonoBehaviour
         networkService.ListenForEventDTO(sessionRoom, HandleActionEvent);
 
         // B. 방장이 최신 전광판(BoardState)을 칠판에 덮어씌웠을 때 (화면 갱신용)
-        networkService.ListenForBoardState(sessionRoom, HandleBoardStateChange);
+        // ★ 토큰을 보관해 OnDestroy에서 떼어낸다.
+        //   예전엔 붙이기만 해서 씬을 재진입할 때마다 리스너가 하나씩 늘었고,
+        //   board_state 한 번 쓸 때마다 같은 스냅샷을 여러 번 처리했다.
+        _boardListener = networkService.ListenForBoardState(sessionRoom, HandleBoardStateChange);
         // A/B/C 버튼과 수동 턴 넘기기 UI는 현재 룰 흐름에서 사용하지 않으므로 비활성화합니다.
         // networkService.ListenForTurn(sessionRoom, HandleTurnChange);
         // if (myRole == "HOST")
@@ -73,6 +87,17 @@ public class session_game_manage : MonoBehaviour
             StartCoroutine(HostGameSetupRoutine());
         }
 
+    }
+
+    /// <summary>board_state 구독 해제용 토큰.</summary>
+    private firebase_network.BoardStateListener _boardListener;
+
+    private void OnDestroy()
+    {
+        if (networkService != null && _boardListener != null)
+            networkService.StopListeningBoardState(_boardListener);
+
+        _boardListener = null;
     }
 
     private async void HandleActionEvent(string actionType, string sender, string jsonData)
@@ -403,6 +428,7 @@ public class session_game_manage : MonoBehaviour
                 var stackNoti = JsonUtility.FromJson<RequireStackNotification>(jsonData);
                 pendingStackNotification = stackNoti;
                 uiManager.UpdateStatus(stackNoti.Message); // "스택 방어 발동할까요?"
+                OnStackRequested?.Invoke(stackNoti);
                 Debug.Log(
                     $"[클라:{myRole}] Stack 알림 수신 stackCardId={stackNoti.StackCardInstanceId}, " +
                     $"stackDataId={stackNoti.StackCardDataId}, opponentCardId={stackNoti.OpponentCardInstanceId}");
@@ -413,6 +439,7 @@ public class session_game_manage : MonoBehaviour
                 var optionalNoti = JsonUtility.FromJson<RequireOptionalNotification>(jsonData);
                 pendingOptionalNotification = optionalNoti;
                 uiManager.UpdateStatus(optionalNoti.Message);
+                OnOptionalRequested?.Invoke(optionalNoti);
                 Debug.Log(
                     $"[클라:{myRole}] Optional 알림 수신 actionId={optionalNoti.ActionId}, message={optionalNoti.Message}");
                 break;
@@ -421,6 +448,7 @@ public class session_game_manage : MonoBehaviour
                 var pickNoti = JsonUtility.FromJson<RequireCardPickNotification>(jsonData);
                 pendingCardPickNotification = pickNoti;
                 uiManager.UpdateStatus(pickNoti.Message);
+                OnCardPickRequested?.Invoke(pickNoti);
                 Debug.Log(
                     $"[클라:{myRole}] CardPick 알림 수신 requestId={pickNoti.RequestId}, required={pickNoti.RequiredCount}, " +
                     $"candidates={(pickNoti.PresentedCardInstanceIds != null ? string.Join(", ", pickNoti.PresentedCardInstanceIds) : "none")}");
@@ -652,6 +680,26 @@ public class session_game_manage : MonoBehaviour
 
     public RequireCardPickNotification GetPendingCardPickNotification() => pendingCardPickNotification;
 
+    /// <summary>
+    /// 항복을 호스트에 알린다 (게스트 전용).
+    /// 새 DTO를 만들지 않고 기존 GameSetRequest를 그대로 쓴다 — 상대를 승자로 지명한다.
+    /// </summary>
+    public void SendSurrender()
+    {
+        string myRole = string.IsNullOrEmpty(GameData.MyRole) ? "GUEST" : GameData.MyRole;
+        string opponent = myRole == "HOST" ? "GUEST" : "HOST";
+
+        var req = new GameSetRequest
+        {
+            MatchId = GameData.SessionCode,
+            PlayerName = myRole,
+            WinnerName = opponent
+        };
+
+        Debug.Log($"[게스트] 항복 전송 — 승자={opponent}");
+        _ = networkService.SendRequestDTO(GameData.SessionCode, "GameSetRequest", req);
+    }
+
     public void SubmitCardPickFromUI(string[] pickedInstanceIds)
     {
         if (pendingCardPickNotification == null)
@@ -830,10 +878,24 @@ public class session_game_manage : MonoBehaviour
             pendingStackNotification.OpponentCardInstanceId,
             isUsing);
     }
+    // 매칭된 두 사람이 각자 고른 덱을 올릴 때까지 기다리는 한도
+    private const float DeckWaitTimeoutSeconds = 15f;
+    private const float DeckPollIntervalSeconds = 0.5f;
+
+    /// <summary>폴백용 기본 덱 (업로드된 덱을 못 읽었을 때만 쓴다). 유니크 10종 → 2장씩 20장</summary>
+    private static readonly string[] FallbackHostDeckIds =
+    {
+        "ELLI-02","ELLI-03","ELLI-04","ELLI-05","ELLI-06","ELLI-07",
+        "DAIN-02","DAIN-03","DAIN-07","DAIN-09"
+    };
+    private static readonly string[] FallbackGuestDeckIds =
+    {
+        "VERO-02","VERO-03","VERO-05","VERO-07","VERO-11",
+        "SONI-02","SONI-03","SONI-05","SONI-06","SONI-07"
+    };
+
     private IEnumerator HostGameSetupRoutine()
     {
-        yield return new WaitForSeconds(0.5f); // 덱이 다 올라올 때까지 잠깐 대기
-
         // 서버 로직 키는 고정(HOST/GUEST)이어야 검증/동기화가 안전합니다.
 
         Player p1 = new Player { Name = "HOST", Type = UserType.Human };
@@ -842,33 +904,59 @@ public class session_game_manage : MonoBehaviour
         // ConsoleRunner와 동일한 방식으로 카드 데이터를 로드해 덱을 생성합니다.
         GameDataManager dataManager = BuildServerDataManager();
 
-        // 임시: ConsoleRunner 테스트 풀과 동일한 ID 세트
-        string[] p1Ids =
-        {
-            "ELLI-02","ELLI-03","ELLI-04","ELLI-05","ELLI-06","ELLI-07",
-            "DAIN-02","DAIN-03","DAIN-07","DAIN-09"
-        };
-        string[] p2Ids =
-        {
-            "VERO-02","VERO-03","VERO-05","VERO-07","VERO-11",
-            "SONI-02","SONI-03","SONI-05","SONI-06","SONI-07"
-        };
+        // ★ 양쪽이 각자 고른 덱을 올릴 때까지 기다린다.
+        //   예전에는 WaitForSeconds(0.5f) 한 번이었는데, 상대 업로드가 조금만 늦어도 그대로 실패했다.
+        DeckSaveData hostDeck = null;
+        DeckSaveData guestDeck = null;
+        float waited = 0f;
 
-        List<Card> p1MainDeck = CreateDeckFromIds(dataManager, p1Ids);
-        List<Card> p2MainDeck = CreateDeckFromIds(dataManager, p2Ids);
+        while (waited < DeckWaitTimeoutSeconds && (hostDeck == null || guestDeck == null))
+        {
+            if (hostDeck == null)
+            {
+                var hostTask = networkService.GetDeck(sessionRoom, "HOST");
+                yield return new WaitUntil(() => hostTask.IsCompleted);
+                if (hostTask.Status == TaskStatus.RanToCompletion) hostDeck = hostTask.Result;
+            }
+
+            if (guestDeck == null)
+            {
+                var guestTask = networkService.GetDeck(sessionRoom, "GUEST");
+                yield return new WaitUntil(() => guestTask.IsCompleted);
+                if (guestTask.Status == TaskStatus.RanToCompletion) guestDeck = guestTask.Result;
+            }
+
+            if (hostDeck != null && guestDeck != null) break;
+
+            yield return new WaitForSeconds(DeckPollIntervalSeconds);
+            waited += DeckPollIntervalSeconds;
+        }
+
+        List<Card> p1MainDeck = BuildMainDeck(dataManager, hostDeck?.cardIdList, FallbackHostDeckIds, "HOST");
+        List<Card> p2MainDeck = BuildMainDeck(dataManager, guestDeck?.cardIdList, FallbackGuestDeckIds, "GUEST");
         List<Card> p1ResourceDeck = CreateResourceDeckFromDataManager(dataManager);
         List<Card> p2ResourceDeck = CreateResourceDeckFromDataManager(dataManager);
 
         p1.ResetForNewGame(p1MainDeck, p1ResourceDeck);
         p2.ResetForNewGame(p2MainDeck, p2ResourceDeck);
 
-        Debug.Log($"[서버 초기화] HOST main={p1.Deck.Count}, resource={p1.ResourceDeck.Count}");
-        Debug.Log($"[서버 초기화] GUEST main={p2.Deck.Count}, resource={p2.ResourceDeck.Count}");
+        // ★ 덱에 담긴 카드로 용병 2종을 정한다.
+        //   이걸 넣지 않으면 CharacterAbilityRegistry가 빈 목록을 돌려줘 용병 능력이 통째로 죽는다.
+        ApplyCharactersFromDeck(p1, p1MainDeck, dataManager, hostDeck?.characterIdList);
+        ApplyCharactersFromDeck(p2, p2MainDeck, dataManager, guestDeck?.characterIdList);
+
+        Debug.Log($"[서버 초기화] HOST main={p1.Deck.Count}, resource={p1.ResourceDeck.Count}, 용병={p1.CharacterCardId}/{p1.SecondaryCharacterId}");
+        Debug.Log($"[서버 초기화] GUEST main={p2.Deck.Count}, resource={p2.ResourceDeck.Count}, 용병={p2.CharacterCardId}/{p2.SecondaryCharacterId}");
 
         if (ServerGameManager.Instance != null && EventService.Instance != null)
         {
             // 2. 게임판(GameContext) 생성!
             ServerGameManager.Instance.StartMultiplayerGame(p1, p2);
+
+            // ★ 용병 슬롯 4칸 방송 (BattleManager도 매치 초기화에서 같은 두 줄을 부른다)
+            //   이게 없으면 용병 카드가 화면에 아예 그려지지 않는다.
+            CharacterFieldBroadcast.Register(p1, dataManager);
+            CharacterFieldBroadcast.SyncAll(p1, p2, dataManager);
 
             // 3. EventService에 게임판(context) 등록! (이제 null이 아닙니다)
             EventService.Instance.InitializeGame(ServerGameManager.Instance.context, p1, p2);
@@ -882,6 +970,104 @@ public class session_game_manage : MonoBehaviour
         {
             Debug.LogError(" ServerGameManager 또는 EventService가 씬에 없습니다!");
         }
+    }
+
+    /// <summary>
+    /// 업로드된 덱 ID 목록으로 메인덱을 만든다. 실패하면 폴백 덱으로 대체한다.
+    ///
+    /// 두 가지 형태가 들어올 수 있다:
+    ///  · 덱 빌더가 저장한 <b>중복 포함 20장</b> → 그대로 1:1로 만든다
+    ///  · 콘솔·구버전 방식의 <b>유니크 10종</b> → 2장씩 전개한다(CreateDeckFromIds)
+    /// 둘을 구분하지 않으면 20장짜리를 40장으로 부풀리게 된다.
+    /// </summary>
+    private List<Card> BuildMainDeck(GameDataManager manager, List<string> uploadedIds, string[] fallbackIds, string role)
+    {
+        const int RequiredDeckSize = 20;
+
+        if (uploadedIds != null && uploadedIds.Count > 0)
+        {
+            List<Card> deck = uploadedIds.Count >= RequiredDeckSize
+                ? CreateDeckFromExactIds(manager, uploadedIds)   // 중복 포함 목록
+                : CreateDeckFromIds(manager, uploadedIds);       // 유니크 목록 → 2장씩
+
+            if (deck.Count == RequiredDeckSize)
+            {
+                Debug.Log($"[서버 초기화] {role} 업로드 덱 사용 ({uploadedIds.Count}개 항목 → {deck.Count}장)");
+                return deck;
+            }
+
+            Debug.LogWarning($"[서버 초기화] {role} 업로드 덱이 {deck.Count}장이라 쓸 수 없다. 기본 덱으로 대체한다.");
+        }
+        else
+        {
+            Debug.LogWarning($"[서버 초기화] {role} 덱을 읽지 못했다(업로드 지연 또는 미선택). 기본 덱으로 대체한다.");
+        }
+
+        return CreateDeckFromIds(manager, fallbackIds);
+    }
+
+    /// <summary>ID 목록을 1:1로 카드로 만든다 (중복 포함 목록용).</summary>
+    private List<Card> CreateDeckFromExactIds(GameDataManager manager, IEnumerable<string> ids)
+    {
+        var deck = new List<Card>();
+        if (manager == null || ids == null) return deck;
+
+        foreach (var id in ids)
+        {
+            if (string.IsNullOrEmpty(id)) continue;
+            if (!manager.AllCards.TryGetValue(id, out Card template)) continue;
+
+            deck.Add(template.Clone());
+        }
+
+        return deck;
+    }
+
+    /// <summary>
+    /// 덱에 담긴 카드로부터 용병 2종을 역산해 플레이어에 주입한다.
+    /// 카드의 characterId("ELLIE")와 카드 ID 접두사("ELLI")가 다르므로
+    /// 문자열을 직접 조립하지 말고 GameDataManager.TryResolveCharacterCardId만 쓴다.
+    /// </summary>
+    private void ApplyCharactersFromDeck(
+        Player player, List<Card> deck, GameDataManager manager, List<string> declaredCharacters = null)
+    {
+        if (player == null || deck == null || manager == null) return;
+
+        var characterCardIds = new List<string>();
+
+        // ★ 덱 빌더가 명시한 용병이 있으면 그걸 먼저 쓴다.
+        //   카드에서 역산하면 "용병 2명을 골랐지만 한쪽 카드만 넣은 덱"이 1명으로 읽힌다.
+        if (declaredCharacters != null)
+        {
+            foreach (string declared in declaredCharacters)
+            {
+                if (string.IsNullOrEmpty(declared)) continue;
+                if (!manager.TryResolveCharacterCardId(declared, out string declaredCardId)) continue;
+                if (characterCardIds.Contains(declaredCardId)) continue;
+
+                characterCardIds.Add(declaredCardId);
+                if (characterCardIds.Count >= 2) break;
+            }
+        }
+
+        // 구버전 덱(명시값 없음)이거나 모자라면 카드에서 채운다
+        foreach (Card card in deck)
+        {
+            if (card == null) continue;
+
+            string key = !string.IsNullOrEmpty(card.CharacterId) ? card.CharacterId : card.Id;
+            if (!manager.TryResolveCharacterCardId(key, out string characterCardId)) continue;
+            if (characterCardIds.Contains(characterCardId)) continue;
+
+            characterCardIds.Add(characterCardId);
+            if (characterCardIds.Count >= 2) break; // 룰북상 용병은 2종
+        }
+
+        player.CharacterCardId = characterCardIds.Count > 0 ? characterCardIds[0] : null;
+        player.SecondaryCharacterId = characterCardIds.Count > 1 ? characterCardIds[1] : null;
+
+        if (characterCardIds.Count == 0)
+            Debug.LogWarning($"[서버 초기화] {player.Name}: 덱에서 용병을 찾지 못했다. 용병 능력이 발동하지 않는다.");
     }
 
     private GameDataManager BuildServerDataManager()

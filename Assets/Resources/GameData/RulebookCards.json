@@ -72,7 +72,7 @@
       "type": "Support", "speed": 2, "cost": 0, "max_deck_count": 2, "rarity": "C2", "isStack": false, "isBattlefield": false,
       "description": "폐기존에 앞면으로 존재하는 엘리의 공격 카드 1장을 자신의 패로 가지고 온다.",
       "effects": [
-        { "type": "RecoverFromDiscardEffect", "count": 1, "filter": "character:ELLIE,type:Attack" }
+        { "type": "RecoverFromDiscardEffect", "count": 1, "filter": "character:ELLIE,type:Attack", "mode": "choose" }
       ],
       "imagePath": "Assets/Resources/card_image/ELLI/ELLI-09.png"
     },

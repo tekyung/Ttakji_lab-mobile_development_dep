@@ -33,6 +33,12 @@ public class BattleManager : MonoBehaviour
     private Player p1;
     private Player p2;
     private GameContext context;
+
+    /// <summary>응답을 기다리는 '폐기 시 발동' 용병 능력 수 (다이나).</summary>
+    private int _pendingAbandonAbilities = 0;
+
+    /// <summary>응답을 기다리는 자원페이즈 전장 기동 효과 수 (ELLI-11).</summary>
+    private int _pendingBattlefieldEffects = 0;
     private PlayerSetupData _p1Setup;
     private PlayerSetupData _p2Setup;
 
@@ -114,7 +120,7 @@ public class BattleManager : MonoBehaviour
     //    이벤트를 쏘므로, 아래 가드가 걸리면 이 응답기는 사실상 동작하지 않는다.
     //    그래도 봇 경로가 추가될 때를 대비해 응답기 자체는 남겨 둔다.)
 
-    private void HandleQA_CardPick(Player player, List<Card> validCards, int count, Action<List<Card>> callback)
+    private void HandleQA_CardPick(Player player, List<Card> validCards, int count, CardPickPrompt prompt, Action<List<Card>> callback)
     {
         if (player == null || player.Type != UserType.Bot) return; // 사람은 UI가 응답한다
 
@@ -449,15 +455,44 @@ public class BattleManager : MonoBehaviour
         p1.ApplyNextTurnBuffs();
         p2.ApplyNextTurnBuffs();
 
+        _pendingBattlefieldEffects = 0;
+
         context.ActivePlayer = p1; context.TargetPlayer = p2;
         p1.TakeResourceCard();
-        if (GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p1, context)) yield break;
+        // 전장 기동 효과(ELLI-11)는 사람에게 예/아니오를 묻는다.
+        // 기다리지 않으면 회수 카드가 드로우 페이즈 도중에 들어온다.
+        bool p1Cut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(
+            p1, context, out int p1Started, () => _pendingBattlefieldEffects--);
+        _pendingBattlefieldEffects += p1Started;
+        yield return WaitForBattlefieldEffects();
+        if (p1Cut) yield break;
 
         context.ActivePlayer = p2; context.TargetPlayer = p1;
         p2.TakeResourceCard();
-        if (GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(p2, context)) yield break;
+        bool p2Cut = GameLogicHelpers.ApplyBattlefieldResourcePhaseEffects(
+            p2, context, out int p2Started, () => _pendingBattlefieldEffects--);
+        _pendingBattlefieldEffects += p2Started;
+        yield return WaitForBattlefieldEffects();
+        if (p2Cut) yield break;
 
         yield return new WaitForSeconds(ActionDelay);
+    }
+
+    /// <summary>
+    /// 전장 기동 효과의 응답을 자원 페이즈 안에서 받는다.
+    /// 응답이 안 와도 게임이 멈추지 않도록 상한을 둔다.
+    /// </summary>
+    private IEnumerator WaitForBattlefieldEffects()
+    {
+        float waited = 0f;
+        float limit = GameRules.ChooseWaitTime / 1000f;
+        while (_pendingBattlefieldEffects > 0 && waited < limit
+               && context != null && !context.IsGameOver)
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+        _pendingBattlefieldEffects = 0;
     }
 
     // ─── 페이즈 2: 드로우 페이즈 (병렬 처리 적용) ─────────────────────────────────────
@@ -683,6 +718,17 @@ public class BattleManager : MonoBehaviour
         context.OpenPhaseStates[p1.Name] = new PlayerOpenPhaseState { HasOpened = (_p1RevealedCard != null), RevealedCard = _p1RevealedCard };
 
         _p2RevealedCard = ApplyOpenChoice(p2, p2Choice);
+
+        // 폐기 시 발동 능력(다이나)의 응답을 이 페이즈 안에서 받는다 (상한을 둬 멈추지 않게)
+        float abandonWait = 0f;
+        float abandonLimit = GameRules.ChooseWaitTime / 1000f;
+        while (_pendingAbandonAbilities > 0 && abandonWait < abandonLimit
+               && context != null && !context.IsGameOver)
+        {
+            abandonWait += Time.deltaTime;
+            yield return null;
+        }
+        _pendingAbandonAbilities = 0;
         context.OpenPhaseStates[p2.Name] = new PlayerOpenPhaseState { HasOpened = (_p2RevealedCard != null), RevealedCard = _p2RevealedCard };
 
         yield return new WaitForSeconds(ActionDelay);
@@ -741,11 +787,16 @@ public class BattleManager : MonoBehaviour
             // 폐기 시 능력(DAIN 다이나 등) 발동
             foreach (var ability in CharacterAbilityRegistry.GetPlayerAbilities(player))
             {
-                if (ability.CanUse(player, context))
-                {
-                    // 즉발 효과라 대기 불필요
-                    ability.OnOpenPhaseAbandon(player, context, _ => { });
-                }
+    // ★ 다이나 능력(폐기 시 라이프 +1)은 사람에게 예/아니오를 묻는 **비동기** 훅이다.
+    //   예전에는 "즉발 효과라 대기 불필요"라며 던져 놓고 바로 다음으로 넘어갔는데,
+    //   그건 묻지 않고 즉시 회복하던 구버전 기준의 주석이었다.
+    //   그대로 두면 오픈 페이즈가 먼저 끝나 버려 라이프 회복이 메인 페이즈 도중에 적용된다
+    //   (그 사이에 데미지를 맞으면 회복 전에 죽을 수 있다).
+    //   그래서 발동한 능력 수를 세고, 오픈 페이즈가 그 응답을 기다린다.
+                if (!ability.CanUse(player, context)) continue;
+
+                _pendingAbandonAbilities++;
+                ability.OnOpenPhaseAbandon(player, context, _ => _pendingAbandonAbilities--);
             }
             return null;
         }
@@ -985,6 +1036,20 @@ public class BattleManager : MonoBehaviour
 
         if (incomingHits == 0) yield break;
 
+        // ★ 불발될 카드에는 스택을 소진하지 않는다.
+        //   "그 후," 선행 조건을 못 채우면 카드 전체가 불발인데(Card.Play),
+        //   스택 발동은 그보다 먼저 일어나 상대 방어 카드만 태워 버렸다.
+        //
+        //   ⚠️ 이 시점엔 cardPlayer.PlayingCard가 아직 설정되기 전이라,
+        //   excludeSelf를 쓰는 효과는 후보를 한 장 더 세게 된다.
+        //   즉 관대한 쪽으로만 틀린다 — "멀짱한 공격인데 스택을 안 태우는" 일은 없다.
+        if (!playedCard.WillResolve(context))
+        {
+            EventManager.OnLogMessage?.Invoke(
+                $"  [스택 보류] '{playedCard.Name}'은(는) 불발될 카드라 스택을 발동하지 않습니다.");
+            yield break;
+        }
+
         // 2. 발동 "가능한" 방어 카드 모두 추리기 (수집)
         List<Card> validStackCards = new List<Card>();
         foreach (var stackCard in stackOwner.StackZone)
@@ -1032,7 +1097,7 @@ public class BattleManager : MonoBehaviour
             // ★ 제한 시간 없음 — 사람은 얼마든지 생각할 수 있어야 한다 (사람 vs 봇 기준).
             bool done = false;
 
-            EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, chosenCards =>
+            EventManager.OnRequireCardPick?.Invoke(stackOwner, validStackCards, requiredCount, default, chosenCards =>
             {
                 selectedCards = chosenCards ?? new List<Card>();
                 done = true;

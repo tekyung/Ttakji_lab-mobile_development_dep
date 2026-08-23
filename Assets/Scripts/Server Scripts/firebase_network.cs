@@ -163,6 +163,10 @@ public class firebase_network : MonoBehaviour
         };
     }
 
+    // ⚠️ 함정: ListenForEvent와 ListenForEventDTO는 **같은 eventHandler/eventRef 필드 하나**를 공유한다.
+    //   둘 다 StopListeningEvents()로 시작하므로, 나중에 부른 쪽이 먼저 부른 쪽을 **조용히 끊는다.**
+    //   현재는 ListenForEventDTO만 쓰여 문제가 없지만, 둘을 동시에 써야 한다면
+    //   필드를 분리하거나 board_state처럼 토큰 방식으로 바꿔야 한다.
     //이벤트리스너
     public void ListenForEvent(string sessioncode, Action<string,string> eventreceive)
     {
@@ -220,16 +224,52 @@ public class firebase_network : MonoBehaviour
         await dbRef.Child("sessions").Child(sessioncode).Child("decks").Child(role).SetRawJsonValueAsync(Deck);
     }
 
+    /// <summary>
+    /// 업로드된 덱을 읽어 카드 ID 목록으로 돌려준다. 아직 올라오지 않았으면 null.
+    /// (호스트가 매치를 구성할 때 양쪽 덱을 가져오는 데 쓴다)
+    /// </summary>
+    /// <summary>
+    /// 업로드된 덱을 통째로 읽는다. 아직 올라오지 않았으면 null.
+    ///
+    /// ★ 예전에는 cardIdList만 돌려줬는데, 그러면 덱이 명시한 <b>용병 목록</b>이 버려진다.
+    ///   호스트가 매치를 구성할 때 둘 다 필요하므로 DeckSaveData를 그대로 넘긴다.
+    /// </summary>
+    public async Task<DeckSaveData> GetDeck(string sessioncode, string role)
+    {
+        if (dbRef == null) return null;
+
+        DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode)
+                                           .Child("decks").Child(role).GetValueAsync();
+
+        if (snapshot == null || !snapshot.Exists) return null;
+
+        string json = snapshot.GetRawJsonValue();
+        if (string.IsNullOrEmpty(json)) return null;
+
+        return JsonUtility.FromJson<DeckSaveData>(json);
+    }
+
     public async Task SyncBoardState(string sessioncode, string jsonState)
     {
         // sessions/{sessioncode}/board_state 경로에 JSON 데이터를 통째로 덮어씁니다.
         await dbRef.Child("sessions").Child(sessioncode).Child("board_state").SetRawJsonValueAsync(jsonState);
     }
 
-    public void ListenForBoardState(string sessioncode, Action<string> onStateChanged)
+    /// <summary>
+    /// board_state 값이 바뀔 때마다 불린다.
+    ///
+    /// ★ 해제하려면 돌려받은 토큰을 <see cref="StopListeningBoardState"/>에 넘겨야 한다.
+    ///   예전에는 익명 람다를 더하기만 하고 떼어 낼 수단이 없어서,
+    ///   씬을 재진입할 때마다 리스너가 눈덩이처럼 불어나 같은 스냅샷을
+    ///   여러 번 처리했다(게스트 화면이 느리고 덱이 깜빡이던 원인).
+    ///   dbRef가 static이라 씬을 바꿔도 살아남는다.
+    /// </summary>
+    /// <returns>해제에 쓸 토큰. 필요 없으면 무시해도 된다.</returns>
+    public BoardStateListener ListenForBoardState(string sessioncode, Action<string> onStateChanged)
     {
-        // board_state 경로의 값이 바뀔 때마다 자동으로 실행됩니다.
-        dbRef.Child("sessions").Child(sessioncode).Child("board_state").ValueChanged += (sender, args) =>
+        DatabaseReference reference = dbRef.Child("sessions").Child(sessioncode).Child("board_state");
+
+        EventHandler<ValueChangedEventArgs> handler = (sender, args) =>
         {
             if (args.Snapshot.Exists)
             {
@@ -238,6 +278,37 @@ public class firebase_network : MonoBehaviour
                 onStateChanged?.Invoke(jsonString);
             }
         };
+
+        reference.ValueChanged += handler;
+        return new BoardStateListener(reference, handler);
+    }
+
+    /// <summary>ListenForBoardState가 돌려준 토큰으로 구독을 떼어낸다. null이면 아무 일도 하지 않는다.</summary>
+    public void StopListeningBoardState(BoardStateListener listener)
+    {
+        listener?.Detach();
+    }
+
+    /// <summary>board_state 구독 해제용 토큰.</summary>
+    public class BoardStateListener
+    {
+        private DatabaseReference _reference;
+        private EventHandler<ValueChangedEventArgs> _handler;
+
+        internal BoardStateListener(DatabaseReference reference, EventHandler<ValueChangedEventArgs> handler)
+        {
+            _reference = reference;
+            _handler = handler;
+        }
+
+        internal void Detach()
+        {
+            if (_reference == null || _handler == null) return;
+
+            _reference.ValueChanged -= _handler;
+            _reference = null;
+            _handler = null;
+        }
     }
 
     // 1. JSON DTO 보내기

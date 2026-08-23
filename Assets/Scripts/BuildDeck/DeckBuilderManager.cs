@@ -2,12 +2,22 @@
 using System.Linq; // 리스트 검색용 기능
 using UnityEngine;
 using TMPro; // 텍스트 사용
+using UnityEngine.UI; // 용병 슬롯·선택 목록을 코드로 만든다
 using System.IO; //파일 관리
 
 [System.Serializable]
 public class DeckSaveData
 {
     public List<string> cardIdList;
+
+    /// <summary>
+    /// 이 덱이 쓰는 용병 characterId 목록 ("ELLIE", "SONIA" …). 최대 2개.
+    ///
+    /// ★ 예전에는 서버가 카드들의 characterId로 용병을 <b>역산</b>했다.
+    ///   그러면 용병 2명을 골라 놓고 한쪽 카드만 넣은 덱이 1명짜리로 읽힌다.
+    ///   구버전 덱은 이 값이 비어 있으므로, 읽는 쪽은 비었을 때 역산으로 넘어가야 한다.
+    /// </summary>
+    public List<string> characterIdList;
 }
 
 public class DeckBuilderManager : MonoBehaviour
@@ -50,6 +60,46 @@ public class DeckBuilderManager : MonoBehaviour
     [Header("덱 목록 UI")]
     public TMP_Dropdown deckListDropdown;
 
+    // ─────────────────────────────────────────────────────────────
+    // 씬에서 배치를 직접 잡고 싶을 때 연결하는 자리.
+    //
+    // ★ 비워 두면 예전처럼 코드가 만들어 준다(기존 씬 호환).
+    //   하나라도 연결하면 그쪽이 우선이고, 코드는 내용만 채운다.
+    // ─────────────────────────────────────────────────────────────
+
+    [Header("용병 슬롯 — 씬에 만들어 두고 연결하면 배치를 직접 조절할 수 있다")]
+    [Tooltip("1번, 2번 순서대로 넣는다. 비우면 아래 프리팹 → 코드 생성 순으로 넘어간다.")]
+    public CharacterSlotView[] characterSlots;
+
+    [Tooltip("슬롯 바 프리팹. 비우면 Resources/Build/CharacterSlotBar 를 자동으로 찾는다.")]
+    public GameObject characterSlotBarPrefab;
+
+    [Tooltip("지금 편집 중인 덱 이름을 보여 줄 텍스트. 없어도 된다.")]
+    public TextMeshProUGUI editingDeckNameText;
+
+    [Header("용병 선택 팝업 — 씬에 비활성으로 두고 연결한다")]
+    [Tooltip("팝업 루트. 비우면 코드가 자동 생성한다.")]
+    public GameObject characterPickerPanel;
+
+    [Tooltip("목록 항목이 들어갈 부모(보통 Content). 비우면 팝업 루트에 직접 넣는다.")]
+    public Transform characterPickerContent;
+
+    [Tooltip("목록 한 줄로 쓸 프리팹(Button + 자식 Text). 비우면 코드가 줄을 만든다.")]
+    public GameObject characterPickerRowPrefab;
+
+    [Tooltip("'1번 슬롯 — 현재: OO' 를 보여 줄 제목. 없어도 된다.")]
+    public TextMeshProUGUI characterPickerTitle;
+
+    [Header("용병 목록 줄 색")]
+    [Tooltip("지금 이 슬롯이 쓰는 용병")]
+    public Color pickerCurrentColor = new Color(0.28f, 0.44f, 0.30f, 1f);
+
+    [Tooltip("고를 수 있는 용병")]
+    public Color pickerNormalColor = new Color(0.26f, 0.26f, 0.32f, 1f);
+
+    [Tooltip("다른 슬롯이 이미 쓰는 용병")]
+    public Color pickerDisabledColor = new Color(0.18f, 0.18f, 0.2f, 1f);
+
     // 실제 데이터 (덱에 들어있는 카드 ID 목록)
     private List<string> myDeck = new List<string>();
     private const int MAX_DECK_COUNT = 20;
@@ -57,43 +107,952 @@ public class DeckBuilderManager : MonoBehaviour
     // 화면에 떠 있는 카드 슬롯들을 관리하는 리스트 (Collection 쪽)
     private List<CardUI> collectionSlots = new List<CardUI>();
 
+    /// <summary>메인 화면(DeckSelector)과 공유하는 "지금 고른 덱" 키.</summary>
+    private const string SELECTED_DECK_PREF = "SelectedDeckName";
+
     void Start()
     {
         // 1. 게임 시작 시 전체 카드 목록(Collection)을 먼저 만듭니다.
         InitCollection();
 
-        // 2. 덱 화면 초기화
-        RefreshDeckList();
+        // 2. 용병 슬롯 UI 생성 (카드 목록 필터의 기준이 되므로 덱을 읽기 전에 만든다)
+        SetupCharacterSlots();
+
+        // 2-1. ★ 용병 선택 팝업을 미리 정리해 둔다.
+        //   예전에는 "팝업을 열 때" 정리했는데, 그러면 씨에 켜둔 채로 저장한 팝업이
+        //   화면 진입자마자 보이고, 안에 남은 예시 줄의 [닫기]는 아무 동작도 하지 않는다.
+        EnsurePickerPanel();
+
+        // 3. ★ 메인 화면에서 고른 덱을 그대로 연다.
+        //   focusDeckName 인자는 원래 있었는데 아무도 넘기지 않아, 늘 목록 맨 위 덱이 열렸다.
+        RefreshDeckList(PlayerPrefs.GetString(SELECTED_DECK_PREF, ""));
+    }
+
+    /// <summary>메인 화면과 선택을 맞춘다. 편집 화면에서 덱을 바꾸거나 저장할 때 부른다.</summary>
+    private void RememberSelectedDeck(string deckName)
+    {
+        if (string.IsNullOrEmpty(deckName) || deckName == EMPTY_DECK_LABEL) return;
+
+        PlayerPrefs.SetString(SELECTED_DECK_PREF, deckName);
+        PlayerPrefs.Save();
+    }
+
+    // ---------------------------------------------------
+    // 용병 슬롯 — 카드 목록의 기준
+    // ---------------------------------------------------
+    //
+    // 예전에는 40종을 전부 늘어놓고 "알아서 2종만 고르라"고 했다.
+    // 룰을 아는 사람만 쓸 수 있는 화면이라, 먼저 용병을 고르고
+    // 그 용병의 카드만 보이게 바꾼다. (용병 1명당 효과 카드 10종)
+
+    /// <summary>지금 고른 용병 characterId 목록. 순서는 슬롯 순서다.</summary>
+    private readonly List<string> _selectedCharacters = new List<string>();
+
+    /// <summary>
+    /// 실제로 화면에 그릴 슬롯들. 씬에서 연결했으면 그것들이고, 아니면 코드가 만든 것들이다.
+    /// 예전에는 버튼·배경·초상·이름을 네 개의 리스트로 따로 들고 있어 인덱스가 어긋날 위험이 있었다.
+    /// </summary>
+    private readonly List<CharacterSlotView> _slotViews = new List<CharacterSlotView>();
+
+    private TextMeshProUGUI _editingNameLabel;
+
+    /// <summary>코드가 만든 팝업. 씬에서 연결한 경우에는 쓰지 않는다(파괴하면 안 되므로).</summary>
+    private GameObject _generatedPickerPanel;
+
+    /// <summary>지금 열려 있는 팝업(씬 것이든 코드 것이든).</summary>
+    private GameObject _openPickerPanel;
+
+    /// <summary>팝업에 넣은 줄들. 다시 열 때 지우기 위해 들고 있는다.</summary>
+    private readonly List<GameObject> _pickerRows = new List<GameObject>();
+
+    /// <summary>런타임에 만든 글자에 쓸 폰트. 지정하지 않으면 한글이 깨진다.</summary>
+    private TMP_FontAsset _uiFont;
+
+    /// <summary>
+    /// 용병 슬롯을 준비한다.
+    ///
+    /// ★ 씬에서 <see cref="characterSlots"/>를 연결했으면 그것을 그대로 쓴다 —
+    ///   배치·크기·색을 기획자가 유니티에서 직접 잡을 수 있다.
+    ///   연결하지 않았으면 예전처럼 코드가 만든다(기존 씬 호환).
+    /// </summary>
+    private void SetupCharacterSlots()
+    {
+        _uiFont = UiFontResolver.Resolve();
+
+        // ★ 프로젝트 폰트에 없는 기호를 OS 폰트에서 끌어오도록 폴백을 건다.
+        //   예전에는 코드 생성 경로에서만 불러서,
+        //   씨·프리팡을 쓰면 기호가 □로 깨졌다.
+        UiFontResolver.EnsureSymbolFallback();
+
+        _slotViews.Clear();
+
+        // ① 씬에 직접 배치한 슬롯이 있으면 그것이 최우선
+        if (characterSlots != null && characterSlots.Length > 0)
+        {
+            BindSceneCharacterSlots();
+            return;
+        }
+
+        // ② 씬에 이미 올려 둔 슬롯 바가 있으면 그것을 쓴다
+        //    ★ 이 검사가 없으면 씬에 배치한 것 위에 프리팹을 하나 더 찍어 **겹쳐 보인다.**
+        if (TryBindSlotBarInScene()) return;
+
+        // ③ 아무것도 없으면 프리팹을 찍는다
+        if (TryBuildSlotBarFromPrefab()) return;
+
+        // ④ 마지막 수단: 코드로 만든다
+        BuildCharacterSlotBar();
+    }
+
+    /// <summary>
+    /// 씬에 이미 배치된 슬롯 바를 찾아 연결한다. 위치·크기는 손대지 않는다.
+    ///
+    /// 인스펙터에 연결하지 않고 프리팹을 씬에 드래그해 둔 경우를 위한 길이다.
+    /// </summary>
+    private bool TryBindSlotBarInScene()
+    {
+        CharacterSlotView[] found = FindObjectsByType<CharacterSlotView>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        if (found.Length == 0) return false;
+
+        // FindObjectsByType의 순서는 하이어라키 순서가 아니다.
+        // 1번·2번을 제대로 가리려면 공통 부모(바)에서 다시 훑어야 한다.
+        Transform bar = found[0].transform.parent;
+        CharacterSlotView[] ordered = bar != null
+            ? bar.GetComponentsInChildren<CharacterSlotView>(true)
+            : found;
+
+        foreach (CharacterSlotView view in ordered)
+        {
+            if (_slotViews.Count >= MAX_DECK_CHARACTERS) break;
+
+            view.ResolveMissingReferences();
+
+            int slotIndex = _slotViews.Count;
+            if (view.button != null)
+            {
+                view.button.onClick.RemoveAllListeners();
+                view.button.onClick.AddListener(() => OpenCharacterPicker(slotIndex));
+            }
+
+            _slotViews.Add(view);
+        }
+
+        if (_slotViews.Count == 0) return false;
+
+        ResolveEditingNameLabel(bar);
+
+        Debug.Log($"[DeckBuilder] 씬에 배치된 슬롯 바 '{(bar != null ? bar.name : "?")}'를 사용한다 — 슬롯 {_slotViews.Count}칸.");
+        return true;
+    }
+
+    /// <summary>
+    /// 슬롯 바 프리팹을 찍어 화면에 올린다.
+    ///
+    /// ★ 이게 있으면 배치·크기·색을 유니티에서 편집하고 저장할 수 있다.
+    ///   코드 생성은 씬을 볼 수 없던 시절의 임시방편이라, 프리팹이 있으면 늘 이쪽이 낫다.
+    /// </summary>
+    private bool TryBuildSlotBarFromPrefab()
+    {
+        GameObject prefab = characterSlotBarPrefab != null
+            ? characterSlotBarPrefab
+            : Resources.Load<GameObject>(SlotBarResourcePath);
+
+        if (prefab == null) return false;
+
+        Canvas canvas = deckContent != null ? deckContent.GetComponentInParent<Canvas>() : null;
+        if (canvas == null)
+        {
+            Debug.LogWarning("[DeckBuilder] 캔버스를 찾지 못해 슬롯 바 프리팹을 올리지 못했다.");
+            return false;
+        }
+
+        // 기준 버튼 옆에 붙인다. 못 찾으면 캔버스 바로 아래에 둔다.
+        RectTransform anchorButton = FindButtonByMethod("OnClickNewDeckButton")
+                                     ?? FindButtonByMethod("OnClickSaveDeck");
+
+        Transform parent = anchorButton != null ? anchorButton.parent : canvas.transform;
+        GameObject bar = Instantiate(prefab, parent);
+        bar.name = prefab.name;   // (Clone) 꼬리표를 떼어 하이어라키를 읽기 쉽게
+
+        var barRect = bar.transform as RectTransform;
+
+        if (anchorButton != null && barRect != null)
+        {
+            PlaceBarLeftOf(barRect, anchorButton);
+            StartCoroutine(PlaceBarWhenLayoutSettles(barRect, anchorButton));
+        }
+
+        // 프리팹 안의 슬롯을 순서대로 거둔다 (하이어라키 순서 = 1번, 2번)
+        foreach (CharacterSlotView view in bar.GetComponentsInChildren<CharacterSlotView>(true))
+        {
+            if (_slotViews.Count >= MAX_DECK_CHARACTERS) break;
+
+            view.ResolveMissingReferences();
+
+            int slotIndex = _slotViews.Count;
+            if (view.button != null)
+                view.button.onClick.AddListener(() => OpenCharacterPicker(slotIndex));
+
+            _slotViews.Add(view);
+        }
+
+        if (_slotViews.Count == 0)
+        {
+            Debug.LogWarning($"[DeckBuilder] '{prefab.name}' 안에 CharacterSlotView가 없다. 코드 생성으로 되돌아간다.");
+            Destroy(bar);
+            return false;
+        }
+
+        ResolveEditingNameLabel(bar.transform);
+
+        Debug.Log($"[DeckBuilder] 슬롯 바 프리팹 '{prefab.name}' 사용 — 슬롯 {_slotViews.Count}칸.");
+        return true;
+    }
+
+    /// <summary>Resources 아래에서 슬롯 바를 찾을 경로 (확장자·Resources 접두어 없이).</summary>
+    private const string SlotBarResourcePath = "Build/CharacterSlotBar";
+
+    /// <summary>
+    /// "편집 중: OO" 텍스트를 정한다.
+    ///
+    /// ★ <see cref="editingDeckNameText"/>를 연결했으면 <b>어디에 있든</b> 그것을 쓴다 —
+    ///   슬롯 바와 떨어진 자리에 두고 싶을 때를 위한 것이다.
+    ///   연결하지 않았을 때만 바 안에서 (슬롯에 속하지 않은) 텍스트를 찾아 쓴다.
+    /// </summary>
+    private void ResolveEditingNameLabel(Transform bar)
+    {
+        // 바 안에 들어 있는 "편집 중" 텍스트(슬롯에 속하지 않은 것)를 찾아 둔다
+        TextMeshProUGUI insideBar = null;
+
+        if (bar != null)
+        {
+            foreach (TextMeshProUGUI text in bar.GetComponentsInChildren<TextMeshProUGUI>(true))
+            {
+                // 슬롯 안의 이름표는 건드리지 않는다
+                if (text.GetComponentInParent<CharacterSlotView>() != null) continue;
+
+                insideBar = text;
+                break;
+            }
+        }
+
+        if (editingDeckNameText != null)
+        {
+            _editingNameLabel = editingDeckNameText;
+
+            // ★ 따로 배치했으면 바 안의 것은 숨긴다 — 둘이 같이 보이면 중복이다.
+            //   (프리팡을 고치지 않고도 "어디든 배치"가 가능해진다)
+            if (insideBar != null && insideBar != editingDeckNameText)
+                insideBar.gameObject.SetActive(false);
+
+            return;
+        }
+
+        _editingNameLabel = insideBar;
+    }
+
+    /// <summary>씬에 배치된 슬롯에 클릭만 연결한다. 위치·크기는 건드리지 않는다.</summary>
+    private void BindSceneCharacterSlots()
+    {
+        int used = 0;
+
+        for (int i = 0; i < characterSlots.Length && used < MAX_DECK_CHARACTERS; i++)
+        {
+            CharacterSlotView view = characterSlots[i];
+            if (view == null) continue;
+
+            view.ResolveMissingReferences();
+
+            int slotIndex = used;
+            if (view.button != null)
+            {
+                view.button.onClick.RemoveListener(() => OpenCharacterPicker(slotIndex));
+                view.button.onClick.AddListener(() => OpenCharacterPicker(slotIndex));
+            }
+            else
+            {
+                Debug.LogWarning($"[DeckBuilder] '{view.name}'에 Button이 없어 클릭을 연결하지 못했다.");
+            }
+
+            _slotViews.Add(view);
+            used++;
+        }
+
+        if (_slotViews.Count == 0)
+        {
+            Debug.LogWarning("[DeckBuilder] characterSlots가 모두 비어 있어 코드 생성으로 되돌아간다.");
+            BuildCharacterSlotBar();
+            return;
+        }
+
+        ResolveEditingNameLabel(_slotViews[0].transform.parent);
+
+        Debug.Log($"[DeckBuilder] 씬에 배치된 용병 슬롯 {_slotViews.Count}칸을 사용한다.");
+    }
+
+    /// <summary>
+    /// 용병 슬롯 2칸 + "편집 중인 덱" 표시를 만든다.
+    ///
+    /// ★ 자리: [새 덱 만들기]·[덱 저장하기] 버튼의 <b>왼쪽</b> —
+    ///   즉 덱 리스트와 카드 리스트 사이의 띠에 놓는다.
+    ///   (예전엔 화면 맨 위에 붙여 두어 덱 리스트를 가렸다)
+    ///   기준 버튼을 못 찾으면 화면 상단으로 물러난다.
+    /// </summary>
+    private void BuildCharacterSlotBar()
+    {
+        Canvas canvas = deckContent != null ? deckContent.GetComponentInParent<Canvas>() : null;
+        if (canvas == null)
+        {
+            Debug.LogWarning("[DeckBuilder] 캔버스를 찾지 못해 용병 슬롯을 만들지 못했다.");
+            return;
+        }
+
+        // 기준이 될 버튼을 찾는다. 씬 배선을 건드리지 않고 onClick에 걸린 메서드 이름으로 역추적한다.
+        RectTransform anchorButton = FindButtonByMethod("OnClickNewDeckButton")
+                                     ?? FindButtonByMethod("OnClickSaveDeck");
+
+        var bar = new GameObject("CharacterSlotBar", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        var barRect = (RectTransform)bar.transform;
+
+        const float Spacing = 12f;
+
+        // ★ 슬롯 높이는 "덱 리스트와 카드 리스트 사이 빈 띠"에서 뽑는다.
+        //   고정값이면 화면 비율이 바뀔 때 리스트를 침범하거나 쓸데없이 작아진다.
+        float slotHeight = MeasureSlotHeight();
+        float slotWidth = slotHeight * PortraitAspect();
+        float barWidth = slotWidth * MAX_DECK_CHARACTERS
+                       + Spacing * (MAX_DECK_CHARACTERS - 1) + 260f + Spacing;
+        float SlotHeight = slotHeight;   // 아래 배치 코드가 쓰는 이름
+
+        if (anchorButton != null)
+        {
+            // 버튼과 같은 부모·같은 앵커를 쓰고, 버튼 왼쪽으로 밀어 놓는다
+            barRect.SetParent(anchorButton.parent, false);
+            barRect.sizeDelta = new Vector2(barWidth, SlotHeight);
+
+            PlaceBarLeftOf(barRect, anchorButton);
+
+            // ★ Start 시점에는 레이아웃이 아직 돌지 않아 버튼 크기가 제값이 아니다.
+            //   (TouchTargetNormalizer가 뒤닮어 크기를 바꾸기도 한다)
+            //   한 프레임 뒤에 한 번 더 재어 자리를 확정한다.
+            StartCoroutine(PlaceBarWhenLayoutSettles(barRect, anchorButton));
+        }
+        else
+        {
+            Debug.LogWarning("[DeckBuilder] 덱 버튼을 찾지 못해 용병 슬롯을 화면 상단에 둔다.");
+            barRect.SetParent(canvas.transform, false);
+            barRect.anchorMin = new Vector2(0f, 1f);
+            barRect.anchorMax = new Vector2(0f, 1f);
+            barRect.pivot = new Vector2(0f, 1f);
+            barRect.sizeDelta = new Vector2(barWidth, SlotHeight);
+            barRect.anchoredPosition = new Vector2(16f, -8f);
+        }
+
+        var layout = bar.GetComponent<HorizontalLayoutGroup>();
+        layout.spacing = Spacing;
+        layout.childAlignment = TextAnchor.MiddleLeft;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
+        layout.childControlWidth = false;
+        layout.childControlHeight = false;
+
+        for (int i = 0; i < MAX_DECK_CHARACTERS; i++)
+            CreateCharacterSlot(barRect, i, slotWidth, slotHeight);
+
+        // 지금 어떤 덱을 편집 중인지 항상 보이게 한다 (메인에서 고른 덱과 헷갈리던 문제)
+        if (editingDeckNameText != null)
+        {
+            // 씬 어딘가에 따로 배치해 뒀다면 바 안에 또 만들지 않는다
+            _editingNameLabel = editingDeckNameText;
+        }
+        else
+        {
+            _editingNameLabel = CreateLabel(barRect, "편집 중: -", 260f, SlotHeight, 26f);
+            _editingNameLabel.alignment = TextAlignmentOptions.MidlineLeft;
+        }
+
+    }
+
+    /// <summary>슬롯 위아래로 남길 여백.</summary>
+    private const float BandPadding = 14f;
+
+    /// <summary>슬롯이 너무 작거나 화면을 잡아먹지 않도록 하는 범위.</summary>
+    private const float MinSlotHeight = 140f;
+    private const float MaxSlotHeight = 320f;
+
+    /// <summary>
+    /// 덱 리스트 아래끝과 카드 리스트 위끝 사이의 빈 높이를 잰다.
+    /// 둘 중 하나라도 못 찾으면 안전한 기본값으로 돌아간다.
+    /// </summary>
+    private float MeasureSlotHeight()
+    {
+        RectTransform deckPanel = FindScrollViewport(deckContent);
+        RectTransform cardPanel = FindScrollViewport(collectionContent);
+
+        if (deckPanel == null || cardPanel == null) return MinSlotHeight;
+
+        var deckCorners = new Vector3[4];
+        var cardCorners = new Vector3[4];
+        deckPanel.GetWorldCorners(deckCorners);
+        cardPanel.GetWorldCorners(cardCorners);
+
+        // corners: 0=좌하, 1=좌상, 2=우상, 3=우하
+        // 두 리스트 중 위에 있는 쪽의 아래끝 ~ 아래에 있는 쪽의 위끝
+        float upperBottom = Mathf.Max(deckCorners[0].y, cardCorners[0].y);
+        float lowerTop = Mathf.Min(deckCorners[1].y, cardCorners[1].y);
+
+        float scale = deckPanel.lossyScale.y;
+        if (Mathf.Approximately(scale, 0f)) return MinSlotHeight;
+
+        float band = (upperBottom - lowerTop) / scale;
+        if (band <= 0f) return MinSlotHeight;   // 겹쳐 있거나 잴 수 없다
+
+        return Mathf.Clamp(band - BandPadding * 2f, MinSlotHeight, MaxSlotHeight);
+    }
+
+    /// <summary>스크롤 뷰의 보이는 영역(Viewport). Content의 부모다.</summary>
+    private static RectTransform FindScrollViewport(Transform content)
+    {
+        if (content == null) return null;
+
+        var scroll = content.GetComponentInParent<ScrollRect>();
+        if (scroll != null && scroll.viewport != null) return scroll.viewport;
+
+        return content.parent as RectTransform;
+    }
+
+    /// <summary>용병 초상의 원본 가로/세로 비율. 못 구하면 3:4(세로로 긴 카드)로 본다.</summary>
+    private float PortraitAspect()
+    {
+        if (CardDataManager.Instance != null)
+        {
+            foreach (CharacterData character in CardDataManager.Instance.allCharacterList)
+            {
+                if (character == null) continue;
+
+                Sprite sprite = CardImageLoader.LoadSprite(character.imagePath);
+                if (sprite == null || sprite.rect.height <= 0f) continue;
+
+                return sprite.rect.width / sprite.rect.height;
+            }
+        }
+
+        return 3f / 4f;
+    }
+
+    /// <summary>기준 버튼 왼쪽에 바를 붙인다.</summary>
+    private static void PlaceBarLeftOf(RectTransform bar, RectTransform anchorButton)
+    {
+        if (bar == null || anchorButton == null) return;
+
+        bar.anchorMin = anchorButton.anchorMin;
+        bar.anchorMax = anchorButton.anchorMax;
+        bar.pivot = new Vector2(1f, anchorButton.pivot.y);
+
+        float buttonLeft = anchorButton.anchoredPosition.x - anchorButton.rect.width * anchorButton.pivot.x;
+        bar.anchoredPosition = new Vector2(buttonLeft - 24f, anchorButton.anchoredPosition.y);
+    }
+
+    private System.Collections.IEnumerator PlaceBarWhenLayoutSettles(RectTransform bar, RectTransform anchorButton)
+    {
+        yield return null;
+        yield return new WaitForEndOfFrame();
+
+        Canvas.ForceUpdateCanvases();
+        PlaceBarLeftOf(bar, anchorButton);
+    }
+
+    /// <summary>
+    /// onClick에 이 스크립트의 <paramref name="methodName"/>이 걸린 버튼을 찾는다.
+    /// 인스펙터 배선을 바꾸지 않고 "저 버튼 옆"이라는 위치를 잡기 위한 것이다.
+    /// </summary>
+    private RectTransform FindButtonByMethod(string methodName)
+    {
+        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        foreach (Button button in buttons)
+        {
+            if (button == null) continue;
+
+            for (int i = 0; i < button.onClick.GetPersistentEventCount(); i++)
+            {
+                if (button.onClick.GetPersistentTarget(i) as Object != this) continue;
+                if (button.onClick.GetPersistentMethodName(i) != methodName) continue;
+
+                return button.transform as RectTransform;
+            }
+        }
+
+        return null;
+    }
+
+    private void CreateCharacterSlot(RectTransform parent, int index, float width, float height)
+    {
+        var go = new GameObject($"CharacterSlot_{index}", typeof(RectTransform), typeof(Image), typeof(Button));
+        var rect = (RectTransform)go.transform;
+        rect.SetParent(parent, false);
+        rect.sizeDelta = new Vector2(width, height);
+
+        // ★ 자동 보정에서 뺀다. 그 규칙은 "최소 4:3"을 강제하는데,
+        //   용병 초상은 세로로 길어 그대로 두면 가로로 억지로 늘어난다.
+        go.AddComponent<TouchTargetExempt>().reason = "용병 초상 — 원본 비율 유지";
+
+        var element = go.AddComponent<LayoutElement>();
+        element.preferredWidth = width;
+        element.preferredHeight = height;
+
+        // 배경(클릭을 받는 면)
+        var background = go.GetComponent<Image>();
+        background.color = new Color(0.24f, 0.24f, 0.28f, 1f);
+
+        // ★ 초상을 별도 Image로 둔다.
+        //   배경 Image에 직접 스프라이트를 넣으면 비었을 때 흰 네모만 남아
+        //   "깨진 칸"처럼 보인다. 초상은 있을 때만 켜준다.
+        var portraitGo = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
+        var portraitRect = (RectTransform)portraitGo.transform;
+        portraitRect.SetParent(rect, false);
+        portraitRect.anchorMin = new Vector2(0f, 0.2f);
+        portraitRect.anchorMax = Vector2.one;
+        portraitRect.offsetMin = new Vector2(4f, 0f);
+        portraitRect.offsetMax = new Vector2(-4f, -4f);
+
+        var portrait = portraitGo.GetComponent<Image>();
+        portrait.preserveAspect = true;
+        portrait.raycastTarget = false;
+        portraitGo.SetActive(false);
+
+        // 이름은 아래쪽 띄에 둔다 (초상과 겹치지 않게)
+        var label = CreateLabel(rect, "용병 선택 +", 0f, 0f, 22f);
+        var labelRect = (RectTransform)label.transform;
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = new Vector2(1f, 0.2f);
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        int captured = index;
+        go.GetComponent<Button>().onClick.AddListener(() => OpenCharacterPicker(captured));
+
+        // 씬에서 만든 슬롯과 똑같은 모양으로 묶어 둔다 — 이후 코드가 둘을 구분할 필요가 없다
+        var view = go.AddComponent<CharacterSlotView>();
+        view.button = go.GetComponent<Button>();
+        view.background = background;
+        view.portrait = portrait;
+        view.label = label;
+
+        _slotViews.Add(view);
+    }
+
+    private TextMeshProUGUI CreateLabel(RectTransform parent, string text, float width, float height, float size)
+    {
+        var go = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        var rect = (RectTransform)go.transform;
+        rect.SetParent(parent, false);
+        if (width > 0f || height > 0f) rect.sizeDelta = new Vector2(width, height);
+
+        var label = go.GetComponent<TextMeshProUGUI>();
+
+        // ★ 런타임 생성 텍스트는 폰트를 직접 넣어 줘야 한다.
+        //   지정하지 않으면 기본 폰트에 한글 글리프가 없어 글자가 깨져 보인다.
+        if (_uiFont != null) label.font = _uiFont;
+
+        label.text = text;
+        label.fontSize = size;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+        return label;
+    }
+
+    /// <summary>슬롯을 눌렀을 때 뜨는 용병 선택 목록 (비우기 포함).</summary>
+    private void OpenCharacterPicker(int slotIndex)
+    {
+        if (CardDataManager.Instance == null) return;
+
+        CloseCharacterPicker();
+
+        // 팝업을 확보한다: 인스펙터 연결 → 씬 배치 → 프리팹 → 코드 생성
+        EnsurePickerPanel();
+
+        RectTransform rowParent = characterPickerPanel != null
+            ? PrepareScenePicker()
+            : PrepareGeneratedPicker();
+
+        if (rowParent == null) return;
+
+        // ★ 지금 이 슬롯에 뭐가 들어 있는지를 제목에도 밝힌다.
+        //   예전에는 "다른 슬롯이 쓰는 용병"만 흐리게 표시해,
+        //   유저가 그 흐린 항목을 "선택된 것"으로 읽어 1·2번이 바뀐 듯 보였다.
+        string currentId = slotIndex < _selectedCharacters.Count ? _selectedCharacters[slotIndex] : null;
+        CharacterData current = CardDataManager.Instance.GetCharacter(currentId);
+        string currentName = current != null ? current.name : "비어 있음";
+        string title = $"{slotIndex + 1}번 슬롯  —  현재: {currentName}";
+
+        if (characterPickerTitle != null) characterPickerTitle.text = title;
+        else CreateLabel(rowParent, title, 0f, 48f, 26f);
+
+        foreach (CharacterData character in CardDataManager.Instance.allCharacterList)
+        {
+            if (character == null) continue;
+
+            int usedAt = _selectedCharacters.IndexOf(character.characterId);
+            bool isThisSlot = usedAt == slotIndex;
+            bool usedByOtherSlot = usedAt >= 0 && !isThisSlot;
+
+            // 세 상태를 글로 구분한다 — 색만으로는 뭐가 뭔지 알 수 없다.
+            string rowText = character.name;
+            if (isThisSlot) rowText += $"   {CheckMark} 현재 이 슬롯";
+            else if (usedByOtherSlot) rowText += $"   ({usedAt + 1}번 슬롯이 사용 중)";
+
+            CharacterData captured = character;
+            AddPickerRow(rowParent, rowText, !usedByOtherSlot,
+                () => SetCharacterSlot(slotIndex, captured.characterId), isThisSlot);
+        }
+
+        AddPickerRow(rowParent, "비우기", true, () => SetCharacterSlot(slotIndex, null));
+        AddPickerRow(rowParent, "닫기", true, CloseCharacterPicker);
+    }
+
+    /// <summary>
+    /// 선택 표시에 쓸 기호.
+    ///
+    /// ✓(U+2713)는 프로젝트 한글 폰트에 없어서, OS 폰트 폴백이 닿아야 보인다.
+    /// 닿았는지를 <see cref="UiFontResolver.CanRender"/>로 물어보고,
+    /// 안 되는 환경에서만 깔끔한 대체 기호로 물러난다.
+    /// — □가 보이는 것보다는 낫다.
+    /// </summary>
+    private static string CheckMark => UiFontResolver.CanRender('✓') ? "✓" : "—";
+
+    /// <summary>Resources 아래에서 용병 선택 팝업을 찾을 경로.</summary>
+    private const string PickerResourcePath = "Build/CharacterPicker";
+
+    /// <summary>프리팹에서 만든 팝업. 한 번만 만들어 두고 껐다 켠다.</summary>
+    private bool _pickerReady;
+
+    /// <summary>
+    /// 팝업을 확보한다. 이미 있으면 아무것도 하지 않는다.
+    ///
+    /// 순서: 인스펙터 연결 → 씬에 배치된 것 → 프리팹 → (없으면 코드 생성으로 넘어간다)
+    /// ★ 씬 검사가 없으면 씬에 둔 팝업 위에 프리팹을 또 찍어 겹친다.
+    /// </summary>
+    private void EnsurePickerPanel()
+    {
+        if (_pickerReady) return;
+
+        Canvas canvas = deckContent != null ? deckContent.GetComponentInParent<Canvas>() : null;
+
+        // ① 인스펙터에 연결하지 않았다면 씬에서 찾아본다 (이름으로)
+        if (characterPickerPanel == null && canvas != null)
+        {
+            Transform found = FindDeepChild(canvas.transform, "CharacterPicker");
+            if (found != null) characterPickerPanel = found.gameObject;
+        }
+
+        // ② 그래도 없으면 프리팹을 한 번 찍는다
+        if (characterPickerPanel == null && canvas != null)
+        {
+            GameObject prefab = Resources.Load<GameObject>(PickerResourcePath);
+            if (prefab != null)
+            {
+                characterPickerPanel = Instantiate(prefab, canvas.transform);
+                characterPickerPanel.name = prefab.name;
+            }
+        }
+
+        if (characterPickerPanel == null) return;   // 코드 생성 경로로 넘어간다
+
+        ResolvePickerParts();
+
+        // ★ 팝업이 이제야 화면에 등장했으므로, 그 안의 폰트에도 폴백을 걸어 준다.
+        //   폴백은 폰트 에셋 단위라, 나중에 나타난 에셋은 새로 걸어야 한다.
+        UiFontResolver.EnsureSymbolFallback();
+
+        characterPickerPanel.SetActive(false);
+        _pickerReady = true;
+
+        if (!UiFontResolver.CanRender('✓'))
+        {
+            Debug.LogWarning("[DeckBuilder] 체크 기호(✓)를 그릴 폰트를 찾지 못해 대체 기호를 씁니다.");
+        }
+    }
+
+    /// <summary>
+    /// 팝업 안에서 제목·목록 부모·줄 템플릿을 알아낸다.
+    ///
+    /// 프리팹은 실행 화면을 그대로 캡처한 모양이라 <b>예시 줄이 여러 개 들어 있다.</b>
+    /// 그중 첫 줄을 템플릿으로 삼고 나머지는 치운다 — 남겨 두면 엉뚱한 목록이 함께 보인다.
+    /// </summary>
+    private void ResolvePickerParts()
+    {
+        Transform panel = characterPickerPanel.transform;
+
+        // 줄 = Button을 가진 자식. 하이어라키 순서대로 모은다.
+        var rows = new List<GameObject>();
+        foreach (Transform childTransform in panel)
+        {
+            if (childTransform.GetComponent<Button>() != null) rows.Add(childTransform.gameObject);
+        }
+
+        if (characterPickerRowPrefab == null && rows.Count > 0)
+        {
+            characterPickerRowPrefab = rows[0];
+            characterPickerRowPrefab.SetActive(false);   // 템플릿은 늘 꺼 둔다
+        }
+
+        // 예시로 들어 있던 나머지 줄은 제거한다
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i] == characterPickerRowPrefab) continue;
+            Destroy(rows[i]);
+        }
+
+        if (characterPickerContent == null)
+            characterPickerContent = panel;
+
+        // 제목 = 줄에 속하지 않은 텍스트
+        if (characterPickerTitle == null)
+        {
+            foreach (TextMeshProUGUI text in panel.GetComponentsInChildren<TextMeshProUGUI>(true))
+            {
+                if (text.GetComponentInParent<Button>() != null) continue;
+
+                characterPickerTitle = text;
+                break;
+            }
+        }
+
+        Debug.Log($"[DeckBuilder] 용병 선택 팝업 준비 완료 — 템플릿 " +
+                  $"{(characterPickerRowPrefab != null ? characterPickerRowPrefab.name : "없음(코드 생성)")}");
+    }
+
+    /// <summary>이름으로 자손을 찾는다(비활성 포함).</summary>
+    private static Transform FindDeepChild(Transform root, string targetName)
+    {
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            if (t.name == targetName) return t;
+
+        return null;
+    }
+
+    /// <summary>팝업을 켜고 목록을 비운다. 위치·크기는 건드리지 않는다.</summary>
+    private RectTransform PrepareScenePicker()
+    {
+        characterPickerPanel.SetActive(true);
+        _openPickerPanel = characterPickerPanel;
+
+        Transform parent = characterPickerContent != null
+            ? characterPickerContent
+            : characterPickerPanel.transform;
+
+        return parent as RectTransform;
+    }
+
+    /// <summary>씬에 팝업이 없을 때 코드로 만든다(예전 방식).</summary>
+    private RectTransform PrepareGeneratedPicker()
+    {
+        Canvas canvas = deckContent != null ? deckContent.GetComponentInParent<Canvas>() : null;
+        if (canvas == null) return null;
+
+        _generatedPickerPanel = new GameObject(
+            "CharacterPicker", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+
+        var rect = (RectTransform)_generatedPickerPanel.transform;
+        rect.SetParent(canvas.transform, false);
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(420f, 520f);
+        rect.anchoredPosition = Vector2.zero;
+        _generatedPickerPanel.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.15f, 0.97f);
+
+        var layout = _generatedPickerPanel.GetComponent<VerticalLayoutGroup>();
+        layout.spacing = 8f;
+        layout.padding = new RectOffset(12, 12, 12, 12);
+        layout.childForceExpandHeight = false;
+
+        _openPickerPanel = _generatedPickerPanel;
+        return rect;
+    }
+
+    /// <summary>
+    /// 목록 한 줄을 더한다.
+    /// 프리팹을 연결했으면 그것을 복제하고(글자만 채운다), 없으면 코드로 만든다.
+    /// </summary>
+    private void AddPickerRow(
+        RectTransform parent, string text, bool interactable, System.Action onClick, bool highlight = false)
+    {
+        GameObject go = characterPickerRowPrefab != null
+            ? Instantiate(characterPickerRowPrefab, parent)
+            : BuildPickerRowObject(parent);
+
+        go.name = "Row";   // (Clone) 꼬리표 제거
+
+        go.SetActive(true);
+        _pickerRows.Add(go);
+
+        // 글자: 프리팹이면 자식 텍스트를 찾고, 코드 생성이면 방금 만든 것을 찾는다
+        var label = go.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (label != null)
+        {
+            if (_uiFont != null) label.font = _uiFont;
+            label.text = text;
+            label.color = interactable ? Color.white : new Color(1f, 1f, 1f, 0.4f);
+        }
+
+        // 상태별 색은 프리팹이든 코드 생성이든 똑같이 입힌다.
+        // 템플릿 색을 그대로 쓰면 모든 줄이 같은 색이 되어 "현재/사용 중" 구분이 사라진다.
+        // 색 자체는 인스펙터에서 바꿀 수 있다.
+        var image = go.GetComponent<Image>();
+        if (image != null)
+            image.color = highlight ? pickerCurrentColor
+                        : interactable ? pickerNormalColor
+                        : pickerDisabledColor;
+
+        var button = go.GetComponent<Button>();
+        if (button != null)
+        {
+            button.onClick.RemoveAllListeners();
+            button.interactable = interactable;
+            if (interactable) button.onClick.AddListener(() => onClick());
+        }
+    }
+
+    /// <summary>프리팹이 없을 때 쓸 기본 줄.</summary>
+    private GameObject BuildPickerRowObject(RectTransform parent)
+    {
+        var go = new GameObject("Row", typeof(RectTransform), typeof(Image), typeof(Button));
+        var rect = (RectTransform)go.transform;
+        rect.SetParent(parent, false);
+        rect.sizeDelta = new Vector2(0f, 76f);
+
+        go.AddComponent<LayoutElement>().minHeight = 76f;
+
+        var label = CreateLabel(rect, string.Empty, 0f, 0f, 24f);
+        var labelRect = (RectTransform)label.transform;
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        return go;
+    }
+
+    private void CloseCharacterPicker()
+    {
+        // 씬에 만들어 둔 팝업은 **끄기만** 한다. 파괴하면 다음에 열 수 없다.
+        foreach (GameObject row in _pickerRows)
+        {
+            // 템플릿은 지우면 안 된다 — 다음에 열 때 쓸 원본이다
+            if (row != null && row != characterPickerRowPrefab) Destroy(row);
+        }
+
+        _pickerRows.Clear();
+
+        if (characterPickerPanel != null) characterPickerPanel.SetActive(false);
+
+        if (_generatedPickerPanel != null)
+        {
+            Destroy(_generatedPickerPanel);
+            _generatedPickerPanel = null;
+        }
+
+        _openPickerPanel = null;
+    }
+
+    /// <summary>슬롯에 용병을 넣거나 비운다. 비울 때 그 용병 카드가 덱에 있으면 함께 뺀다.</summary>
+    private void SetCharacterSlot(int slotIndex, string characterId)
+    {
+        while (_selectedCharacters.Count <= slotIndex) _selectedCharacters.Add(null);
+
+        string previous = _selectedCharacters[slotIndex];
+        _selectedCharacters[slotIndex] = characterId;
+
+        // 빠진 용병의 카드는 덱에 남겨 둘 수 없다 (목록에서 사라져 뺄 방법이 없어진다)
+        if (!string.IsNullOrEmpty(previous) && previous != characterId)
+        {
+            int removed = myDeck.RemoveAll(id =>
+            {
+                CardData data = CardDataManager.Instance?.GetCard(id);
+                return data != null && data.characterId == previous;
+            });
+
+            if (removed > 0)
+                ShowMessagePopup($"용병을 바꿔 그 용병의 카드 {removed}장을 덱에서 뺐습니다.");
+        }
+
+        CloseCharacterPicker();
+        RefreshAllUI();
+    }
+
+    /// <summary>덱에 든 카드로부터 용병 슬롯을 복원한다 (덱을 불러올 때).</summary>
+    private void SyncCharactersFromDeck(List<string> explicitCharacters)
+    {
+        _selectedCharacters.Clear();
+
+        // 저장된 명시값이 있으면 그대로 쓴다
+        if (explicitCharacters != null)
+        {
+            foreach (string id in explicitCharacters)
+                if (!string.IsNullOrEmpty(id) && !_selectedCharacters.Contains(id))
+                    _selectedCharacters.Add(id);
+        }
+
+        // 구버전 덱(명시값 없음)은 카드에서 역산한다
+        foreach (string owner in GetDeckCharacters())
+            if (!_selectedCharacters.Contains(owner) && _selectedCharacters.Count < MAX_DECK_CHARACTERS)
+                _selectedCharacters.Add(owner);
+    }
+
+    private void RefreshCharacterSlotUI()
+    {
+        for (int i = 0; i < _slotViews.Count; i++)
+        {
+            CharacterSlotView view = _slotViews[i];
+            if (view == null) continue;
+
+            string id = i < _selectedCharacters.Count ? _selectedCharacters[i] : null;
+            CharacterData character = CardDataManager.Instance != null
+                ? CardDataManager.Instance.GetCharacter(id)
+                : null;
+
+            if (view.label != null)
+                view.label.text = character != null ? character.name : "용병 선택 +";
+
+            if (view.background != null)
+                view.background.color = character != null
+                    ? new Color(0.28f, 0.34f, 0.5f, 1f)
+                    : new Color(0.24f, 0.24f, 0.28f, 1f);
+
+            if (view.portrait != null)
+            {
+                Sprite sprite = character != null ? CardImageLoader.LoadSprite(character.imagePath) : null;
+                view.portrait.sprite = sprite;
+                view.portrait.gameObject.SetActive(sprite != null);
+            }
+        }
+
+        if (_editingNameLabel != null)
+            _editingNameLabel.text = string.IsNullOrEmpty(_editingDeckName)
+                ? "편집 중: -"
+                : $"편집 중: {_editingDeckName}";
+    }
+
+    /// <summary>이 카드가 지금 고른 용병의 것인가.</summary>
+    private bool IsCardUnlocked(string cardId)
+    {
+        if (_selectedCharacters.Count == 0) return false;
+
+        CardData data = CardDataManager.Instance?.GetCard(cardId);
+        return data != null && _selectedCharacters.Contains(data.characterId);
     }
 
     // ---------------------------------------------------
     // 덱 / 덱리스트 관련
     // ---------------------------------------------------
 
-    //임시 슬라임20장 시작 덱
-    void CreateStarterDeck()
-    {
-        myDeck.Clear();
+    /// <summary>덱 목록이 비었을 때 드롭다운에 띄우는 문구.</summary>
+    private const string EMPTY_DECK_LABEL = "덱이 없습니다.";
 
-        string slimeID = "11001";
-        int starterCount = 20;
-
-        for (int i = 0; i < starterCount; i++)
-        {
-            myDeck.Add(slimeID);
-        }
-
-        // 덱 이름 입력칸도 "DefaultDeck" 등으로 채워주면 더 좋습니다.
-        if (deckNameInput != null)
-        {
-            deckNameInput.text = "StarterDeck";
-        }
-
-        // 데이터가 변경되었으니 화면을 갱신합니다. (중요!)
-        RefreshAllUI();
-
-        Debug.Log("기본 슬라임 덱 생성 완료!");
-    }
 
     // 덱 리스트 정리
     public void RefreshDeckList(string focusDeckName = null)
@@ -119,10 +1078,21 @@ public class DeckBuilderManager : MonoBehaviour
 
         if (options.Count == 0)
         {
-            options.Add("덱이 없습니다.");
+            // ★ 예전에는 여기서 CreateStarterDeck()이 존재하지 않는 카드 ID("11001")로 덱을 만들었다.
+            //   그 다음 RefreshDeckUI가 null 카드를 그대로 역참조해 **화면이 터졌다.**
+            //   새 설치나 저장 경로가 바뀐 복사본에서 바로 만나는 상황이라 죽은 코드를 걷어냈다.
+            //   덱이 없으면 그냥 빈 상태로 두고 [새 덱 만들기]를 쓰게 한다.
+            options.Add(EMPTY_DECK_LABEL);
             deckListDropdown.interactable = false;
             deckListDropdown.AddOptions(options);
-            CreateStarterDeck(); // 파일이 없으면 스타터 덱 생성 및 저장
+
+            myDeck.Clear();
+            _selectedCharacters.Clear();
+            _editingDeckName = "";
+            if (deckNameInput != null) deckNameInput.text = "";
+
+            RefreshAllUI();
+            ShowMessagePopup("저장된 덱이 없습니다.\n[새 덱 만들기]로 시작하세요.");
             return;
         }
 
@@ -148,9 +1118,10 @@ public class DeckBuilderManager : MonoBehaviour
         if (deckListDropdown.options.Count > targetIndex)
         {
             string deckName = deckListDropdown.options[targetIndex].text;
-            if (deckName != "덱이 없습니다.")
+            if (deckName != EMPTY_DECK_LABEL)
             {
                 LoadDeckFromJson(deckName + ".json");
+                RememberSelectedDeck(deckName);
             }
         }
     }
@@ -174,21 +1145,35 @@ public class DeckBuilderManager : MonoBehaviour
         string selectedName = deckListDropdown.options[index].text;
 
         // 3. 덱이 없을 경우
-        if (selectedName == "덱이 없습니다.")
+        if (selectedName == EMPTY_DECK_LABEL)
         {
             Debug.Log("불러올 덱이 없습니다.");
             return;
         }
 
+        // 저장하지 않은 편집 내용이 있으면 먼저 확인을 받는다
+        if (HasUnsavedChanges())
+        {
+            _pendingDeckToLoad = selectedName;
+            ShowUnsavedWarning();
+            return;
+        }
+
+        LoadDeckSelected(selectedName);
+    }
+
+    /// <summary>실제 불러오기 + 선택 동기화. 미저장 경고 이후에도 이 경로로 모인다.</summary>
+    private void LoadDeckSelected(string selectedName)
+    {
+        // ★ 예전에는 LoadDeckFromJson을 두 번 불렀다(팝업 띄우고 또 로드).
+        //   동작은 했지만 불필요하고, 팝업 뒤에 다시 덮어써 혼란스러웠다.
         bool isSuccess = LoadDeckFromJson(selectedName + ".json");
 
         if (isSuccess)
         {
+            RememberSelectedDeck(selectedName);
             ShowMessagePopup($"{selectedName}을(를) 불러왔습니다.");
         }
-
-        // 4. 로딩
-        LoadDeckFromJson(selectedName + ".json");
 
         Debug.Log($"'{selectedName}' 덱을 불러왔습니다.");
     }
@@ -242,6 +1227,13 @@ public class DeckBuilderManager : MonoBehaviour
             return;
         }
 
+        // 고른 용병의 카드만 넣을 수 있다. 목록에서 이미 걸러지지만 마지막으로 한 번 더 본다.
+        if (!IsCardUnlocked(id))
+        {
+            ShowMessagePopup("먼저 상단에서 용병을 고르세요. 고른 용병의 카드만 덱에 넣을 수 있습니다.");
+            return;
+        }
+
         // 2. 카드별 장수 제한 체크
         // ★ JSON에 max_deck_count가 없으면 0으로 파싱돼 "0 < 0"이 되고,
         //   추가 버튼이 아무 반응 없이 죽는다(실제로 그랬다). 값이 없으면 룰북 기본값으로 본다.
@@ -285,6 +1277,7 @@ public class DeckBuilderManager : MonoBehaviour
 
     void RefreshAllUI()
     {
+        RefreshCharacterSlotUI(); // 용병 슬롯이 카드 목록의 기준이므로 먼저
         RefreshDeckUI();       // 위쪽 화면 다시 그리기
         RefreshCollectionUI(); // 아래쪽 화면 숫자 바꾸기
 
@@ -300,13 +1293,21 @@ public class DeckBuilderManager : MonoBehaviour
         // 기존 슬롯 다 삭제
         foreach (Transform child in deckContent) Destroy(child.gameObject);
 
-        List<string> uniqueIDs = myDeck.Distinct().ToList();
+        // ★ 추가한 순서가 아니라 룰북 순서로 보여 준다
+        //   (엘리 → 베로니카 → 다이나 → 소니아, 각 용병 안에서 공격 → 방어 → 지원)
+        List<string> uniqueIDs = SortByRulebookOrder(myDeck.Distinct().ToList());
 
         foreach (string id in uniqueIDs)
         {
+            CardData data = CardDataManager.Instance?.GetCard(id);
+            if (data == null)
+            {
+                Debug.LogWarning($"[DeckBuilder] 알 수 없는 카드가 덱에 있다(건너뜀): {id}");
+                continue;
+            }
+
             GameObject go = Instantiate(cardPrefab, deckContent);
             CardUI ui = go.GetComponent<CardUI>();
-            CardData data = CardDataManager.Instance.GetCard(id);
 
             int countInDeck = myDeck.Count(x => x == id);
 
@@ -330,11 +1331,23 @@ public class DeckBuilderManager : MonoBehaviour
     {
         foreach (CardUI slot in collectionSlots)
         {
-            // 덱에 이 카드가 몇 장 있는지 셉니다.
-            int count = myDeck.Count(x => x == slot.myCardID);
-            CardData data = CardDataManager.Instance.GetCard(slot.myCardID);
+            if (slot == null) continue;
 
-            // 숫자만 갱신 (깜빡임 없음)
+            CardData data = CardDataManager.Instance?.GetCard(slot.myCardID);
+            if (data == null)
+            {
+                // 카드 데이터가 사라진 경우(구버전 덱 등). 예전엔 여기서 null을 그대로 역참조해 터졌다.
+                slot.gameObject.SetActive(false);
+                continue;
+            }
+
+            // ★ 고른 용병의 카드만 보여 준다. 슬롯을 지우지 않고 켜고 끄기만 해
+            //   스크롤 위치가 유지된다.
+            bool unlocked = IsCardUnlocked(slot.myCardID);
+            if (slot.gameObject.activeSelf != unlocked) slot.gameObject.SetActive(unlocked);
+            if (!unlocked) continue;
+
+            int count = myDeck.Count(x => x == slot.myCardID);
             slot.UpdateCount(count, data.max_deck_count);
         }
     }
@@ -380,6 +1393,57 @@ public class DeckBuilderManager : MonoBehaviour
         SaveDeckToJson();
     }
 
+    /// <summary>
+    /// 룰북 순서로 정렬한다.
+    /// <see cref="CardDataManager.GetSortOrder"/> 하나로 "용병 순서"와 "공격→방어→지원"이 모두 해결된다
+    /// (RulebookCards.json이 이미 그 순서로 쓰여 있다).
+    /// </summary>
+    private List<string> SortByRulebookOrder(List<string> ids)
+    {
+        if (CardDataManager.Instance == null) return ids;
+
+        return ids.OrderBy(id => CardDataManager.Instance.GetSortOrder(id)).ToList();
+    }
+
+    /// <summary>마지막으로 저장·불러오기 한 시점의 덱. 미저장 여부 판단에 쓴다.</summary>
+    private List<string> _savedSnapshot = new List<string>();
+    private string _pendingDeckToLoad;
+
+    /// <summary>저장하지 않은 편집이 있는가.</summary>
+    private bool HasUnsavedChanges()
+    {
+        if (myDeck.Count != _savedSnapshot.Count) return true;
+
+        // 순서는 상관없다 — 구성만 비교한다
+        var a = SortByRulebookOrder(new List<string>(myDeck));
+        var b = SortByRulebookOrder(new List<string>(_savedSnapshot));
+
+        for (int i = 0; i < a.Count; i++)
+            if (a[i] != b[i]) return true;
+
+        return false;
+    }
+
+    private void ShowUnsavedWarning()
+    {
+        ShowMessagePopup(
+            "저장하지 않은 변경이 있습니다.\n" +
+            "[덱 저장하기]로 먼저 저장하거나, 한 번 더 [덱 불러오기]를 누르면 변경을 버리고 불러옵니다.");
+
+        // 다음 클릭은 경고 없이 진행시킨다 (확인 팝업 버튼을 새로 배선하지 않아도 되도록)
+        _savedSnapshot = new List<string>(myDeck);
+    }
+
+    /// <summary>미저장 경고 뒤 대기 중이던 덱이 있으면 이어서 불러온다.</summary>
+    public void ContinuePendingLoad()
+    {
+        if (string.IsNullOrEmpty(_pendingDeckToLoad)) return;
+
+        string target = _pendingDeckToLoad;
+        _pendingDeckToLoad = null;
+        LoadDeckSelected(target);
+    }
+
     /// <summary>현재 덱에 들어 있는 용병 테마 목록 (카드의 characterId 기준).</summary>
     private List<string> GetDeckCharacters()
     {
@@ -409,7 +1473,13 @@ public class DeckBuilderManager : MonoBehaviour
 
         // 저장할 데이터 객체 만들기
         DeckSaveData data = new DeckSaveData();
-        data.cardIdList = new List<string>(myDeck); // 현재 덱 복사
+
+        // ★ 룰북 순서로 재배열해서 저장한다. 다음에 열었을 때 항상 같은 순서로 보인다.
+        data.cardIdList = SortByRulebookOrder(new List<string>(myDeck));
+
+        // ★ 고른 용병을 명시적으로 남긴다.
+        //   카드에서 역산하면 "용병 2명을 골랐지만 한쪽 카드만 넣은 덱"의 의도가 사라진다.
+        data.characterIdList = _selectedCharacters.Where(c => !string.IsNullOrEmpty(c)).ToList();
 
         // JSON 문자열로 변환
         string json = JsonUtility.ToJson(data, true);
@@ -481,6 +1551,10 @@ public class DeckBuilderManager : MonoBehaviour
         // 방금 저장한 덱이 이제 편집 대상이다. 이어서 또 저장하면 이 파일을 덮어쓴다
         _editingDeckName = finalName;
 
+        // 저장했으니 미저장 기준점도 여기로 옮기고, 메인 화면과 선택을 맞춘다
+        _savedSnapshot = new List<string>(myDeck);
+        RememberSelectedDeck(finalName);
+
         Debug.Log(isOverwritingEditedDeck
             ? $"저장 완료(덮어쓰기): {finalName}"
             : $"저장 완료(새 덱): {finalName}");
@@ -518,7 +1592,13 @@ public class DeckBuilderManager : MonoBehaviour
         DeckSaveData data = JsonUtility.FromJson<DeckSaveData>(json);
 
         // 5. 내 덱 리스트(myDeck)를 저장된 데이터로 덮어쓰기
-        myDeck = new List<string>(data.cardIdList);
+        myDeck = data.cardIdList != null ? new List<string>(data.cardIdList) : new List<string>();
+
+        // 용병 슬롯 복원 — 명시값이 있으면 그대로, 구버전 덱이면 카드에서 역산
+        SyncCharactersFromDeck(data.characterIdList);
+
+        // 미저장 판정 기준점
+        _savedSnapshot = new List<string>(myDeck);
 
         // 6. 덱 이름 입력칸도 파일 이름으로 맞춰주기 (확장자 .json 제거)
         string loadedName = fileName.Replace(".json", "");

@@ -487,6 +487,39 @@ namespace TCG_Project.Scripts.Core
             return true;
         }
 
+        /// <summary>
+        /// 위치를 지정해 카드를 넣는다. 리스트로 된 존에만 적용된다.
+        ///
+        /// ★ 메인덱은 <c>index 0이 맨 위</c>다(드로우가 <c>Deck[0]</c>에서 가져간다).
+        ///   인자 없는 <see cref="InsertCard(ZoneType, Card)"/>는 리스트 끝에 붙이므로
+        ///   <b>덱 맨 아래</b>가 된다. 맨 위에 넣으려면 반드시 이 오버로드를 써야 한다.
+        /// </summary>
+        /// <param name="index">범위를 벗어나면 양 끝으로 보정된다.</param>
+        public bool InsertCard(ZoneType zone, Card card, int index)
+        {
+            if (card == null) return false;
+
+            List<Card> target = zone switch
+            {
+                ZoneType.Deck => Deck,
+                ZoneType.Hand => Hand,
+                ZoneType.Graveyard => Graveyard,
+                ZoneType.ResourceDeck => ResourceDeck,
+                ZoneType.ResourceZone => ResourceZone,
+                ZoneType.StackZone => StackZone,
+                ZoneType.PlayBuffer => PlayBuffer,
+                _ => null
+            };
+
+            // 리스트가 아닌 존(세트존·전장존)은 위치 개념이 없다. 기존 경로로 넘긴다.
+            if (target == null) return InsertCard(zone, card);
+
+            if (index < 0) index = 0;
+            if (index > target.Count) index = target.Count;
+            target.Insert(index, card);
+            return true;
+        }
+
         // ---------------------------------------------------------
         // 3. 카드 추출 (Extract) - 외부로 카드가 나갈 때
         // ---------------------------------------------------------

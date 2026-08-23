@@ -296,6 +296,11 @@ public class session_manage : MonoBehaviour
                 string jsonText = System.IO.File.ReadAllText(filePath);
                 DeckSaveData parsedData = JsonUtility.FromJson<DeckSaveData>(jsonText);
                 GameData.MyDeck = new List<string>(parsedData.cardIdList);
+
+                // 덱 빌더가 명시적으로 남긴 용병 목록. 구버전 덱이면 비어 있다.
+                GameData.MyCharacters = parsedData.characterIdList != null
+                    ? new List<string>(parsedData.characterIdList)
+                    : new List<string>();
             }
             else
             {

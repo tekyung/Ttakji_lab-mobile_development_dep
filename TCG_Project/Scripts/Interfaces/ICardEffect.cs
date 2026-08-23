@@ -23,4 +23,29 @@ namespace TCG_Project.Scripts.Interfaces // 이 부분이 필수!
         // 자신과 완벽히 동일한 상태를 가진 새로운 인스턴스를 반환합니다.
         ICardEffect Clone();
     }
+
+    /// <summary>
+    /// "그 후," 연쇄의 <b>선행 조건</b>이 될 수 있는 효과가 구현한다.
+    ///
+    /// 룰 설계상 연쇄의 앞에 오는 효과는 <b>100% 이행되어야만</b> 뒷 효과가 따라온다.
+    /// 부분만 이행되면 카드 전체가 불발이다(예: 베로니카 "계획대로"는 패 3장을 전부 버려야 데미지가 들어간다).
+    /// 반대로 연쇄의 뒷효과나 조건이 없는 단일 효과는 <b>가능한 최대 이행</b>이 원칙이다.
+    ///
+    /// 모든 효과가 구현할 필요는 없다. 구현하지 않은 효과는 선행 조건 검사에서 항상 통과한다.
+    /// </summary>
+    public interface IConditionalEffect
+    {
+        /// <summary>
+        /// true면 100% 이행해야 성공이다(선행 조건 자리).
+        /// false면 가능한 만큼만 해도 성공이다.
+        /// <see cref="Core.Card"/>가 발동 직전에 카드 구조를 보고 정해 준다.
+        /// </summary>
+        bool RequireFullExecution { get; set; }
+
+        /// <summary>
+        /// 지금 이 효과를 100% 이행할 수 있는가.
+        /// <b>화면을 띄우기 전에</b> 불리므로 상태를 바꿔서는 안 된다.
+        /// </summary>
+        bool CanFullySatisfy(GameContext context);
+    }
 }

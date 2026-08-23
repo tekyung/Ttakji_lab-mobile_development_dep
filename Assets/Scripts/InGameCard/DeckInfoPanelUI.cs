@@ -262,9 +262,51 @@ public class DeckInfoPanelUI : MonoBehaviour
 
         // 2차 클릭: 실제 항복
         ClosePanel();
+        Surrender();
+    }
 
-        if (BattleManager.Instance != null && _human != null)
-            BattleManager.Instance.SurrenderBy(_human);
+    /// <summary>
+    /// 항복 처리. 로컬과 온라인은 게임을 끝내는 주체가 다르다.
+    ///
+    /// ★ 예전엔 무조건 <c>BattleManager.SurrenderBy</c>를 불렀는데,
+    ///   온라인에서는 BattleManager가 매치를 돌리지 않아 context가 null이라
+    ///   그 메서드가 첫 줄에서 그냥 돌아왔다. 항복 버튼 둘이 모두 먹통이었던 이유다.
+    /// </summary>
+    private void Surrender()
+    {
+        if (_human == null)
+        {
+            Debug.LogWarning("[DeckInfoPanel] 항복할 플레이어를 찾지 못했다.");
+            return;
+        }
+
+        if (!OnlineMatchStarter.IsOnlineSessionActive)
+        {
+            if (BattleManager.Instance != null) BattleManager.Instance.SurrenderBy(_human);
+            return;
+        }
+
+        // 온라인: 호스트는 자기 엔진을 직접 끝내고, 게스트는 호스트에게 알린다.
+        if (GameData.MyRole == "HOST")
+        {
+            if (ServerGameManager.Instance != null)
+            {
+                ServerGameManager.Instance.SurrenderBy(_human);
+                return;
+            }
+
+            Debug.LogWarning("[DeckInfoPanel] ServerGameManager를 찾지 못해 항복하지 못했다.");
+            return;
+        }
+
+        var client = FindFirstObjectByType<session_game_manage>(FindObjectsInactive.Include);
+        if (client != null)
+        {
+            client.SendSurrender();
+            return;
+        }
+
+        Debug.LogWarning("[DeckInfoPanel] 세션 매니저를 찾지 못해 항복을 보내지 못했다.");
     }
 
     private void DisarmSurrender()

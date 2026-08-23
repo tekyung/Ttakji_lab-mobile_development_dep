@@ -11,7 +11,7 @@ namespace TCG_Project.Scripts.Effects
         Top,     // 존의 앞(맨 위)에서 N장
         Bottom,  // 존의 뒤(맨 아래)에서 N장
         Random,  // 랜덤 N장 (봇/Human 모두 랜덤)
-        Choose,  // 플레이어 선택 (봇 환경에서는 Random과 동일)
+        Choose,  // 플레이어 선택 — 실제 선택은 MoveEffect가 가로채 처리한다
         All,     // 조건에 맞는 전체
         First,   // 조건에 맞는 첫 번째 카드
         Last,    // 조건에 맞는 마지막 N장 (최근 추가 순)
@@ -138,10 +138,22 @@ namespace TCG_Project.Scripts.Effects
                 SelectMode.First => pool.Take(Count).ToList(),
                 SelectMode.Bottom => pool.Skip(Math.Max(0, pool.Count - Count)).ToList(),
                 SelectMode.Last => pool.Skip(Math.Max(0, pool.Count - Count)).ToList(),
-                SelectMode.Random or SelectMode.Choose
-                                    => SelectRandom(pool, Count),
+                SelectMode.Random => SelectRandom(pool, Count),
+
+                // 선택 UI가 없던 시절 Choose를 조용히 랜덤으로 떨괴러뜨렸고,
+                // 그 사일음이 ELLI-09·10 같은 버그를 오랫동안 감췄다.
+                // MoveEffect가 Choose를 먼저 가로채므로 여기 도달했다면 선택 UI를 우회한 것이다.
+                SelectMode.Choose => SelectChooseFallback(pool, Count),
                 _ => pool.Take(Count).ToList()
             };
+        }
+
+        private static List<Card> SelectChooseFallback(List<Card> pool, int count)
+        {
+            EventManager.OnLogMessage?.Invoke(
+                $"  ⚠ [CardSelector] Choose가 선택 UI를 거치지 않고 랜덤으로 처리됩니다. " +
+                $"(후보 {pool.Count}장 중 {count}장) — 호출 경로를 점검하세요.");
+            return SelectRandom(pool, count);
         }
 
         private static List<Card> SelectRandom(List<Card> pool, int count)

@@ -26,6 +26,7 @@ using ServerScripts.EventScripts;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
+using TCG_Project.Scripts.Utils;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -97,6 +98,10 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     private string _inputRequestedForPhase;
     private int _inputRequestedForTurn = -1;
     private session_game_manage _client;
+
+    /// <summary>board_state 구독 해제용 토큰. 반드시 떼어 내야 리스너가 쌓이지 않는다.</summary>
+    private firebase_network.BoardStateListener _boardListener;
+    private firebase_network _boardNetwork;
     private readonly GameContext _ctx = new GameContext();
 
     // ─── 수명 주기 ──────────────────────────────────────────────────────
@@ -110,6 +115,8 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= HandleSceneLoaded;
+        UnsubscribeFromChoiceRequests();
+        DetachBoardListener();
     }
 
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -118,8 +125,21 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         TryAttach();
     }
 
+    /// <summary>board_state 구독을 뗀다. 여러 번 불러도 안전하다.</summary>
+    private void DetachBoardListener()
+    {
+        if (_boardNetwork != null && _boardListener != null)
+            _boardNetwork.StopListeningBoardState(_boardListener);
+
+        _boardListener = null;
+        _boardNetwork = null;
+    }
+
     private void ResetMirror()
     {
+        UnsubscribeFromChoiceRequests();
+        DetachBoardListener();
+
         _mine = null;
         _foe = null;
         _started = false;
@@ -129,6 +149,8 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         _zoneOf.Clear();
         _revealedOf.Clear();
         _desiredReveal.Clear();
+        _usedAbilitiesApplied.Clear();
+        _handledRequestIds.Clear();
 
         _lastTurn = -1;
         _lastPhase = null;
@@ -138,6 +160,8 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         _lastFoeResource = int.MinValue;
         _inputRequestedForPhase = null;
         _inputRequestedForTurn = -1;
+        _outstandingPickFingerprint = null;
+        _droppedSnapshots = 0;
         _client = null;
         _moveQueue.Clear();
 
@@ -166,8 +190,11 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         // session_game_manage.Start()가 그걸 await하므로 몇 프레임 늦을 수 있어 실패하면 조용히 재시도한다.
         try
         {
-            // ⚠️ ListenForBoardState는 핸들러를 추가만 한다. session_game_manage 쪽 구독과 공존한다
-            network.ListenForBoardState(GameData.SessionCode, EnqueueSnapshot);
+            // 재구독 전에 이전 것을 반드시 뗀다. 이게 없으면 씬을 재진입할 때마다
+            // 리스너가 하나씩 늘어 같은 스냅샷을 여러 번 처리하게 된다.
+            DetachBoardListener();
+            _boardNetwork = network;
+            _boardListener = network.ListenForBoardState(GameData.SessionCode, EnqueueSnapshot);
         }
         catch (System.Exception e)
         {
@@ -177,6 +204,7 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         }
 
         _listening = true;
+        SubscribeToChoiceRequests(_client);
 
         Debug.Log($"[GuestBoard] board_state 구독 시작 — 세션 {GameData.SessionCode}");
     }
@@ -190,11 +218,22 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
 
         lock (_lock)
         {
-            // 순서를 지켜야 하므로 원칙적으로 버리지 않는다. 병적으로 밀릴 때만 오래된 것을 흘린다
-            while (_pending.Count >= MaxPendingSnapshots) _pending.Dequeue();
+            // 순서를 지켜야 하므로 원칙적으로 버리지 않는다. 병적으로 밀릴 때만 오래된 것을 흘린다.
+            // ★ 버릴 때는 반드시 알린다 — 예전엔 소리 없이 버려서 "덱이 통째로 사라졌다 나타나는"
+            //   증상의 원인을 추적할 수 없었다. 이 경고가 보이면 처리량이 모자란다는 뜻이다.
+            while (_pending.Count >= MaxPendingSnapshots)
+            {
+                _pending.Dequeue();
+                _droppedSnapshots++;
+            }
+
             _pending.Enqueue(json);
         }
     }
+
+    /// <summary>버린 스냅샷 수. 0이 아니면 처리량이 모자란 것이다.</summary>
+    private int _droppedSnapshots;
+    private float _nextDropReportTime;
 
     private void Update()
     {
@@ -203,6 +242,8 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
             TryAttach();
             return;
         }
+
+        ReportDroppedSnapshots();
 
         // 밀린 이동부터 조금씩 흘려보낸다. 다 비우기 전에는 다음 스냅샷을 읽지 않는다(순서 보존)
         if (_moveQueue.Count > 0)
@@ -291,6 +332,18 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
 
         // 내가 p1이어야 하단 보드 주인이 된다 (CharacterFieldUI·CardZoomPopupUI의 owner == p1 규칙)
         EventManager.OnGameStart?.Invoke(_mine, _foe);
+
+        // ★ 용병 슬롯 4칸. 호스트는 session_game_manage가 같은 두 줄을 부른다.
+        //   board_state의 Character1_ID/2_ID가 채워져야 의미가 있다(EventService에서 대입).
+        if (!string.IsNullOrEmpty(_mine.CharacterCardId) || !string.IsNullOrEmpty(_foe.CharacterCardId))
+        {
+            CharacterFieldBroadcast.Register(_mine, _data);
+            CharacterFieldBroadcast.SyncAll(_mine, _foe, _data);
+        }
+        else
+        {
+            Debug.LogWarning("[GuestBoard] board_state에 용병 ID가 없다 — 용병 슬롯을 그릴 수 없다.");
+        }
         EventManager.OnLogMessage?.Invoke("<color=cyan>[온라인] 상대 보드와 동기화되었습니다.</color>");
 
         Debug.Log($"[GuestBoard] 미러 생성 — 내 카드 {_mine.Deck.Count}장 / 상대 {_foe.Deck.Count}장");
@@ -417,6 +470,9 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         // 2) 앞면/뒷면 변화 (존은 그대로인데 공개만 된 경우 — 오픈 페이즈의 세트 카드)
         ApplyRevealChanges(desired);
 
+        // 2-1) 용병 능력 사용 상태 (카드 180도 회전)
+        ApplyUsedAbilities(state);
+
         // 3) 수치 변화
         SyncNumbers(state);
 
@@ -452,10 +508,34 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         RequestInputIfNeeded(state);
     }
 
-    /// <summary>큐에 쌓인 카드 이동을 프레임당 몇 건씩 화면에 반영한다.</summary>
+    private void ReportDroppedSnapshots()
+    {
+        if (_droppedSnapshots == 0 || Time.unscaledTime < _nextDropReportTime) return;
+
+        Debug.LogWarning(
+            $"[GuestBoard] 밀린 스냅샷 {_droppedSnapshots}건을 버렸다 — 중간 상태가 유실될 수 있다. " +
+            $"(대기 {_pending.Count}건, 이동 대기 {_moveQueue.Count}건)");
+
+        _droppedSnapshots = 0;
+        _nextDropReportTime = Time.unscaledTime + 3f; // 로그 폭주 방지
+    }
+
+    /// <summary>밀린 정도에 따라 한 프레임에 처리할 이동 수를 정한다.</summary>
+    [Tooltip("이동이 크게 밀렸을 때 한 프레임에 처리할 수 있는 최대 건수")]
+    public int maxMovesPerFrame = 8;
+
+    /// <summary>
+    /// 큐에 쌓인 카드 이동을 프레임당 몇 건씩 화면에 반영한다.
+    ///
+    /// ★ 예산은 <b>밀린 만큼만</b> 늘린다. 한가할 때는 movesPerFrame(기본 1)을 그대로 써서
+    ///   예전의 "화면이 한꺼번에 다시 그려지며 번쩍이던" 문제를 부르지 않고,
+    ///   초기 드로우처럼 20장이 한꺼번에 움직일 때만 빨라진다.
+    ///   고정값 1로 두면 20장 이동에 20프레임이 걸려 덱이 비었다 차는 게 그대로 보였다.
+    /// </summary>
     private void DrainMoveQueue()
     {
-        int budget = Mathf.Max(1, movesPerFrame);
+        int baseline = Mathf.Max(1, movesPerFrame);
+        int budget = Mathf.Clamp(baseline + _moveQueue.Count / 4, baseline, Mathf.Max(baseline, maxMovesPerFrame));
 
         while (budget-- > 0 && _moveQueue.Count > 0)
         {
@@ -585,6 +665,42 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>InstanceId가 아니라 용병 카드 ID로 추적한다 (플레이어당 최대 2개).</summary>
+    private readonly HashSet<string> _usedAbilitiesApplied = new HashSet<string>();
+
+    /// <summary>
+    /// 호스트가 알려 준 "이미 쓴 용병 능력"을 미러에 반영한다.
+    ///
+    /// ★ 용병 카드의 180도 회전은 <c>Player.MarkCharacterAbilityUsed</c>가 쏘는
+    ///   <c>OnCharacterAbilityUsed</c> → <c>CharacterFieldBroadcast.EmitSlotUpdate</c>로 일어난다.
+    ///   게스트에는 그 이벤트를 쏘는 엔진이 없어 양쪽 용병 카드가 영영 안 돌아갔다.
+    ///   (그래서 이미 쓴 능력을 다시 쓸 수 있는 것처럼 보였다)
+    /// </summary>
+    private void ApplyUsedAbilities(BoardState state)
+    {
+        ApplyUsedAbilitiesFor(_mine, state.GuestState);
+        ApplyUsedAbilitiesFor(_foe, state.HostState);
+    }
+
+    private void ApplyUsedAbilitiesFor(Player owner, PlayerState ps)
+    {
+        if (owner == null || ps?.UsedCharacterCardIds == null) return;
+
+        foreach (string characterCardId in ps.UsedCharacterCardIds)
+        {
+            if (string.IsNullOrEmpty(characterCardId)) continue;
+
+            string key = owner.Name + ":" + characterCardId;
+            if (!_usedAbilitiesApplied.Add(key)) continue;
+
+            // 미러의 상태를 맞추면 MarkCharacterAbilityUsed가 OnCharacterAbilityUsed를 쏘고,
+            // 그걸 받은 CharacterFieldBroadcast가 슬롯을 갱신해 카드가 돌아간다.
+            owner.MarkCharacterAbilityUsed(characterCardId);
+            EventManager.OnLogMessage?.Invoke(
+                $"{(LocalPlayerContext.IsMine(owner) ? "나" : "상대")}: 용병 능력 사용");
+        }
+    }
+
     private void CollectZones(Dictionary<string, ZoneMembership> map, PlayerState ps, Player owner)
     {
         if (ps == null || owner == null) return;
@@ -700,6 +816,191 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
                 EventManager.OnResourceChange?.Invoke(_foe, _lastFoeResource);
             }
         }
+    }
+
+    // ─── 선택 요청 (카드 선택 · 예/아니오 · 스택) ────────────────────────
+    //
+    // ★ 세트·오픈과 같은 방식이다. 호스트에서 온 '알림'을 로컬 엔진 이벤트로 합성해
+    //   기존 HumanChoiceDialogUI를 그대로 띄우고, 답이 오면 네트워크로 돌려보낸다.
+    //   **새 UI를 만들지 않는다.**
+    //
+    // 알림 도착은 session_game_manage가 공개한 훅으로 받는다(내부 pending 필드는 private다).
+
+    private session_game_manage _subscribedClient;
+
+    /// <summary>
+    /// 이미 처리한 선택 요청 식별자.
+    ///
+    /// ★ 같은 요청이 두 번 도착하면 선택 다이얼로그가 두 번 큐에 쌓여
+    ///   "확정을 두 번 눌러야 창이 사라지는" 증상이 된다(HumanChoiceDialogUI는 요청 큐 방식이다).
+    ///   중복을 여기서 걸러 낸다. 호스트가 실제로 두 번 보내는지는 아래 로그로 확인할 수 있다.
+    /// </summary>
+    private readonly HashSet<string> _handledRequestIds = new HashSet<string>();
+
+    /// <summary>중복 요청이면 true. 처음 보는 요청이면 기록하고 false.</summary>
+    /// <summary>응답을 아직 보내지 않은 카드 선택 요청의 내용 지문. 같은 내용이 또 오면 무시한다.</summary>
+    private string _outstandingPickFingerprint;
+
+    private static string BuildPickFingerprint(RequireCardPickNotification noti, int required)
+    {
+        string ids = noti.PresentedCardInstanceIds != null
+            ? string.Join(",", noti.PresentedCardInstanceIds)
+            : string.Empty;
+
+        return $"{noti.PlayerName}|{required}|{noti.Message}|{ids}";
+    }
+
+    private bool IsDuplicateRequest(string kind, string requestId)
+    {
+        if (string.IsNullOrEmpty(requestId)) return false; // 식별자가 없으면 거를 수 없다
+
+        if (_handledRequestIds.Add(kind + ":" + requestId)) return false;
+
+        Debug.LogWarning($"[GuestBoard] 같은 {kind} 요청이 또 왔다(무시) — id={requestId}");
+        return true;
+    }
+
+    private void SubscribeToChoiceRequests(session_game_manage client)
+    {
+        if (client == null || ReferenceEquals(client, _subscribedClient)) return;
+
+        UnsubscribeFromChoiceRequests();
+
+        client.OnCardPickRequested += HandleCardPickRequested;
+        client.OnOptionalRequested += HandleOptionalRequested;
+        client.OnStackRequested += HandleStackRequested;
+        _subscribedClient = client;
+    }
+
+    private void UnsubscribeFromChoiceRequests()
+    {
+        if (_subscribedClient == null) return;
+
+        _subscribedClient.OnCardPickRequested -= HandleCardPickRequested;
+        _subscribedClient.OnOptionalRequested -= HandleOptionalRequested;
+        _subscribedClient.OnStackRequested -= HandleStackRequested;
+        _subscribedClient = null;
+    }
+
+    /// <summary>N장 선택 요청 → 선택 다이얼로그 → 고른 카드를 호스트로 전송.</summary>
+    private void HandleCardPickRequested(RequireCardPickNotification noti)
+    {
+        if (noti == null || _mine == null) return;
+        if (IsDuplicateRequest("CardPick", noti.RequestId)) return;
+
+        List<Card> candidates = RestoreCards(noti.PresentedCardInstanceIds, noti.PresentedCardDataIds);
+        if (candidates.Count == 0)
+        {
+            Debug.LogWarning("[GuestBoard] 카드 선택 요청인데 후보를 복원하지 못했다. 기본 응답을 보낸다.");
+            _client.OnCardPickConfirmDefaultFromUI();
+            return;
+        }
+
+        int required = Mathf.Max(1, noti.RequiredCount);
+
+        // ★ RequestId가 달라도 내용이 같으면 같은 질문이다.
+        //   호스트가 같은 질문을 두 번 방송하면 RequestId가 서로 달라 위의 가드를 통과해 버린다
+        //   (게스트에서 "확정을 두 번 해야 창이 닫히던" 증상).
+        string fingerprint = BuildPickFingerprint(noti, required);
+        if (fingerprint == _outstandingPickFingerprint)
+        {
+            Debug.LogWarning(
+                $"[GuestBoard] 내용이 같은 카드 선택 요청이 또 왔다(무시) — requestId={noti.RequestId}, " +
+                $"직전 요청과 후보·장수가 동일하다. 호스트가 중복 방송했을 가능성이 높다.");
+            return;
+        }
+        _outstandingPickFingerprint = fingerprint;
+
+        Debug.Log($"[GuestBoard] 카드 선택 요청 — 후보 {candidates.Count}장 중 {required}장, requestId={noti.RequestId}");
+
+        // ★ noti.Message를 그대로 넘긴다. 이전에는 버려서 게스트가 항상
+        //   "카드를 N장 선택하세요"만 봤고, 순서를 요구하는 요청을 구분할 수 없었다.
+        EventManager.OnRequireCardPick?.Invoke(
+            _mine, candidates, required, new CardPickPrompt(noti.Message, noti.Ordered), chosen =>
+        {
+            string[] ids = ToInstanceIds(chosen, candidates, required);
+            Debug.Log($"[GuestBoard] 카드 선택 전송: {string.Join(", ", ids)}");
+            _outstandingPickFingerprint = null; // 응답했으니 같은 질문이 다시 와도 된다
+            _client.SubmitCardPickFromUI(ids);
+        });
+    }
+
+    /// <summary>예/아니오 요청.</summary>
+    private void HandleOptionalRequested(RequireOptionalNotification noti)
+    {
+        if (noti == null || _mine == null) return;
+        if (IsDuplicateRequest("Optional", noti.ActionId)) return;
+
+        string message = string.IsNullOrEmpty(noti.Message) ? "효과를 발동하시겠습니까?" : noti.Message;
+        Debug.Log($"[GuestBoard] 예/아니오 요청 — {message}");
+
+        EventManager.OnRequireOptionalAction?.Invoke(_mine, message, _ctx, accepted =>
+        {
+            Debug.Log($"[GuestBoard] 예/아니오 전송: {(accepted ? "예" : "아니오")}");
+            _client.SendPendingOptionalResponse(accepted);
+        });
+    }
+
+    /// <summary>
+    /// 스택 발동 여부.
+    /// ⚠️ 시맨틱이 어긋나는 지점이다 — 호스트 엔진은 <c>OnRequireCardPick</c>으로 묻지만
+    ///   게스트에는 <c>RequireStackNotification</c>(스택 카드 1장 지정)으로 도착한다.
+    ///   그래서 여기서는 "발동할까요?" 예/아니오로 바꿔 묻고, 응답도 스택 전용 API로 보낸다.
+    /// </summary>
+    private void HandleStackRequested(RequireStackNotification noti)
+    {
+        if (noti == null || _mine == null) return;
+        if (IsDuplicateRequest("Stack", noti.StackCardInstanceId + "|" + noti.OpponentCardInstanceId)) return;
+
+        Card stackCard = ResolveCard(noti.StackCardInstanceId, noti.StackCardDataId);
+        string cardName = stackCard != null ? stackCard.Name : "스택 카드";
+        string message = string.IsNullOrEmpty(noti.Message)
+            ? $"'{cardName}'을(를) 발동하시겠습니까?"
+            : noti.Message;
+
+        Debug.Log($"[GuestBoard] 스택 발동 요청 — {cardName}");
+
+        EventManager.OnRequireOptionalAction?.Invoke(_mine, message, _ctx, use =>
+        {
+            Debug.Log($"[GuestBoard] 스택 응답 전송: {(use ? "발동" : "미발동")}");
+            _client.SendPendingStackResponse(use);
+        });
+    }
+
+    /// <summary>알림이 준 ID 쌍으로 카드 목록을 복원한다.</summary>
+    private List<Card> RestoreCards(string[] instanceIds, string[] dataIds)
+    {
+        var cards = new List<Card>();
+        if (instanceIds == null || dataIds == null) return cards;
+
+        int count = Mathf.Min(instanceIds.Length, dataIds.Length);
+        for (int i = 0; i < count; i++)
+        {
+            Card card = ResolveCard(instanceIds[i], dataIds[i]);
+            if (card != null) cards.Add(card);
+        }
+
+        return cards;
+    }
+
+    /// <summary>선택 결과를 InstanceId 배열로. 비었으면 후보 앞쪽으로 채운다(서버가 대기 중이므로 빈 응답은 위험하다).</summary>
+    private static string[] ToInstanceIds(List<Card> chosen, List<Card> candidates, int required)
+    {
+        var ids = new List<string>();
+
+        if (chosen != null)
+        {
+            foreach (Card c in chosen)
+                if (c != null && !string.IsNullOrEmpty(c.InstanceId)) ids.Add(c.InstanceId);
+        }
+
+        for (int i = 0; ids.Count < required && i < candidates.Count; i++)
+        {
+            string id = candidates[i].InstanceId;
+            if (!string.IsNullOrEmpty(id) && !ids.Contains(id)) ids.Add(id);
+        }
+
+        return ids.ToArray();
     }
 
     // ─── 게스트 입력 ────────────────────────────────────────────────────

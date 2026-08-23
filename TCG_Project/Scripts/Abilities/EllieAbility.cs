@@ -70,7 +70,7 @@ namespace TCG_Project.Scripts.Abilities
             else
             {
                 var selectedList = await AsyncTimeoutHelper.WaitForChoiceWithTimeout<System.Collections.Generic.List<Card>>(
-                    cb => EventManager.OnRequireCardPick?.Invoke(owner, validCards, 1, cb),
+                    cb => EventManager.OnRequireCardPick?.Invoke(owner, validCards, 1, default, cb),
                     () => new System.Collections.Generic.List<Card> { validCards.OrderBy(c => Guid.NewGuid()).First() }, // 시간 초과 시 무작위 강제 선택
                     GameLogicHelpers.GetChooseTimeoutMs(owner)
                 );

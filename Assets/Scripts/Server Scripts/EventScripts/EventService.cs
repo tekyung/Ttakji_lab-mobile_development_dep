@@ -73,6 +73,9 @@ namespace ServerScripts.EventScripts
         private readonly Dictionary<string, PendingCardPickAction> _pendingCardPickActions = new Dictionary<string, PendingCardPickAction>();
         private readonly Dictionary<string, PendingCardChoiceAction> _pendingCardChoiceActions = new Dictionary<string, PendingCardChoiceAction>();
 
+        /// <summary>알림 구독 여부. 정적 이벤트라 중복 구독하면 알림이 그 수만큼 방송된다.</summary>
+        private bool _notificationsSubscribed;
+
         public void InitializeGame(GameContext gameContext, Player host, Player guest)
         {
             this.context = gameContext;
@@ -234,6 +237,19 @@ namespace ServerScripts.EventScripts
                             .Where(card => card != null)
                             .ToList();
 
+                        // ★ 보낸 ID를 하나라도 못 찾으면 진행하면 안 된다.
+                        //   빈 목록으로 콜백하면 검증은 통과해 버리고(개수 초과만 보므로)
+                        //   능력이 "선택 없음"으로 조용히 실패한다. 실제로 이 때문에
+                        //   베로니카·소니아 능력이 매 턴 반복 발동됐다.
+                        int requestedCount = pickReq.PickedCardInstanceIds != null ? pickReq.PickedCardInstanceIds.Length : 0;
+                        if (pickedCards.Count != requestedCount)
+                        {
+                            Debug.LogWarning(
+                                $"[서버][CardPick] 카드 해석 실패로 거부. requested={requestedCount}, resolved={pickedCards.Count}, " +
+                                $"ids={string.Join(", ", pickReq.PickedCardInstanceIds ?? new string[0])}");
+                            return;
+                        }
+
                         if (!ActionValidator.ValidateOnRequireCardPick(
                                 senderPlayer,
                                 pickedCards,
@@ -352,6 +368,18 @@ namespace ServerScripts.EventScripts
 
                     case "GameSetRequest":
                         var setGameReq = JsonUtility.FromJson<GameSetRequest>(jsonData);
+
+                        // ★ 보낸 사람이 자기를 승자로 지명하는 건 받지 않는다.
+                        //   이 경로는 항복(= 상대를 승자로 지명)에만 쓰이므로,
+                        //   자기 이름을 보내면 "즉석 승리"가 되는 명백한 구멍이다.
+                        //   (전면적인 서버 인증은 별건이지만 이건 한 줄로 막힌다)
+                        if (setGameReq.WinnerName == senderRole)
+                        {
+                            Debug.LogWarning(
+                                $"[검증 실패] 자기 자신을 승자로 지명한 GameSetRequest 거부. sender={senderRole}");
+                            return;
+                        }
+
                         Player winner = context.Players.Find(p => p.Name == setGameReq.WinnerName);
                         if (!ActionValidator.ValidateOnGameSet(winner, context, context.IsGameOver, out string gameSetError))
                         {
@@ -607,6 +635,18 @@ namespace ServerScripts.EventScripts
                 allCards.AddRange(p.StackZone);     // 스택존
                 if (p.BattlefieldCard != null) allCards.Add(p.BattlefieldCard); // 전장
                 if (p.SetZoneCard != null) allCards.Add(p.SetZoneCard);         // 세트존
+
+                // ★ 덱·폐기존·자원 존도 반드시 포함해야 한다.
+                //   빠뜨리면 그 존의 카드를 후보로 제시하는 용병 능력이 통째로 실패한다:
+                //   · 베로니카 = 덱 탑 3장 중 1장   · 소니아 = 폐기존에서 1장
+                //   클라이언트가 고른 InstanceId를 여기서 못 찾으면 빈 목록이 콜백으로 넘어가고,
+                //   능력은 "선택 없음"으로 끝나 MarkCharacterAbilityUsed도 호출되지 않는다
+                //   (→ 매 턴 다시 물어보고, 카드도 안 옮겨진다).
+                //   엘리만 멀쩡했던 이유는 후보가 '패'에 있었기 때문이다.
+                allCards.AddRange(p.Deck);          // 메인덱
+                allCards.AddRange(p.Graveyard);     // 폐기존
+                allCards.AddRange(p.ResourceDeck);  // 자원덱
+                allCards.AddRange(p.ResourceZone);  // 자원존
             };
 
             collect(hostPlayer);
@@ -643,11 +683,33 @@ namespace ServerScripts.EventScripts
             await networkService.SyncBoardState(sessionRoom, json);
         }
 
+        /// <summary>이 플레이어가 이미 능력을 쓴 용병 카드 ID들.</summary>
+        private static string[] CollectUsedCharacterIds(Player p)
+        {
+            var used = new List<string>();
+            if (p == null) return used.ToArray();
+
+            if (!string.IsNullOrEmpty(p.CharacterCardId) && p.HasUsedCharacterAbility(p.CharacterCardId))
+                used.Add(p.CharacterCardId);
+
+            if (!string.IsNullOrEmpty(p.SecondaryCharacterId) && p.HasUsedCharacterAbility(p.SecondaryCharacterId))
+                used.Add(p.SecondaryCharacterId);
+
+            return used.ToArray();
+        }
+
         private PlayerState ExtractPlayerState(Player p)
         {
             if (p == null) return new PlayerState();
             return new PlayerState
             {
+                // 용병 2종. 게스트는 이 값으로 상대 용병을 알고 슬롯을 그린다
+                Character1_ID = p.CharacterCardId,
+                Character2_ID = p.SecondaryCharacterId,
+
+                // 이미 쓴 용병 능력. 이게 없으면 게스트 화면에서 용병 카드가 계속 안 돌아간다
+                UsedCharacterCardIds = CollectUsedCharacterIds(p),
+
                 LifeToken = p.LifeTokens,
                 DeckCount = p.Deck.Count,
                 HandCount = p.Hand.Count,
@@ -736,225 +798,268 @@ namespace ServerScripts.EventScripts
         
         private void SubscribeToNotifications()
         {
-            // 1. 세트 페이즈 요구 알림 방송
-            EventManager.OnRequireSetPhaseAction += async (player, ctx, callback) =>
+            // ★ 정적 이벤트 구독은 씬을 다시 로드해도 살아남는다.
+            //   예전에는 익명 람다로 += 만 하고 해제 코드가 없어서,
+            //   씬을 재진입하면 **파괴된 옛 EventService의 람다가 그대로 붙어 있었다.**
+            //   그러면 엔진이 질문 한 번에 알림이 두 번 방송돼 게스트에 선택창이 두 번 떴다.
+            //   그래서 (1) 기명 메서드로 바꿔 해제할 수 있게 하고 (2) 중복 구독을 막고
+            //   (3) OnDestroy에서 반드시 떼어 낸다.
+            if (_notificationsSubscribed)
             {
-                var noti = new RequireSetPhaseNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    Message = "패에서 세트할 카드를 선택해 주세요."
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireSetPhaseNotification", noti);
-            };
+                Debug.LogWarning("[EventService] 이미 알림을 구독 중이다 — 중복 구독을 건너뛴다.");
+                return;
+            }
 
-            // 2. 오픈 페이즈 요구 알림 방송
-            EventManager.OnRequireOpenPhaseAction += async (player, setCard, cost, ctx, callback) =>
-            {
-                var noti = new RequireOpenPhaseNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    SetCardInstanceId = setCard?.InstanceId,
-                    EffectiveCost = cost,
-                    Message = $"비용({cost})을 지불하고 카드를 공개하시겠습니까?"
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireOpenPhaseNotification", noti);
-            };
+            _notificationsSubscribed = true;
 
-            // 3. 스택 방어 요구 알림 방송
-            EventManager.OnRequireStackResponse += async (player, stackCard, oppCard, callback) =>
-            {
-                var noti = new RequireStackNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    StackCardInstanceId = stackCard?.InstanceId,
-                    StackCardDataId = stackCard?.DataId,
-                    OpponentCardInstanceId = oppCard?.InstanceId,
-                    Message = $"상대가 공격했습니다! 스택 방어 카드를 발동하시겠습니까?"
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireStackNotification", noti);
-            };
-
-            // 4. 애니메이션/시각 연출 방송 (카드 이동)
-            EventManager.OnCardMove += async (card, fromPlayer, fromZone, toPlayer, toZone) =>
-            {
-                var noti = new VisualEventNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = "ALL", // 연출은 호스트/게스트 양쪽 화면 모두에서 재생되어야 함
-                    EventType = "CardMove",
-                    CardInstanceId = card.InstanceId,
-                    CardDataId = card.DataId,
-                    OwnerRole = fromPlayer != null ? fromPlayer.Name : null,
-                    FromZone = fromZone.ToString(),
-                    ToZone = toZone.ToString()
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
-            };
-
-            // 5. 애니메이션 연출 방송 (카드 발동 이펙트)
-            EventManager.OnPlayCard += async (player, card) =>
-            {
-                var noti = new VisualEventNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = "ALL",
-                    EventType = "PlayCard",
-                    CardInstanceId = card.InstanceId,
-                    CardDataId = card.DataId,
-                    OwnerRole = player != null ? player.Name : null
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
-            };
-
-            // 6. 드로우 연출 방송
-            EventManager.OnCardDraw += async (card, player, fromZone) =>
-            {
-                var noti = new VisualEventNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = "ALL",
-                    EventType = "CardDraw",
-                    CardInstanceId = card.InstanceId,
-                    CardDataId = card.DataId,
-                    OwnerRole = player != null ? player.Name : null,
-                    FromZone = fromZone.ToString(),
-                    ToZone = ZoneType.Hand.ToString()
-                };
-                await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
-            };
-
-            // 7. 선택적 행동 질문 알림 방송
-            EventManager.OnRequireOptionalAction += async (player, message, ctx, callback) =>
-            {
-                if (player == null || callback == null) return;
-
-                string actionId = Guid.NewGuid().ToString();
-                _pendingOptionalActions[actionId] = new PendingOptionalAction
-                {
-                    PlayerName = player.Name,
-                    ActionId = actionId,
-                    Message = message,
-                    Callback = callback
-                };
-
-                var noti = new RequireOptionalNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    ActionId = actionId,
-                    Message = message
-                };
-
-                Debug.Log(
-                    $"[서버][Optional] 질문 전송 target={player.Name}, actionId={actionId}, message={message}");
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireOptionalNotification", noti);
-            };
-
-            // 8. 카드 픽 질문 알림 방송
-            EventManager.OnRequireCardPick += async (player, candidates, requiredCount, callback) =>
-            {
-                if (player == null || callback == null) return;
-
-                string requestId = Guid.NewGuid().ToString();
-                List<Card> presentedCards = candidates != null
-                    ? candidates.Where(card => card != null).ToList()
-                    : new List<Card>();
-
-                _pendingCardPickActions[requestId] = new PendingCardPickAction
-                {
-                    PlayerName = player.Name,
-                    RequestId = requestId,
-                    PresentedCards = presentedCards,
-                    RequiredCount = requiredCount,
-                    Callback = callback
-                };
-
-                var noti = new RequireCardPickNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    RequestId = requestId,
-                    PresentedCardInstanceIds = presentedCards.Select(card => card.InstanceId).ToArray(),
-                    PresentedCardDataIds = presentedCards.Select(card => card.DataId).ToArray(),
-                    RequiredCount = requiredCount,
-                    Message = $"카드 {requiredCount}장을 선택하세요."
-                };
-
-                Debug.Log(
-                    $"[서버][CardPick] 질문 전송 target={player.Name}, requestId={requestId}, " +
-                    $"required={requiredCount}, candidates={string.Join(", ", presentedCards.Select(card => card.InstanceId))}");
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireCardPickNotification", noti);
-            };
-
-            // 9. 카드 초이스 질문 알림 방송
-            EventManager.OnRequireCardChoice += async (player, zone, requiredCount, filter, callback) =>
-            {
-                if (player == null || callback == null) return;
-
-                string requestId = Guid.NewGuid().ToString();
-                List<Card> presentedCards = player.GetZone(zone) ?? new List<Card>();
-                if (!string.IsNullOrEmpty(filter))
-                {
-                    presentedCards = presentedCards.Where(card => MatchesFilter(card, filter)).ToList();
-                }
-
-                _pendingCardChoiceActions[requestId] = new PendingCardChoiceAction
-                {
-                    PlayerName = player.Name,
-                    RequestId = requestId,
-                    Zone = zone,
-                    Filter = filter,
-                    PresentedCards = presentedCards,
-                    RequiredCount = requiredCount,
-                    Callback = callback
-                };
-
-                var noti = new RequireCardChoiceNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = player.Name,
-                    RequestId = requestId,
-                    Zone = zone.ToString(),
-                    PresentedCardInstanceIds = presentedCards.Select(card => card.InstanceId).ToArray(),
-                    PresentedCardDataIds = presentedCards.Select(card => card.DataId).ToArray(),
-                    RequiredCount = requiredCount,
-                    Filter = filter,
-                    Message = $"{zone}에서 {requiredCount}장 선택"
-                };
-
-                Debug.Log(
-                    $"[서버][CardChoice] 질문 전송 target={player.Name}, requestId={requestId}, zone={zone}, required={requiredCount}, " +
-                    $"filter={filter}, candidates={string.Join(", ", presentedCards.Select(card => card.InstanceId))}");
-                await networkService.SendRequestDTO(GameData.SessionCode, "RequireCardChoiceNotification", noti);
-            };
-
-            // 10. 라이프 변화 알림 방송
-            EventManager.OnLifeChange += async (player, newLife) =>
-            {
-                if (player == null) return;
-
-                int previousLife = _lastKnownLifeByPlayer.TryGetValue(player.Name, out int cachedLife)
-                    ? cachedLife
-                    : newLife;
-                int delta = newLife - previousLife;
-                _lastKnownLifeByPlayer[player.Name] = newLife;
-
-                var noti = new LifeChangeNotification
-                {
-                    MatchId = GameData.SessionCode,
-                    PlayerName = "ALL",
-                    TargetPlayerName = player.Name,
-                    NewLife = newLife,
-                    Delta = delta,
-                    Reason = delta < 0 ? "Damage" : delta > 0 ? "Heal" : "Sync"
-                };
-
-                await networkService.SendRequestDTO(GameData.SessionCode, "LifeChangeNotification", noti);
-            };
+            EventManager.OnRequireSetPhaseAction += BroadcastRequireSetPhaseAction;
+            EventManager.OnRequireOpenPhaseAction += BroadcastRequireOpenPhaseAction;
+            EventManager.OnRequireStackResponse += BroadcastRequireStackResponse;
+            EventManager.OnCardMove += BroadcastCardMove;
+            EventManager.OnPlayCard += BroadcastPlayCard;
+            EventManager.OnCardDraw += BroadcastCardDraw;
+            EventManager.OnRequireOptionalAction += BroadcastRequireOptionalAction;
+            EventManager.OnRequireCardPick += BroadcastRequireCardPick;
+            EventManager.OnRequireCardChoice += BroadcastRequireCardChoice;
+            EventManager.OnLifeChange += BroadcastLifeChange;
         }
+
+        /// <summary>구독한 알림을 모두 떼어 낸다. 여러 번 불러도 안전하다.</summary>
+        private void UnsubscribeFromNotifications()
+        {
+            if (!_notificationsSubscribed) return;
+            _notificationsSubscribed = false;
+
+            EventManager.OnRequireSetPhaseAction -= BroadcastRequireSetPhaseAction;
+            EventManager.OnRequireOpenPhaseAction -= BroadcastRequireOpenPhaseAction;
+            EventManager.OnRequireStackResponse -= BroadcastRequireStackResponse;
+            EventManager.OnCardMove -= BroadcastCardMove;
+            EventManager.OnPlayCard -= BroadcastPlayCard;
+            EventManager.OnCardDraw -= BroadcastCardDraw;
+            EventManager.OnRequireOptionalAction -= BroadcastRequireOptionalAction;
+            EventManager.OnRequireCardPick -= BroadcastRequireCardPick;
+            EventManager.OnRequireCardChoice -= BroadcastRequireCardChoice;
+            EventManager.OnLifeChange -= BroadcastLifeChange;
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromNotifications();
+        }
+
+        private async void BroadcastRequireSetPhaseAction(Player player, GameContext ctx, Action<Card> callback)
+        {
+            var noti = new RequireSetPhaseNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                Message = "패에서 세트할 카드를 선택해 주세요."
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireSetPhaseNotification", noti);
+        }
+
+        private async void BroadcastRequireOpenPhaseAction(Player player, Card setCard, int cost, GameContext ctx, Action<OpenPhaseChoice> callback)
+        {
+            var noti = new RequireOpenPhaseNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                SetCardInstanceId = setCard?.InstanceId,
+                EffectiveCost = cost,
+                Message = $"비용({cost})을 지불하고 카드를 공개하시겠습니까?"
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireOpenPhaseNotification", noti);
+        }
+
+        private async void BroadcastRequireStackResponse(Player player, Card stackCard, Card oppCard, Action<bool> callback)
+        {
+            var noti = new RequireStackNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                StackCardInstanceId = stackCard?.InstanceId,
+                StackCardDataId = stackCard?.DataId,
+                OpponentCardInstanceId = oppCard?.InstanceId,
+                Message = $"상대가 공격했습니다! 스택 방어 카드를 발동하시겠습니까?"
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireStackNotification", noti);
+        }
+
+        private async void BroadcastCardMove(Card card, Player fromPlayer, ZoneType fromZone, Player toPlayer, ZoneType toZone)
+        {
+            var noti = new VisualEventNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = "ALL", // 연출은 호스트/게스트 양쪽 화면 모두에서 재생되어야 함
+                EventType = "CardMove",
+                CardInstanceId = card.InstanceId,
+                CardDataId = card.DataId,
+                OwnerRole = fromPlayer != null ? fromPlayer.Name : null,
+                FromZone = fromZone.ToString(),
+                ToZone = toZone.ToString()
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
+        }
+
+        private async void BroadcastPlayCard(Player player, Card card)
+        {
+            var noti = new VisualEventNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = "ALL",
+                EventType = "PlayCard",
+                CardInstanceId = card.InstanceId,
+                CardDataId = card.DataId,
+                OwnerRole = player != null ? player.Name : null
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
+        }
+
+        private async void BroadcastCardDraw(Card card, Player player, ZoneType fromZone)
+        {
+            var noti = new VisualEventNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = "ALL",
+                EventType = "CardDraw",
+                CardInstanceId = card.InstanceId,
+                CardDataId = card.DataId,
+                OwnerRole = player != null ? player.Name : null,
+                FromZone = fromZone.ToString(),
+                ToZone = ZoneType.Hand.ToString()
+            };
+            await networkService.SendRequestDTO(GameData.SessionCode, "VisualEventNotification", noti);
+        }
+
+        private async void BroadcastRequireOptionalAction(Player player, string message, GameContext ctx, Action<bool> callback)
+        {
+            if (player == null || callback == null) return;
+
+            string actionId = Guid.NewGuid().ToString();
+            _pendingOptionalActions[actionId] = new PendingOptionalAction
+            {
+                PlayerName = player.Name,
+                ActionId = actionId,
+                Message = message,
+                Callback = callback
+            };
+
+            var noti = new RequireOptionalNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                ActionId = actionId,
+                Message = message
+            };
+
+            Debug.Log(
+                $"[서버][Optional] 질문 전송 target={player.Name}, actionId={actionId}, message={message}");
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireOptionalNotification", noti);
+        }
+
+        private async void BroadcastRequireCardPick(Player player, List<Card> candidates, int requiredCount, CardPickPrompt prompt, Action<List<Card>> callback)
+        {
+            if (player == null || callback == null) return;
+
+            string requestId = Guid.NewGuid().ToString();
+            List<Card> presentedCards = candidates != null
+                ? candidates.Where(card => card != null).ToList()
+                : new List<Card>();
+
+            _pendingCardPickActions[requestId] = new PendingCardPickAction
+            {
+                PlayerName = player.Name,
+                RequestId = requestId,
+                PresentedCards = presentedCards,
+                RequiredCount = requiredCount,
+                Callback = callback
+            };
+
+            var noti = new RequireCardPickNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                RequestId = requestId,
+                PresentedCardInstanceIds = presentedCards.Select(card => card.InstanceId).ToArray(),
+                PresentedCardDataIds = presentedCards.Select(card => card.DataId).ToArray(),
+                RequiredCount = requiredCount,
+                // 엔진이 문구를 준 경우(예: 베로니카의 순서 지정)에는 그걸 그대로 게스트에 전달한다.
+                Message = string.IsNullOrWhiteSpace(prompt.Message)
+                    ? $"카드 {requiredCount}장을 선택하세요."
+                    : prompt.Message,
+                Ordered = prompt.Ordered
+            };
+
+            Debug.Log(
+                $"[서버][CardPick] 질문 전송 target={player.Name}, requestId={requestId}, " +
+                $"required={requiredCount}, candidates={string.Join(", ", presentedCards.Select(card => card.InstanceId))}");
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireCardPickNotification", noti);
+        }
+
+        private async void BroadcastRequireCardChoice(Player player, ZoneType zone, int requiredCount, string filter, Action<List<Card>> callback)
+        {
+            if (player == null || callback == null) return;
+
+            string requestId = Guid.NewGuid().ToString();
+            List<Card> presentedCards = player.GetZone(zone) ?? new List<Card>();
+            if (!string.IsNullOrEmpty(filter))
+            {
+                presentedCards = presentedCards.Where(card => MatchesFilter(card, filter)).ToList();
+            }
+
+            _pendingCardChoiceActions[requestId] = new PendingCardChoiceAction
+            {
+                PlayerName = player.Name,
+                RequestId = requestId,
+                Zone = zone,
+                Filter = filter,
+                PresentedCards = presentedCards,
+                RequiredCount = requiredCount,
+                Callback = callback
+            };
+
+            var noti = new RequireCardChoiceNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = player.Name,
+                RequestId = requestId,
+                Zone = zone.ToString(),
+                PresentedCardInstanceIds = presentedCards.Select(card => card.InstanceId).ToArray(),
+                PresentedCardDataIds = presentedCards.Select(card => card.DataId).ToArray(),
+                RequiredCount = requiredCount,
+                Filter = filter,
+                Message = $"{zone}에서 {requiredCount}장 선택"
+            };
+
+            Debug.Log(
+                $"[서버][CardChoice] 질문 전송 target={player.Name}, requestId={requestId}, zone={zone}, required={requiredCount}, " +
+                $"filter={filter}, candidates={string.Join(", ", presentedCards.Select(card => card.InstanceId))}");
+            await networkService.SendRequestDTO(GameData.SessionCode, "RequireCardChoiceNotification", noti);
+        }
+
+        private async void BroadcastLifeChange(Player player, int newLife)
+        {
+            if (player == null) return;
+
+            int previousLife = _lastKnownLifeByPlayer.TryGetValue(player.Name, out int cachedLife)
+                ? cachedLife
+                : newLife;
+            int delta = newLife - previousLife;
+            _lastKnownLifeByPlayer[player.Name] = newLife;
+
+            var noti = new LifeChangeNotification
+            {
+                MatchId = GameData.SessionCode,
+                PlayerName = "ALL",
+                TargetPlayerName = player.Name,
+                NewLife = newLife,
+                Delta = delta,
+                Reason = delta < 0 ? "Damage" : delta > 0 ? "Heal" : "Sync"
+            };
+
+            await networkService.SendRequestDTO(GameData.SessionCode, "LifeChangeNotification", noti);
+        }
+
 
         private static bool MatchesFilter(Card card, string filter)
         {
