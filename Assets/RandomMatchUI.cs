@@ -93,7 +93,7 @@ public class RandomMatchUI : MonoBehaviour
     private void HandleMatchedAndReady()
     {
         isMatching = false;
-        Debug.Log("매칭 성공!");
+        Debug.Log("[RandomMatchUI] 매칭 성공!");
 
         if (popupRandomMatching != null)
             popupRandomMatching.SetActive(false);
