@@ -1,4 +1,4 @@
-using TCG_Project.Scripts.Systems;
+﻿using TCG_Project.Scripts.Systems;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -50,21 +50,40 @@ public static class CardImageLoader
         return ApplyCardBack(cardObject, GameRules.DefaultCardBackPath);
     }
 
+    /// <summary>
+    /// 카드 뒷면 그림을 입힌다.
+    ///
+    /// ★ 예전에는 자식 Image를 <b>전부</b> 칠했다. 그런데 뒷면 오브젝트 안에는
+    ///   [회수] 버튼이 들어 있어서, 그 버튼의 배경까지 카드 뒷면으로 바뀌었다.
+    ///   preserveAspect까지 켜지는 바람에 <b>뒷면 위에 작은 뒷면이 얹힌</b> 모양이 됐다.
+    ///
+    ///   그래서 규칙을 좁혔다:
+    ///     ① 루트에 Image가 있으면 <b>그것만</b> 칠하고 끝낸다 (보통 여기서 끝난다)
+    ///     ② 루트에 Image가 없을 때만 자식을 훑되, 버튼 같은 조작 요소는 건너뛴다
+    /// </summary>
     public static bool ApplyCardBack(GameObject cardObject, string originalPath)
     {
         if (cardObject == null || string.IsNullOrEmpty(originalPath))
             return false;
 
-        bool applied = false;
-
         Image rootImage = cardObject.GetComponent<Image>();
         if (rootImage != null)
-            applied |= ApplyToImage(rootImage, originalPath);
-
-        Image[] childImages = cardObject.GetComponentsInChildren<Image>(true);
-        foreach (Image childImage in childImages)
         {
-            if (childImage == rootImage)
+            bool ok = ApplyToImage(rootImage, originalPath);
+            if (!ok)
+            {
+                Debug.LogWarning(
+                    $"[CardImageLoader] 카드 뒷면 이미지 적용 실패 — 로드 실패: {originalPath}");
+            }
+
+            return ok;
+        }
+
+        bool applied = false;
+        foreach (Image childImage in cardObject.GetComponentsInChildren<Image>(true))
+        {
+            // 버튼의 배경은 그 버튼의 모양이다. 뒷면으로 덮어쓰면 안 된다.
+            if (childImage.GetComponentInParent<Selectable>(true) != null)
                 continue;
 
             applied |= ApplyToImage(childImage, originalPath);

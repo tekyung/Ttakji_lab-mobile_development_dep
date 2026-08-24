@@ -166,8 +166,7 @@ RectTransform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 3181685554922499602}
+  m_Children: []
   m_Father: {fileID: 7873933258628979672}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -496,7 +495,7 @@ GameObject:
   - component: {fileID: 894059382696328420}
   - component: {fileID: 5367261819764570243}
   m_Layer: 5
-  m_Name: Button
+  m_Name: RecallButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -515,7 +514,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 649634728699156379}
-  m_Father: {fileID: 8979907727717771433}
+  m_Father: {fileID: 7873933258628979672}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
@@ -2672,6 +2671,7 @@ RectTransform:
   - {fileID: 5672447565942599091}
   - {fileID: 6533624022369700944}
   - {fileID: 8979907727717771433}
+  - {fileID: 3181685554922499602}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}

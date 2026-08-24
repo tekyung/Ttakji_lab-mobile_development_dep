@@ -889,6 +889,16 @@ public class HumanChoiceDialogUI : MonoBehaviour
                 continue;
             }
 
+            // ★ 꺼진 부모 아래에 있으면 무슨 짓을 해도 화면에 나오지 않는다.
+            //   이 화면은 엔진이 응답을 기다리는 임계 경로라, 조용히 안 보이면 게임이 멈춘다.
+            if (FindInactiveAncestor(candidate.transform) is Transform blocker)
+            {
+                Debug.LogError(
+                    $"[HumanChoiceDialogUI] 씬의 '{candidate.name}'은 꺼져 있는 '{blocker.name}' 아래에 있어 화면에 뜰 수 없습니다. " +
+                    "캔버스 바로 아래로 옮기거나 씬에서 지우세요. 지금은 프리팹을 새로 찍어 씁니다.");
+                continue;
+            }
+
             Canvas canvas = candidate.GetComponentInParent<Canvas>();
 
             _dialogRoot = candidate.gameObject;
@@ -903,6 +913,20 @@ public class HumanChoiceDialogUI : MonoBehaviour
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 자기 자신을 뺀 조상 중에 꺼져 있는 것이 있으면 돌려준다. 없으면 null.
+    /// (자기 자신은 코드가 켜고 끄므로 검사에서 뺀다)
+    /// </summary>
+    private static Transform FindInactiveAncestor(Transform t)
+    {
+        for (Transform p = t.parent; p != null; p = p.parent)
+        {
+            if (!p.gameObject.activeSelf) return p;
+        }
+
+        return null;
     }
 
     private Canvas ResolveCanvas()

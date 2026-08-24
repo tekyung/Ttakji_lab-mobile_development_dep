@@ -8,44 +8,55 @@
 // (InitializeSingleGame: OnGameStart → CharacterFieldBroadcast → DrawCards 순서)
 // 그 시점의 player.Deck이 곧 온전한 20장이다. 엔진에 별도 API를 뚫지 않아도 된다.
 //
-// 씬 배선 불필요 — RuntimeInitializeOnLoadMethod로 자가 생성하고 UI도 코드로 만든다.
+// ── 화면은 프리팹이 갖는다 ────────────────────────────────────────────
+//   프리팹 — 위치·크기·앵커·격자 배치(칸 크기·간격·열 수)·글꼴·기본 색·톱니 스프라이트
+//   코드   — 제목 문구 · 열고 닫기 · 격자에 채울 카드 · 항복 확인 단계의 문구와 색
+//
+//   Resources/Build/DeckInfoPanelRoot — 톱니바퀴 + 패널
+//   Resources/Build/DeckCellItem      — 격자에 늘어놓을 카드 한 칸
+//
+//   씬에 미리 놓여 있으면 그것을 쓰고, 없으면 프리팹을 찍는다.
+//   로직 싱글턴은 씬을 넘어 살아남지만 화면은 씬 캔버스에 붙으므로 수명이 다르다.
+using System.Collections;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
-using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class DeckInfoPanelUI : MonoBehaviour
 {
     public static DeckInfoPanelUI Instance { get; private set; }
 
-    [Header("Grid")]
-    public int columns = 5;
-    public int rows = 4;
-    public Vector2 cellSize = new Vector2(112f, 157f);
-    public Vector2 cellSpacing = new Vector2(10f, 10f);
-    [Tooltip("격자 칸에 맞춰 카드 프리팹을 축소하는 배율. 카드 원본은 200x280이다.")]
-    public float cardScale = 0.56f;
+    /// <summary>Resources 아래에서 톱니바퀴 + 패널을 찾을 경로.</summary>
+    private const string PanelResourcePath = "Build/DeckInfoPanelRoot";
 
-    [Header("Panel")]
-    public Color panelColor = new Color(0.10f, 0.10f, 0.13f, 0.95f);
-    public Color gearColor = new Color(0.18f, 0.18f, 0.22f, 0.92f);
-    [Range(0f, 1f)] public float usedCardAlpha = 0.28f;
+    /// <summary>Resources 아래에서 카드 한 칸 템플릿을 찾을 경로.</summary>
+    private const string CellResourcePath = "Build/DeckCellItem";
 
-    [Header("Surrender")]
+    [Header("상태에 따라 코드가 바꾸는 값")]
+    // 칸 크기·간격·열 수·축소 배율·패널 색은 프리팹이 갖는다.
+    // 여기 남은 것은 **상황**에 따라 달라지는 것뿐이다.
+    [Range(0f, 1f)]
+    [Tooltip("덱에 남아 있지 않은 카드를 얼마나 흐리게 보여 줄지.")]
+    public float usedCardAlpha = 0.28f;
+
+    [Tooltip("[항복] 버튼의 평소 색.")]
     public Color surrenderColor = new Color(0.80f, 0.25f, 0.25f, 1f);
+
+    [Tooltip("한 번 눌러 '정말 항복?'이 된 상태의 색.")]
     public Color surrenderConfirmColor = new Color(0.95f, 0.35f, 0.20f, 1f);
 
     private Canvas _hostCanvas;
-    private TMP_FontAsset _font;
 
-    private Button _gearButton;
-    private GameObject _panel;
-    private RectTransform _grid;
-    private TextMeshProUGUI _titleText;
-    private Button _surrenderButton;
-    private TextMeshProUGUI _surrenderLabel;
+    private GameObject _root;
+    private DeckInfoPanelView _view;
+
+    /// <summary>내가 찍은 것인가. 씬에서 빌려 온 것은 절대 파괴하지 않는다.</summary>
+    private bool _ownsRoot;
+
+    private GameObject _cellTemplate;
 
     private Player _human;
     private readonly List<Card> _deckSnapshot = new List<Card>();
@@ -74,12 +85,35 @@ public class DeckInfoPanelUI : MonoBehaviour
     {
         EventManager.OnGameStart += HandleGameStart;
         EventManager.OnGameSet += HandleGameEnd;
+
+        // ★ 씬이 로드되면 **게임 시작을 기다리지 않고** 곧바로 화면을 정리한다.
+        //   씬에 놓인 UI는 편집하기 좋도록 켜진 채 저장되므로,
+        //   여기서 꺼 주지 않으면 진입하자마자 패널이 화면을 가로막는다.
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        StartCoroutine(AdoptSceneRootSoon());
     }
 
     private void OnDisable()
     {
         EventManager.OnGameStart -= HandleGameStart;
         EventManager.OnGameSet -= HandleGameEnd;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode) => StartCoroutine(AdoptSceneRootSoon());
+
+    /// <summary>
+    /// 한 프레임 기다렸다가 씬에 놓인 패널을 거둔다.
+    /// 씬 로드 직후에는 캔버스·레이아웃이 아직 자리를 잡지 않았다.
+    /// </summary>
+    private IEnumerator AdoptSceneRootSoon()
+    {
+        yield return null;
+
+        // 씬에 없으면 아무 일도 하지 않는다 — 로비처럼 이 패널이 없는 화면도 있다.
+        // 실제로 필요한 순간(EnsureUI)에 프리팹을 찍으면 된다.
+        AdoptSceneRootIfPresent();
     }
 
     // ─── 게임 흐름 ──────────────────────────────────────────────────────
@@ -105,10 +139,7 @@ public class DeckInfoPanelUI : MonoBehaviour
     /// </summary>
     private void WireLegacySurrenderButton()
     {
-        GameObject go = GameObject.Find("Surrender");
-        if (go == null) return;
-
-        var button = go.GetComponent<Button>();
+        Button button = FindSceneButtonByName("Surrender");
         if (button == null || button == _legacySurrenderButton) return;
 
         // 씬을 다시 로드하면 버튼 인스턴스가 새로 생기므로, 참조가 바뀔 때마다 다시 연결한다.
@@ -116,6 +147,24 @@ public class DeckInfoPanelUI : MonoBehaviour
         button.onClick.RemoveListener(OpenPanel);
         button.onClick.AddListener(OpenPanel);
         _legacySurrenderButton = button;
+    }
+
+    /// <summary>
+    /// 이름으로 씬의 버튼을 찾는다. <b>꺼져 있는 것까지 본다.</b>
+    ///
+    /// ★ 예전에는 GameObject.Find를 썼는데, 그 함수는 계층에서 <b>켜져 있는</b> 오브젝트만 찾는다.
+    ///   문제의 [항복] 버튼은 평소 닫혀 있는 '설정' 패널 안에 들어 있어서 한 번도 찾히지 않았고,
+    ///   그래서 눌러도 아무 일이 없었다. (버튼 자신은 켜져 있지만 부모가 꺼져 있다)
+    /// </summary>
+    private static Button FindSceneButtonByName(string targetName)
+    {
+        foreach (Button candidate in FindObjectsByType<Button>(
+                     FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (candidate != null && candidate.name == targetName) return candidate;
+        }
+
+        return null;
     }
 
     private Button _legacySurrenderButton;
@@ -128,34 +177,38 @@ public class DeckInfoPanelUI : MonoBehaviour
 
     private void SetGearVisible(bool visible)
     {
-        if (_gearButton != null) _gearButton.gameObject.SetActive(visible);
+        if (_view != null && _view.gearButton != null)
+            _view.gearButton.gameObject.SetActive(visible);
     }
 
     // ─── 패널 열기 / 닫기 ───────────────────────────────────────────────
 
     private void TogglePanel()
     {
-        if (_panel == null) return;
+        if (_view == null || _view.panel == null) return;
 
-        if (_panel.activeSelf) ClosePanel();
+        if (_view.panel.activeSelf) ClosePanel();
         else OpenPanel();
     }
 
     private void OpenPanel()
     {
         EnsureUI();
-        if (_panel == null) return;
+        if (_view == null || _view.panel == null) return;
 
         DisarmSurrender();
         RebuildGrid();
-        _panel.SetActive(true);
-        _panel.transform.SetAsLastSibling();
+        _view.panel.SetActive(true);
+
+        // 패널은 자기 Canvas(정렬 700)를 갖고 있어 형제 순서와 무관하게 앞에 뜨지만,
+        // 정렬을 끄고 쓰는 경우까지 생각해 앞으로 끌어 둔다.
+        if (_root != null) _root.transform.SetAsLastSibling();
     }
 
     private void ClosePanel()
     {
         DisarmSurrender();
-        if (_panel != null) _panel.SetActive(false);
+        if (_view != null && _view.panel != null) _view.panel.SetActive(false);
     }
 
     // ─── 덱 격자 ────────────────────────────────────────────────────────
@@ -165,7 +218,7 @@ public class DeckInfoPanelUI : MonoBehaviour
         foreach (var go in _cells) if (go != null) Destroy(go);
         _cells.Clear();
 
-        if (_human == null) return;
+        if (_human == null || _view == null || _view.grid == null) return;
 
         // 덱에 아직 남아 있는 수를 카드 ID별로 센다 (같은 카드가 2장이므로 개수 기반으로 판정)
         var remaining = new Dictionary<string, int>();
@@ -188,29 +241,51 @@ public class DeckInfoPanelUI : MonoBehaviour
                 stillInDeck = true;
             }
 
-            _cells.Add(CreateCell(card, stillInDeck));
+            GameObject cell = CreateCell(card, stillInDeck);
+            if (cell != null) _cells.Add(cell);
             shown++;
         }
 
-        if (_titleText != null)
-            _titleText.text = $"내 덱  ({_human.Deck.Count} / {shown}장 남음)";
+        if (_view.titleText != null)
+            _view.titleText.text = $"내 덱  ({_human.Deck.Count} / {shown}장 남음)";
     }
 
+    /// <summary>
+    /// 카드 한 장을 격자에 올린다.
+    ///
+    /// 칸의 모양(크기·카드 축소 배율)은 <b>프리팹이 정한다.</b>
+    /// 코드는 어떤 카드를 넣을지와, 덱에 남아 있는지만 다룬다.
+    /// </summary>
     private GameObject CreateCell(Card card, bool stillInDeck)
     {
-        var cellGo = new GameObject($"Cell_{card.Id}", typeof(RectTransform), typeof(CanvasGroup));
-        var cellRect = (RectTransform)cellGo.transform;
-        cellRect.SetParent(_grid, false);
-        cellRect.sizeDelta = cellSize;
+        GameObject template = ResolveCellTemplate();
+        if (template == null) return null;
 
-        var group = cellGo.GetComponent<CanvasGroup>();
-        group.alpha = stillInDeck ? 1f : usedCardAlpha;   // 덱에 없는 카드는 흐리게
-        group.blocksRaycasts = false;
+        GameObject cellGo = Instantiate(template, _view.grid);
+        cellGo.name = $"Cell_{card.Id}";
+        cellGo.SetActive(true);
+
+        var cellView = cellGo.GetComponent<DeckCellItemView>();
+        if (cellView == null)
+        {
+            Debug.LogError("[DeckInfoPanel] 카드 칸 템플릿에 DeckCellItemView가 없습니다.");
+            Destroy(cellGo);
+            return null;
+        }
+
+        if (!cellView.Validate(out string reason))
+        {
+            Debug.LogError($"[DeckInfoPanel] 카드 칸 템플릿이 온전하지 않습니다 — {reason}");
+            Destroy(cellGo);
+            return null;
+        }
+
+        cellView.canvasGroup.alpha = stillInDeck ? 1f : usedCardAlpha;   // 덱에 없는 카드는 흐리게
 
         GameObject prefab = ResolveCardPrefab();
         if (prefab == null) return cellGo;
 
-        GameObject cardGo = Instantiate(prefab, cellRect);
+        GameObject cardGo = Instantiate(prefab, cellView.cardHost);
         var ui = cardGo.GetComponent<CardUI>();
         if (ui != null)
         {
@@ -221,7 +296,7 @@ public class DeckInfoPanelUI : MonoBehaviour
         var interaction = cardGo.GetComponent<CardInteraction>();
         if (interaction != null) interaction.enabled = false;
 
-        // 카드 내부는 자식들이 고정 크기라 sizeDelta로는 줄어들지 않는다. localScale로 축소한다.
+        // 자리에 딱 맞춰 놓기만 한다. 축소는 CardHost의 localScale이 이미 걸고 있다.
         var cardRect = cardGo.GetComponent<RectTransform>();
         if (cardRect != null)
         {
@@ -229,13 +304,30 @@ public class DeckInfoPanelUI : MonoBehaviour
             cardRect.anchorMax = new Vector2(0.5f, 0.5f);
             cardRect.pivot = new Vector2(0.5f, 0.5f);
             cardRect.anchoredPosition = Vector2.zero;
-            cardRect.localScale = Vector3.one * cardScale;
+            cardRect.localScale = Vector3.one;
         }
 
         foreach (var g in cardGo.GetComponentsInChildren<Graphic>(true))
             g.raycastTarget = false;
 
         return cellGo;
+    }
+
+    /// <summary>카드 칸 템플릿을 한 번만 불러 둔다.</summary>
+    private GameObject ResolveCellTemplate()
+    {
+        if (_cellTemplate != null) return _cellTemplate;
+
+        _cellTemplate = Resources.Load<GameObject>(CellResourcePath);
+
+        if (_cellTemplate == null)
+        {
+            Debug.LogError(
+                $"[DeckInfoPanel] 카드 칸 템플릿을 찾지 못했습니다: Resources/{CellResourcePath}. " +
+                "덱 리스트를 그릴 수 없습니다.");
+        }
+
+        return _cellTemplate;
     }
 
     private static GameObject ResolveCardPrefab()
@@ -250,13 +342,14 @@ public class DeckInfoPanelUI : MonoBehaviour
 
     private void OnSurrenderClicked()
     {
+        if (_view == null) return;
+
         if (!_surrenderArmed)
         {
             // 1차 클릭: 확인 요청 (오조작 방지)
             _surrenderArmed = true;
-            _surrenderLabel.text = "정말 항복?";
-            var img = _surrenderButton.GetComponent<Image>();
-            if (img != null) img.color = surrenderConfirmColor;
+            if (_view.surrenderLabel != null) _view.surrenderLabel.text = "정말 항복?";
+            if (_view.surrenderImage != null) _view.surrenderImage.color = surrenderConfirmColor;
             return;
         }
 
@@ -312,28 +405,51 @@ public class DeckInfoPanelUI : MonoBehaviour
     private void DisarmSurrender()
     {
         _surrenderArmed = false;
-        if (_surrenderLabel != null) _surrenderLabel.text = "항복";
-        if (_surrenderButton != null)
-        {
-            var img = _surrenderButton.GetComponent<Image>();
-            if (img != null) img.color = surrenderColor;
-        }
+        if (_view == null) return;
+
+        if (_view.surrenderLabel != null) _view.surrenderLabel.text = "항복";
+        if (_view.surrenderImage != null) _view.surrenderImage.color = surrenderColor;
     }
 
-    // ─── UI 생성 ────────────────────────────────────────────────────────
+    // ─── 화면 마련 ──────────────────────────────────────────────────────
 
     private void EnsureUI()
     {
         Canvas canvas = ResolveCanvas();
         if (canvas == null) return;
-        if (_panel != null && _hostCanvas == canvas) return;
 
-        if (_panel != null) Destroy(_panel);
-        if (_gearButton != null) Destroy(_gearButton.gameObject);
+        if (_view != null && _hostCanvas == canvas) return;
+
+        // 씬이 바뀌어 캔버스가 교체되면 화면을 다시 마련한다 (로직 싱글턴은 그대로 산다).
+        // ★ 우리가 찍은 것만 파괴한다. 씬에 놓인 것을 지우면 기획자의 작업이 사라진다.
+        if (_root != null && _ownsRoot) Destroy(_root);
+        _root = null;
+        _view = null;
+        _ownsRoot = false;
 
         _hostCanvas = canvas;
-        _font = UiFontResolver.Resolve();
-        Build(canvas);
+
+        // ① 씬에 이미 놓여 있으면 그것을 쓴다.
+        //    이 검사가 없으면 씬에 배치한 것 위에 하나를 더 찍어 **둘이 겹친다.**
+        //    (CharacterSlotBar·CharacterPicker·HumanChoiceDialog에서 똑같이 겪은 문제다)
+        if (AdoptSceneRootIfPresent()) return;
+
+        // ② 없으면 프리팹을 찍는다
+        BuildFromPrefab(canvas);
+    }
+
+    /// <summary>
+    /// 자기 자신을 뺀 조상 중에 꺼져 있는 것이 있으면 돌려준다. 없으면 null.
+    /// (자기 자신은 코드가 켜고 끄므로 검사에서 뺀다)
+    /// </summary>
+    private static Transform FindInactiveAncestor(Transform t)
+    {
+        for (Transform p = t.parent; p != null; p = p.parent)
+        {
+            if (!p.gameObject.activeSelf) return p;
+        }
+
+        return null;
     }
 
     private Canvas ResolveCanvas()
@@ -346,184 +462,144 @@ public class DeckInfoPanelUI : MonoBehaviour
         return FindFirstObjectByType<Canvas>();
     }
 
-    private void Build(Canvas canvas)
+    /// <summary>
+    /// 씬에 미리 놓인 패널을 찾아 연결한다. 위치·크기는 손대지 않는다.
+    ///
+    /// 씬 로드 직후에도 부르고(화면을 곧바로 정리하기 위해),
+    /// 필요해졌을 때도 부른다(그때까지 없었을 수도 있으므로).
+    /// </summary>
+    private bool AdoptSceneRootIfPresent()
     {
-        float gridW = columns * cellSize.x + (columns - 1) * cellSpacing.x;
-        float gridH = rows * cellSize.y + (rows - 1) * cellSpacing.y;
-        const float pad = 20f;
-        const float headerH = 44f;
-        const float footerH = 64f;
+        // 이미 우리가 찍은 것을 쓰고 있으면 그대로 둔다.
+        // (씬이 바뀌면 그것은 씬과 함께 사라져 _view가 null이 되므로 자연스럽게 다시 찾는다)
+        if (_ownsRoot && _view != null) return true;
 
-        // ── 좌측 상단 톱니바퀴 버튼 ──
-        var gearGo = new GameObject("GearButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Canvas), typeof(GraphicRaycaster));
-        var gearRect = (RectTransform)gearGo.transform;
-        gearRect.SetParent(canvas.transform, false);
-        gearRect.anchorMin = new Vector2(0f, 1f);
-        gearRect.anchorMax = new Vector2(0f, 1f);
-        gearRect.pivot = new Vector2(0f, 1f);
-        gearRect.sizeDelta = new Vector2(52f, 52f);
-        gearRect.anchoredPosition = new Vector2(12f, -12f);
-        gearGo.GetComponent<Image>().color = gearColor;
-
-        var gearCanvas = gearGo.GetComponent<Canvas>();
-        gearCanvas.overrideSorting = true;
-        gearCanvas.sortingOrder = 600;
-
-        var gearIcon = new GameObject("Icon", typeof(RectTransform), typeof(Image));
-        var gearIconRect = (RectTransform)gearIcon.transform;
-        gearIconRect.SetParent(gearRect, false);
-        gearIconRect.anchorMin = new Vector2(0.5f, 0.5f);
-        gearIconRect.anchorMax = new Vector2(0.5f, 0.5f);
-        gearIconRect.pivot = new Vector2(0.5f, 0.5f);
-        gearIconRect.sizeDelta = new Vector2(32f, 32f);
-        var gearImg = gearIcon.GetComponent<Image>();
-        gearImg.sprite = GetGearSprite();
-        gearImg.raycastTarget = false;
-
-        _gearButton = gearGo.GetComponent<Button>();
-        _gearButton.onClick.AddListener(TogglePanel);
-        gearGo.SetActive(false);
-
-        // ── 패널 ──
-        _panel = new GameObject("DeckInfoPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Canvas), typeof(GraphicRaycaster));
-        var panelRect = (RectTransform)_panel.transform;
-        panelRect.SetParent(canvas.transform, false);
-        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(gridW + pad * 2f, gridH + headerH + footerH + pad * 2f);
-        panelRect.anchoredPosition = Vector2.zero;
-        _panel.GetComponent<Image>().color = panelColor;
-
-        var panelCanvas = _panel.GetComponent<Canvas>();
-        panelCanvas.overrideSorting = true;
-        panelCanvas.sortingOrder = 700; // 선택 다이얼로그(500)보다 위, 결과 오버레이(900)보다 아래
-
-        // 헤더
-        _titleText = CreateText(panelRect, "내 덱", 24f, TextAlignmentOptions.MidlineLeft);
-        var titleRect = _titleText.rectTransform;
-        titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.sizeDelta = new Vector2(-pad * 2f, headerH);
-        titleRect.anchoredPosition = new Vector2(0f, -pad * 0.5f);
-
-        // 닫기 버튼 (헤더 우측)
-        TextMeshProUGUI closeLabel;
-        Button closeButton = CreateButton(panelRect, "CloseButton", "닫기", new Color(0.32f, 0.32f, 0.38f, 1f), out closeLabel);
-        var closeRect = closeButton.GetComponent<RectTransform>();
-        closeRect.anchorMin = new Vector2(1f, 1f);
-        closeRect.anchorMax = new Vector2(1f, 1f);
-        closeRect.pivot = new Vector2(1f, 1f);
-        closeRect.sizeDelta = new Vector2(96f, 38f);
-        closeRect.anchoredPosition = new Vector2(-pad, -pad * 0.5f);
-        closeButton.onClick.AddListener(ClosePanel);
-
-        // 5 × 4 격자
-        var gridGo = new GameObject("DeckGrid", typeof(RectTransform), typeof(GridLayoutGroup));
-        _grid = (RectTransform)gridGo.transform;
-        _grid.SetParent(panelRect, false);
-        _grid.anchorMin = new Vector2(0.5f, 1f);
-        _grid.anchorMax = new Vector2(0.5f, 1f);
-        _grid.pivot = new Vector2(0.5f, 1f);
-        _grid.sizeDelta = new Vector2(gridW, gridH);
-        _grid.anchoredPosition = new Vector2(0f, -(headerH + pad * 0.5f));
-
-        var glg = gridGo.GetComponent<GridLayoutGroup>();
-        glg.cellSize = cellSize;
-        glg.spacing = cellSpacing;
-        glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        glg.constraintCount = columns;
-        glg.childAlignment = TextAnchor.UpperCenter;
-
-        // 항복 버튼 (격자 아래, 패널 우측)
-        _surrenderButton = CreateButton(panelRect, "SurrenderButton", "항복", surrenderColor, out _surrenderLabel);
-        var surRect = _surrenderButton.GetComponent<RectTransform>();
-        surRect.anchorMin = new Vector2(1f, 0f);
-        surRect.anchorMax = new Vector2(1f, 0f);
-        surRect.pivot = new Vector2(1f, 0f);
-        surRect.sizeDelta = new Vector2(160f, 46f);
-        surRect.anchoredPosition = new Vector2(-pad, pad * 0.6f);
-        _surrenderButton.onClick.AddListener(OnSurrenderClicked);
-
-        _panel.SetActive(false);
-    }
-
-    private TextMeshProUGUI CreateText(Transform parent, string text, float size, TextAlignmentOptions align)
-    {
-        var go = new GameObject("Text", typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        if (_font != null) tmp.font = _font;
-        tmp.text = text;
-        tmp.fontSize = size;
-        tmp.alignment = align;
-        tmp.color = Color.white;
-        tmp.raycastTarget = false;
-        return tmp;
-    }
-
-    private Button CreateButton(Transform parent, string name, string label, Color color, out TextMeshProUGUI labelText)
-    {
-        var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = color;
-
-        labelText = CreateText(go.transform, label, 22f, TextAlignmentOptions.Center);
-        var r = labelText.rectTransform;
-        r.anchorMin = Vector2.zero;
-        r.anchorMax = Vector2.one;
-        r.offsetMin = Vector2.zero;
-        r.offsetMax = Vector2.zero;
-
-        return go.GetComponent<Button>();
-    }
-
-    // ─── 톱니바퀴 아이콘 ────────────────────────────────────────────────
-    // ⚙(U+2699)는 프로젝트 한글 폰트(정적 아틀라스)에 글리프가 없어 ㅁ로 깨진다.
-    // 문자 대신 코드로 그린다.
-
-    private static Sprite _gearSprite;
-
-    private static Sprite GetGearSprite()
-    {
-        if (_gearSprite != null) return _gearSprite;
-
-        const int size = 64;
-        const int teeth = 8;
-        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        foreach (DeckInfoPanelView candidate in FindObjectsByType<DeckInfoPanelView>(
+                     FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp
-        };
+            if (candidate == null) continue;
+            if (candidate == _view) return true;   // 이미 쓰고 있다
 
-        float c = (size - 1) * 0.5f;
-        float bodyR = size * 0.30f;   // 톱니 뿌리 반지름
-        float toothR = size * 0.44f;  // 톱니 끝 반지름
-        float holeR = size * 0.13f;   // 가운데 구멍
-        Color on = Color.white;
-        Color off = new Color(1f, 1f, 1f, 0f);
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
+            if (!candidate.Validate(out string reason))
             {
-                float dx = x - c, dy = y - c;
-                float dist = Mathf.Sqrt(dx * dx + dy * dy);
-
-                // 각도에 따라 톱니 구간에서는 반지름을 늘린다
-                float angle = Mathf.Atan2(dy, dx);
-                float wave = Mathf.Cos(angle * teeth);
-                float radius = wave > 0.35f ? toothR : bodyR;
-
-                bool inside = dist <= radius && dist >= holeR;
-                tex.SetPixel(x, y, inside ? on : off);
+                Debug.LogWarning(
+                    $"[DeckInfoPanel] 씬의 '{candidate.name}'은 참조가 온전하지 않아 건너뜁니다 — {reason}");
+                continue;
             }
+
+            // ★ 꺼진 부모 아래에 있으면 무슨 짓을 해도 화면에 나오지 않는다.
+            //   실제로 이 프리팹이 선택 다이얼로그의 패널(평소 꺼져 있다) 안으로 들어간 적이 있고,
+            //   그때 톱니바퀴가 끝내 뜨지 않아 항복조차 할 수 없었다.
+            //   조용히 안 보이는 것보다 시끄럽게 알리고 우리 것을 찍는 편이 낫다.
+            if (FindInactiveAncestor(candidate.transform) is Transform blocker)
+            {
+                Debug.LogError(
+                    $"[DeckInfoPanel] 씬의 '{candidate.name}'은 꺼져 있는 '{blocker.name}' 아래에 있어 화면에 뜰 수 없습니다. " +
+                    "캔버스 바로 아래로 옮기거나 씬에서 지우세요. 지금은 프리팹을 새로 찍어 씁니다.");
+                continue;
+            }
+
+            Canvas canvas = candidate.GetComponentInParent<Canvas>();
+
+            _root = candidate.gameObject;
+            _view = candidate;
+            _ownsRoot = false;   // 빌려 쓰는 것이다
+            _hostCanvas = canvas != null ? (canvas.rootCanvas != null ? canvas.rootCanvas : canvas) : null;
+
+            PrepareView();
+
+            Debug.Log($"[DeckInfoPanel] 씬에 배치된 '{candidate.name}'을 사용합니다.");
+            return true;
         }
 
-        tex.Apply();
-        _gearSprite = Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f));
-        return _gearSprite;
+        return false;
+    }
+
+    /// <summary>
+    /// 프리팹을 씬 캔버스 아래에 찍고 참조를 연결한다.
+    ///
+    /// ★ 씬 캔버스의 자식으로 두는 것이 중요하다 — CanvasScaler를 물려받아야
+    ///   카드 크기가 보드와 같은 비율로 보인다.
+    /// </summary>
+    private void BuildFromPrefab(Canvas canvas)
+    {
+        GameObject prefab = Resources.Load<GameObject>(PanelResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError(
+                $"[DeckInfoPanel] 프리팹을 찾지 못했습니다: Resources/{PanelResourcePath}. " +
+                "덱 리스트와 항복 버튼을 쓸 수 없습니다.");
+            return;
+        }
+
+        _root = Instantiate(prefab, canvas.transform);
+        _root.name = prefab.name;   // (Clone) 꼬리표 제거
+
+        _view = _root.GetComponent<DeckInfoPanelView>()
+                ?? _root.GetComponentInChildren<DeckInfoPanelView>(true);
+
+        if (_view == null)
+        {
+            Debug.LogError(
+                $"[DeckInfoPanel] '{prefab.name}'에 DeckInfoPanelView가 없습니다. " +
+                "프리팹 루트에 컴포넌트를 붙여 주세요.");
+            Destroy(_root);
+            _root = null;
+            return;
+        }
+
+        if (!_view.Validate(out string reason))
+        {
+            Debug.LogError($"[DeckInfoPanel] 프리팹 참조가 온전하지 않습니다 — {reason}");
+            Destroy(_root);
+            _root = null;
+            _view = null;
+            return;
+        }
+
+        _ownsRoot = true;
+        PrepareView();
+    }
+
+    /// <summary>
+    /// 찍었든 빌려 왔든, 쓰기 전에 똑같이 해 두어야 하는 것들.
+    ///
+    /// ★ 씬에 놓인 것은 편집하기 좋도록 **켜진 채 저장돼 있다.**
+    ///   여기서 꺼 주지 않으면 화면 진입부터 계속 떠 있게 된다.
+    /// </summary>
+    private void PrepareView()
+    {
+        WireButtons();
+        DisarmSurrender();
+
+        if (_view.panel != null) _view.panel.SetActive(false);
+
+        // 톱니바퀴는 사람이 조작하는 판에서만 쓴다. HandleGameStart가 다시 켠다.
+        if (_view.gearButton != null) _view.gearButton.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// 프리팹 버튼에 동작을 건다.
+    /// 인스펙터에 남아 있을지 모를 배선과 겹치지 않도록 먼저 비운다.
+    /// </summary>
+    private void WireButtons()
+    {
+        if (_view.gearButton != null)
+        {
+            _view.gearButton.onClick.RemoveAllListeners();
+            _view.gearButton.onClick.AddListener(TogglePanel);
+        }
+
+        if (_view.closeButton != null)
+        {
+            _view.closeButton.onClick.RemoveAllListeners();
+            _view.closeButton.onClick.AddListener(ClosePanel);
+        }
+
+        if (_view.surrenderButton != null)
+        {
+            _view.surrenderButton.onClick.RemoveAllListeners();
+            _view.surrenderButton.onClick.AddListener(OnSurrenderClicked);
+        }
     }
 }

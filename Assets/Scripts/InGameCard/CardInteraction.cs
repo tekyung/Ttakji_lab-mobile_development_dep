@@ -40,7 +40,43 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     /// <summary>드래그 중에는 CardZoomPopupUI의 호버 미리보기가 대상을 바꾸지 않고 집은 카드를 계속 보여 준다.</summary>
     public static bool IsDraggingAny => CurrentDragging != null;
     private static CardInteraction currentlySelectedCard; // 현재 카드 기억하기
-    public bool isInSetZone = false; // 네트존에 있는가
+
+    [Header("Recall Settings")]
+    [Tooltip("세트한 카드를 손패로 되돌리는 [회수] 버튼. 비우면 OnClickReturn이 걸린 버튼을 자식에서 찾는다.")]
+    public GameObject recallButton;
+
+    private bool _isInSetZone;
+    private bool _recallAvailable;
+
+    /// <summary>
+    /// 이 카드가 내 세트존에 있는가.
+    ///
+    /// ★ 값이 바뀌면 [회수]는 무조건 닫는다.
+    ///   존이 바뀌었다는 것은 엔진이 이미 카드를 옮겼다는 뜻이고, 그 시점의 되돌리기는
+    ///   엔진 상태와 어긋난다. 되돌릴 수 있는 시점은 <b>[레디]를 누르기 전</b>뿐이며,
+    ///   그건 <see cref="SetRecallAvailable"/>로 PlayerUIManager가 직접 알려 준다.
+    ///
+    ///   필드가 아니라 프로퍼티로 둔 것은, 이 값을 넣는 곳이 여덟 군데라
+    ///   한 곳이라도 빠뜨리면 회수 버튼이 엉뚱한 카드에 남기 때문이다.
+    /// </summary>
+    public bool isInSetZone
+    {
+        get => _isInSetZone;
+        set
+        {
+            _isInSetZone = value;
+            SetRecallAvailable(false);
+        }
+    }
+
+    /// <summary>
+    /// [회수] 버튼을 보여 줄지 정한다. PlayerUIManager가 세트 선택의 시작·끝에서 부른다.
+    /// </summary>
+    public void SetRecallAvailable(bool available)
+    {
+        _recallAvailable = available;
+        RefreshRecallButton();
+    }
 
     [Header("Drag to Center Settings")]
     public GameObject actionButtonPanelBottom; // 하단 공개, 폐기 버튼
@@ -79,6 +115,44 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         // 버튼 패널에 자체 CanvasGroup을 두고 부모의 alpha를 무시하게 만든다.
         DetachFromParentAlpha(actionButtonPanel);
         DetachFromParentAlpha(actionButtonPanelBottom);
+
+        ResolveRecallButton();
+
+        // 세트 선택 중에는 카드 본체가 흐려진다(PlayerUIManager가 루트 CanvasGroup.alpha를 낮춤).
+        // [회수]까지 같이 흐려지면 안 되므로 [공개]/[폐기]와 같은 처리를 해 둔다.
+        DetachFromParentAlpha(recallButton);
+
+        RefreshRecallButton();   // 기본은 숨김. 되돌릴 수 있는 동안에만 켠다.
+    }
+
+    /// <summary>
+    /// [회수] 버튼을 자식에서 찾는다. 인스펙터에 연결돼 있으면 그것을 쓴다.
+    ///
+    /// 이름이 아니라 <b>인스펙터에 걸린 onClick 대상</b>으로 찾는다.
+    /// 이름은 바뀌기 쉽지만 "OnClickReturn을 부르는 버튼"이라는 사실은 바뀌지 않는다.
+    /// </summary>
+    private void ResolveRecallButton()
+    {
+        if (recallButton != null) return;
+
+        foreach (var button in GetComponentsInChildren<UnityEngine.UI.Button>(true))
+        {
+            int count = button.onClick.GetPersistentEventCount();
+            for (int i = 0; i < count; i++)
+            {
+                if (button.onClick.GetPersistentMethodName(i) != nameof(OnClickReturn)) continue;
+
+                recallButton = button.gameObject;
+                return;
+            }
+        }
+    }
+
+    /// <summary>되돌릴 수 있는 동안에만 [회수]를 보여 준다.</summary>
+    private void RefreshRecallButton()
+    {
+        if (recallButton == null) return;
+        if (recallButton.activeSelf != _recallAvailable) recallButton.SetActive(_recallAvailable);
     }
 
     /// <summary>부모 CanvasGroup의 alpha 영향을 받지 않도록 자체 CanvasGroup을 붙인다.</summary>
@@ -239,53 +313,36 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     }
 
     // 회수 버튼
+    /// <summary>
+    /// 세트 선택을 되돌린다.
+    ///
+    /// ★ 지금 룰 흐름에서 되돌릴 수 있는 시점은 <b>[레디]를 누르기 전</b>뿐이다.
+    ///   [공개]/[폐기]를 골라도 카드는 아직 손패에 흐리게 남아 있고,
+    ///   세트존에는 잔상만 떠 있다. 실제 이동은 양쪽이 준비된 뒤 엔진이 한다.
+    ///   [레디] 이후에 되돌리면 이미 보낸 선택과 어긋난다.
+    ///
+    ///   예전 코드는 카드를 '세트 필드'에서 손패로 <b>옮겨</b> 왔는데,
+    ///   지금은 애초에 옮겨 가지 않으므로 그 일이 전부 헛일이었다.
+    ///   되돌리기는 PlayerUIManager가 쥐고 있는 보류 선택을 지우는 것으로 끝난다.
+    /// </summary>
     public void OnClickReturn()
     {
-        Debug.Log("🔄 회수 버튼 클릭! 카드를 다시 패로 가져옵니다.");
+        Debug.Log("[CardInteraction] 회수 — 세트 선택을 되돌립니다.");
 
-        isInSetZone = false;
+        SetRecallAvailable(false);
+        DeselectCard();
 
-        // 1. 씬에서 패(HandArea)를 찾습니다. 
-        GameObject handArea = GameObject.Find("MyHand");
-
-        if (handArea != null)
+        if (PlayerUIManager.Instance != null)
         {
-            // 2. 카드의 부모를 다시 패(HandArea)로 바꿉니다.
-            // Horizontal Layout Group이 알아서 카드를 패의 오른쪽 끝에 예쁘게 정렬해 줍니다.
-            transform.SetParent(handArea.transform);
-
-            // 원래 인덱스 위치로 이동
-            transform.SetSiblingIndex(originalSiblingIndex);
-
-            // 3. 필드에 나갔다는 상태를 해제! (이제 다시 드래그/확대가 가능해집니다)
-            isPlayed = false;
-
-            // 4. 뒷면 이불을 치우고 다시 앞면을 보여줍니다.
-            CardUI cardUI = GetComponent<CardUI>();
-            if (cardUI != null) cardUI.SetFaceDown(false);
-
-            // 5. 손패에 카드가 다시 늘어났으니, 간격(Spacing)을 다시 예쁘게 맞춰줍니다.
-            // (이전에 작성하신 HandManager의 코루틴을 원격으로 실행합니다)
-            MyHandManager handManager = FindAnyObjectByType<MyHandManager>();
-
-            if (handManager != null)
-            {
-                // 카드 간격 맞추는 김에 버튼 끄기도 같이 시킵니다!
-                handManager.StartCoroutine("UpdateSpacingRoutine");
-                handManager.SetReadyButtonState(false);
-            }
-
-            DeselectCard();
-
-            if (PlayerUIManager.Instance != null)
-            {
-                PlayerUIManager.Instance.CancelSet();
-            }
+            PlayerUIManager.Instance.CancelSet();
         }
         else
         {
-            Debug.LogError("🚨 HandArea(손패 패널)를 찾을 수 없습니다! 이름을 확인해주세요.");
+            Debug.LogWarning("[CardInteraction] PlayerUIManager를 찾지 못해 세트 선택을 되돌리지 못했습니다.");
         }
+
+        MyHandManager handManager = FindAnyObjectByType<MyHandManager>();
+        if (handManager != null) handManager.SetReadyButtonState(false);
     }
 
     //-----------------------------

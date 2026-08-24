@@ -507,6 +507,297 @@ Assets/Scripts/
 
 ## 5. Phase별 완료 현황
 
+### [2026-08-23 후속 5] 회수 버튼 정착 + 설정 패널 정렬 순서
+
+#### ① [회수]를 '뒷면인가'가 아니라 '내 세트존 카드인가'에 묶었다
+
+기획 판단: **회수 기능은 유지한다.** 세트 후 되돌리기는 필요하다.
+
+`CardInteraction.isInSetZone`을 **필드에서 프로퍼티로** 바꾸고, 값이 들어올 때마다
+[회수] 버튼의 표시를 갱신한다.
+
+```csharp
+public bool isInSetZone
+{
+    get => _isInSetZone;
+    set { _isInSetZone = value; RefreshRecallButton(); }
+}
+```
+
+> 필드로 두고 호출처마다 갱신을 넣지 않은 이유: **이 값을 넣는 곳이 여덟 군데다**
+> (CardBoardRegistry 6 · DeckGraveyardStackUI 1 · OnClickReturn 1).
+> 한 곳이라도 빠뜨리면 같은 증상이 되돌아온다. 프로퍼티면 빠뜨릴 수가 없다.
+
+이것만으로 증상이 사라진다 — 버튼이 `CardBack` 아래에 있어도, 뒷면을 켜는 덱·폐기존·
+상대 손패·스택 카드에서는 `isInSetZone`이 false라 버튼이 꺼진 채 있는다.
+내 세트 카드(역시 뒷면이다)에서만 켜진다. **계층을 옮기지 않아도 되는 이유가 이것이다.**
+
+버튼 찾기는 **이름이 아니라 onClick 대상**으로 한다 —
+자식 Button 중 인스펙터에 `OnClickReturn`이 걸린 것을 고른다. 이름은 바뀌기 쉽지만
+"OnClickReturn을 부르는 버튼"이라는 사실은 바뀌지 않는다.
+인스펙터의 `Recall Button` 칸에 직접 연결하면 그것을 우선한다.
+
+**남은 프리팹 작업**: 이 버튼의 Image가 **카드 뒷면 스프라이트**를 쓰고 있다.
+뒷면 위에 작은 뒷면이 겹쳐 보이는 원인. Source Image를 비우고 단색으로 바꿀 것.
+
+#### ★ ①의 조건을 다시 잡았다 — `isInSetZone`은 이미 늦은 시점이었다
+
+실기에서 [회수]가 "메인 페이즈로 넘어가 카드가 뒤집히기 직전에만 잠깐" 떴다.
+`isInSetZone`이 그때 켜지기 때문인데, 문제는 **그 시점이 이미 되돌릴 수 없는 때**라는 것이다.
+
+지금 세트 흐름은 카드를 옮기지 않는다:
+
+```
+[공개]/[폐기] 선택  →  카드는 손패에 흐리게 남고 세트존에는 잔상만 뜬다
+[레디]              →  선택을 엔진·서버로 보낸다
+양쪽 준비 완료      →  엔진이 실제로 카드를 세트존으로 옮긴다 (isInSetZone = true)
+메인 페이즈         →  뒤집힌다
+```
+
+되돌릴 수 있는 구간은 **[공개]/[폐기] ~ [레디] 직전**뿐이다.
+그 뒤는 이미 보낸 선택과 어긋난다. `isInSetZone`이 켜지는 때는 두 단계나 지난 뒤다.
+
+조치:
+- `PlayerUIManager`가 그 구간을 직접 연다/닫는다 — `ConfirmSetCard`에서 열고,
+  `OnClickReadyButton`과 `ClearPendingSelection`에서 닫는다. 한 번에 한 장만 열린다.
+- `CardInteraction.SetRecallAvailable(bool)`이 표시를 맡는다.
+  `isInSetZone`은 값이 바뀌면 **무조건 닫기만** 한다(존이 바뀌었다 = 이미 늦었다).
+- `OnClickReturn`을 새로 썼다. 예전 코드는 카드를 '세트 필드'에서 손패로 **옮겨** 왔는데,
+  지금은 애초에 옮겨 가지 않으므로 전부 헛일이었다. 이제 `PlayerUIManager.CancelSet()`을
+  부르는 것으로 끝난다(흐림 해제 · 잔상 제거 · [레디] 숨김).
+
+#### 프리팹도 결국 옮겨야 했다
+
+되돌리는 구간의 카드는 **손패에 앞면으로** 있다. 즉 `CardBack`이 꺼져 있다.
+버튼이 그 아래에 있으면 정작 필요한 때 보이지 않는다.
+
+`CardSlotInGame.prefab`에서 `CardBack > Button`을 **카드 루트로 옮기고**
+`CardBack` <b>다음 순서</b>에 두었다(뒷면 위에 그려지도록). 이름도 `RecallButton`으로 바꿨다.
+`CardBack`과 루트가 둘 다 중앙 앵커 200×280이라 화면상 위치는 그대로다.
+
+세트 선택 중에는 카드 본체가 흐려지므로, [공개]/[폐기]와 같이
+`DetachFromParentAlpha`로 부모 알파에서 떼어 냈다.
+
+> **앞선 판단 정정**: "계층을 옮기지 않아도 된다"고 했던 것은
+> 세트 카드가 세트존에서 뒷면으로 있는 동안 회수한다는 전제였다.
+> 그 전제 자체가 틀렸다 — 그때는 이미 늦다.
+
+#### ★ ②의 진짜 원인은 프리팹이 아니라 코드였다
+
+"[회수] 버튼의 Image를 단색으로 바꿔 달라"고 했는데, 프리팹을 열어 보니 **이미 단색이었다** —
+유니티 기본 UISprite(흰 둥근 사각형)다. 뒷면 그림은 실행 중에 덧씌워지고 있었다.
+
+`CardImageLoader.ApplyCardBack`이 대상의 **자식 Image를 전부** 칠하고 있었다:
+
+```csharp
+Image[] childImages = cardObject.GetComponentsInChildren<Image>(true);
+foreach (Image childImage in childImages) ApplyToImage(childImage, originalPath);
+```
+
+`cardBackObj`(= CardBack) 안에 [회수] 버튼이 들어 있으니 그 배경까지 카드 뒷면이 됐고,
+`ApplyToImage`가 `preserveAspect = true`까지 켜는 바람에 98×41 버튼 안에
+**카드 비율의 작은 뒷면**이 그려졌다. 사용자가 본 그대로다.
+
+조치 — 규칙을 좁혔다:
+1. 루트에 Image가 있으면 **그것만** 칠하고 끝낸다
+2. 루트에 Image가 없을 때만 자식을 훑되, `Selectable`(버튼) 아래는 건너뛴다
+
+확인: 이 함수를 쓰는 카드 프리팹은 `CardSlotInGame` 하나뿐이고 `CardBack`에 루트 Image가 있다.
+즉 항상 1번으로 끝나며, 2번은 앞으로를 위한 안전망이다.
+
+> **교훈: "그림이 이상하다"고 프리팹부터 의심하지 말 것.**
+> 실행 중에 그림을 입히는 코드가 있으면 프리팹에 뭘 넣어 두든 덮어쓰인다.
+
+#### ② 설정 패널이 페이즈 표시 바에 가리던 문제
+
+같은 캔버스 안에서 UI는 **하이어라키 순서**대로 그려지는데, 코드가 실행 중에 만들어
+캔버스에 붙이는 것은 언제나 맨 뒤에 붙는다. 그래서 `GameStatusPanelUI`가 만드는
+가운데 페이즈 바(`StatusHeader`)가 씬에 미리 놓인 '설정' 패널을 덮었다.
+
+→ `Assets/Scripts/UI/UiSortingLayer.cs` — 붙이면 Canvas + GraphicRaycaster를 달고
+정렬 순서를 지정한다. `SettingPanel`에 붙여 쓴다. 기본값 **450**.
+
+**이 프로젝트의 정렬 순서 사다리** (값을 정할 때 이걸 볼 것):
+
+| 순서 | 무엇 |
+|---:|---|
+| 0 | 보드·씬 UI (하이어라키 순서) · 페이즈 표시 바 |
+| 10 | 손패에서 집어 든 카드 |
+| **450** | **설정 패널** |
+| 500 | 카드 선택 다이얼로그 |
+| 600 | 톱니바퀴 |
+| 700 | 덱 리스트 패널 |
+| 780 / 800 | 폐기존 목록 / 폐기존 패널 |
+| 850 | 카드 확대 팝업 |
+| 900 | 승패 결과 오버레이 |
+
+> ⚠️ 설정 패널을 700보다 높이면 **안 된다.** 거기서 [항복]을 누르면 열리는
+> 덱 리스트 패널(700)이 뒤에 숨어 버린다. 처음 이 문제를 만든 것과 같은 함정이다.
+
+---
+
+### [2026-08-23 후속 4] 대전 화면 실기 확인에서 나온 4건
+
+#### ① 톱니바퀴가 안 뜨고 ② 항복도 안 됐다 — 원인은 하나였다
+
+`DeckInfoPanelRoot` 프리팹 인스턴스가 씬에서 **선택 다이얼로그의 패널 안**에 들어가 있었다.
+
+```
+Canvas > HumanChoiceDialog > CardChoicePanel > DeckInfoPanelRoot   ← 여기
+```
+
+`CardChoicePanel`은 `HumanChoiceDialogUI.PrepareView()`가 시작할 때 **꺼 버린다**(그게 그 화면의 정상 동작이다).
+그 아래 있으니 톱니바퀴를 아무리 켜도 화면에 나올 수 없었고, [항복]으로 패널을 열어도 마찬가지였다.
+`DeckCellItem`도 같은 자리에 떨어져 있었다 — 프리팹을 Project로 끌 때 하이어라키에서
+그 패널이 선택돼 있었던 것으로 보인다.
+
+> **드래그로 프리팹을 만들면 그 오브젝트는 씬에 인스턴스로 남는다.**
+> 어디에 남았는지 확인하지 않으면 이런 일이 생긴다. 지금까지 세 번 반복됐다.
+
+**조치 — 조용히 안 보이는 대신 시끄럽게 알린다.**
+`AdoptSceneRootIfPresent`(DeckInfoPanelUI)와 `AdoptSceneDialogIfPresent`(HumanChoiceDialogUI)에
+`FindInactiveAncestor` 검사를 넣었다. 조상 중에 꺼진 것이 있으면 **에러 로그를 남기고 채택을 포기**한 뒤
+프리팹을 새로 찍는다. 씬을 고치지 않아도 화면은 동작한다.
+
+#### ★ 그리고 항복 버튼은 애초에 찾히지 않고 있었다 (별개 버그)
+
+```
+Canvas > Setting > SettingPanel(꺼짐) > Panel > Surrender
+```
+
+`WireLegacySurrenderButton`이 `GameObject.Find("Surrender")`를 쓰고 있었는데,
+**이 함수는 계층에서 켜져 있는 오브젝트만 찾는다.** 이 버튼은 자신은 켜져 있지만
+평소 닫혀 있는 '설정' 패널 안이라 한 번도 찾히지 않았다.
+
+→ `FindObjectsByType<Button>(FindObjectsInactive.Include, …)`로 이름을 훑도록 바꿨다.
+
+덤으로 확인한 것: 이 버튼의 인스펙터 onClick은 `ChageScene`(오타)이 **대상 fileID 0**으로 걸려 있다.
+즉 원래부터 아무 일도 하지 않는 죽은 배선이다. 지금은 코드가 런타임 리스너를 따로 건다.
+
+#### ③ 화면 로그의 이모지가 깨져 보였다
+
+엔진 로그에 `🤖 [Bot AI]`, `🚫 [불발]`, `🛡️ [방어]` 같은 이모지가 섞여 있다(44곳).
+콘솔에서는 잘 보이지만, 화면 로그가 쓰는 한글 TMP 폰트는 **정적 아틀라스**라 글리프가 없다.
+
+**조치 — 화면에 찍기 직전에만 걷어낸다.** `GameStatusPanelUI.StripUnrenderable`.
+이모지는 BMP 밖이라 C#에서 서로게이트 쌍으로 표현되므로, 그 쌍과 뒤따르는
+변형 선택자(U+FE0F)·결합 문자(U+200D)를 함께 지운다.
+
+> **엔진 문자열은 건드리지 않았다.** 콘솔 실행에서는 그대로 쓸모가 있고,
+> 로직 레이어가 화면 폰트 사정을 알아야 할 이유가 없다. 고칠 곳은 그리는 쪽이다.
+
+#### ④ 뒷면 카드마다 '회수' 버튼이 따라다닌다 (원인 규명 — 아직 안 고침)
+
+`CardSlotInGame` 프리팹의 구조가 이렇다:
+
+```
+CardSlotInGame
+└── CardBack   [평소 꺼짐] Image = 카드 뒷면
+    └── Button  Image + "회수"  → CardInteraction.OnClickReturn
+```
+
+**회수 버튼이 뒷면 이불(CardBack)의 자식이다.** `CardUI.SetFaceDown(true)`는 이 이불을 켜는데,
+덱·폐기존·상대 손패·스택의 카드는 전부 뒷면이므로 **그 모든 카드에 회수 버튼이 함께 켜진다.**
+카드가 겹쳐 있을 땐 가려져 보이지 않다가, 이동 트윈으로 흩어지는 순간 드러난다.
+사용자가 "작은 뒷면 이미지 위에 글씨"라고 본 것은 이 Button의 Image다.
+
+의도는 "세트한 내 카드를 되돌리기"였을 것이다. 그렇다면 조건은 **뒷면인가**가 아니라
+**내 세트존 카드인가**(`CardInteraction.isInSetZone`)여야 한다.
+
+고치는 방법은 둘 중 하나이고, 어느 쪽인지는 기획 판단이 필요해 남겨 둔다:
+- 회수 기능을 유지한다면 → 버튼을 `CardBack` 밖으로 빼고 `isInSetZone`으로 표시를 제어
+- 현재 룰 흐름(공개/폐기)에 회수가 없다면 → 버튼과 `OnClickReturn`을 함께 제거
+
+---
+
+### [2026-08-23 후속 3] DeckInfoPanelUI 프리팹 전환 ✅ **전환 완료**
+
+세 번째 대상. 톱니바퀴 + 덱 리스트 + 항복 패널을 코드 생성에서 프리팹으로 옮겼다.
+`HumanChoiceDialogUI`와 달리 **한 라운드에 끝냈다** — 패널과 카드 칸을 같은 빌더에서 함께 만들었다.
+
+#### 만든 것
+
+| 경로 | 내용 |
+|------|------|
+| `Assets/Resources/Build/DeckInfoPanelRoot.prefab` | 톱니바퀴(Canvas 600) + 패널(Canvas 700) |
+| `Assets/Resources/Build/DeckCellItem.prefab` | 격자 한 칸 |
+| `Assets/Scripts/InGameCard/DeckInfoPanelView.cs` | 참조 8개 + `Validate` |
+| `Assets/Scripts/InGameCard/DeckCellItemView.cs` | 참조 2개 + `Validate` |
+| `Assets/Art/UI/icon_gear.png` | 톱니바퀴 256×256 RGBA |
+
+#### 톱니바퀴를 에셋으로 구웠다
+
+`GetGearSprite()`가 픽셀을 하나씩 찍어 `Texture2D`를 만들고 있었다.
+런타임 텍스처는 **프리팹에 저장되지 않는다** — ▲▼ 화살표에서 이미 겪은 문제다.
+같은 알고리즘(톱니 8개, 몸통 0.30R / 이 끝 0.44R / 구멍 0.13R)으로 PNG를 구웠고,
+해상도를 64 → 256으로 올리고 톱니 경계를 보간해 계단을 없앴다.
+
+**부수 효과: `UiFontResolver` 의존이 사라졌다.** 이 화면에서 폴백이 필요했던 유일한 글자가
+톱니 문자(⚙ U+2699)였는데, 그림이 되면서 남은 글자가 전부 한글이 됐다.
+
+#### 구조 — `CardHost`가 축소 배율의 주인
+
+```
+DeckCellItem   RectTransform + CanvasGroup
+└── CardHost   localScale = 0.56  ← 여기
+```
+
+카드 프리팹(200×280)은 자식들이 고정 크기라 `sizeDelta`로는 줄지 않고 `localScale`로만 줄어든다.
+그 배율을 코드가 쥐고 있으면 **격자 칸 크기를 프리팹에서 바꿔도 카드가 따라오지 않는다.**
+자리를 하나 두고 거기에 배율을 걸면 칸과 카드를 한곳에서 맞출 수 있다.
+`ChoiceCardItem`의 `CardHost`와 같은 수법이되, 저쪽은 여백으로 두께를 정하고 이쪽은 배율을 정한다.
+
+#### 몫 나누기
+
+| | 소유 |
+|---|---|
+| 프리팹 | 위치·크기·앵커·**격자 배치(칸 크기·간격·열 수)**·글꼴·기본 색·톱니 그림·카드 축소 배율 |
+| 코드 | 제목 문구 · 열고 닫기 · 격자에 채울 카드 · 덱에 남았는지(흐리기) · 항복 확인 단계의 문구와 색 |
+
+인스펙터에 남긴 것은 셋뿐이다: `usedCardAlpha`, `surrenderColor`, `surrenderConfirmColor`.
+전부 **상황에 따라 코드가 바꾸는** 값이라 프리팹이 가질 수 없다.
+
+#### 삭제한 것
+
+`Build()` · `CreateText()` · `CreateButton()` · `GetGearSprite()` · `_gearSprite` · `_font`
+필드: `columns` · `rows` · `cellSize` · `cellSpacing` · `cardScale` · `panelColor` · `gearColor`
+
+`new GameObject` **8곳 → 1곳** (로직 싱글턴만 남음).
+
+> 파일은 529줄 → 564줄로 오히려 **늘었다.** 생성 코드보다 채택·검증 코드가 조금 더 길다.
+> 이 전환의 이득은 코드가 줄어드는 것이 아니라 **배치를 손으로 만질 수 있게 되는 것**이다.
+
+#### 세 규칙을 처음부터 넣었다
+
+1. **시작 시 정리** — `OnEnable`에서 `sceneLoaded` 구독 + 코루틴으로 즉시 채택.
+   게임 시작을 기다리지 않는다 (그게 네 번 반복한 그 실수였다)
+2. **중복 방지** — `EnsureUI`가 ① 씬 검사 → ② 프리팹 순으로 확보
+3. **소유권 구분** — `_ownsRoot`. 씬에서 빌려 온 것은 절대 파괴하지 않는다
+
+#### 알아 둘 것
+
+- 두 대전 씬에 프리팹 인스턴스가 남아 있고, 코드가 그것을 **채택**한다.
+  톱니바퀴 자리를 씬마다 다르게 두고 싶으면 그대로 옮기면 된다.
+- `DeckCellItem`은 **템플릿**이라 씬에 있을 이유가 없다. 눈에 보이지도 않지만(그림 없음)
+  격자 밖에 떠 있는 빈 칸이므로 지우는 편이 낫다.
+- `OpenPanel`의 `SetAsLastSibling`은 이제 뿌리에 건다. 사실 두 자식 모두
+  `overrideSorting` Canvas를 갖고 있어 형제 순서와 무관하지만, 정렬을 끄고 쓸 경우를 위해 남겼다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 `[MATCH SET]` 완주.
+**콘솔 회귀는 이 UI를 전혀 타지 않는다.** 실기 확인이 본 검증이다:
+
+1. 좌측 상단 **톱니바퀴가 그림으로** 보이는가 (ㅁ가 아니라)
+2. 누르면 덱 20장이 **5 × 4로** 뜨고, 뽑아 쓴 카드가 흐린가
+3. 다시 누르면 닫히는가. [닫기]도 닫는가
+4. [항복]을 한 번 누르면 **'정말 항복?'**으로 바뀌고, 두 번째에 실제로 항복하는가
+5. 씬의 기존 [Surrender] 버튼도 이 패널을 여는가
+6. 프리팹에서 `DeckGrid`의 칸 크기를 바꾸면 **카드도 따라 커지는가** (CardHost 확인)
+7. 로비 → 대전 → 로비 → 대전을 반복해도 계속 정상인가
+
+---
+
 ### [2026-08-23 후속 2] HumanChoiceDialogUI 프리팹 전환 — 2단계(카드 항목) ✅ **전환 완료**
 
 1단계에서 패널을 옮겼고, 이번에 **요청마다 만들어지는 카드 칸**까지 옮겼다.

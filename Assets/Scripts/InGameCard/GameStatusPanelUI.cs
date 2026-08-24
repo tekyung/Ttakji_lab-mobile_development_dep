@@ -263,7 +263,7 @@ public class GameStatusPanelUI : MonoBehaviour
         // 엔진 로그에는 앞뒤 개행이 섞여 있다. 빈 줄이 화면을 잡아먹지 않도록 정리한다.
         foreach (var raw in message.Split('\n'))
         {
-            string line = raw.Trim();
+            string line = StripUnrenderable(raw).Trim();
             if (line.Length == 0) continue;
 
             _logLines.Enqueue(line);
@@ -271,6 +271,46 @@ public class GameStatusPanelUI : MonoBehaviour
         }
 
         _logText.text = string.Join("\n", _logLines);
+    }
+
+    /// <summary>
+    /// 화면 폰트가 그릴 수 없는 글자를 걷어낸다.
+    ///
+    /// 엔진 로그에는 이모지가 섞여 있다. 콘솔에서는 잘 보이지만, 이 화면이 쓰는 한글 TMP 폰트는
+    /// <b>정적 아틀라스</b>라 해당 글리프가 없어 네모나 엉뚱한 글자로 찍힌다.
+    /// 이모지는 BMP 밖에 있어 C#에서 서로게이트 쌍으로 표현되므로, 그 쌍과 뒤따르는
+    /// 변형 선택자·결합 문자를 함께 지운다.
+    ///
+    /// ★ 엔진 쪽 문자열은 건드리지 않는다. 콘솔 실행에서는 그대로 쓸모가 있고,
+    ///   로직 레이어는 화면 사정을 몰라야 한다.
+    /// </summary>
+    private static string StripUnrenderable(string source)
+    {
+        if (string.IsNullOrEmpty(source)) return source;
+
+        bool needsWork = false;
+        foreach (char c in source)
+        {
+            if (IsUnrenderable(c)) { needsWork = true; break; }
+        }
+
+        if (!needsWork) return source;
+
+        var sb = new System.Text.StringBuilder(source.Length);
+        foreach (char c in source)
+        {
+            if (!IsUnrenderable(c)) sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool IsUnrenderable(char c)
+    {
+        if (char.IsSurrogate(c)) return true;   // 이모지 본체
+        if (c == '️' || c == '︎') return true;   // 변형 선택자
+        if (c == '‍') return true;                     // 결합용 폭 없는 문자
+        return false;
     }
 
     // ─── 결과 오버레이 ──────────────────────────────────────────────────

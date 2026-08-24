@@ -51,6 +51,9 @@ public class PlayerUIManager : MonoBehaviour
     private Player localPlayer;
     private Card pendingCardToSet;
     private GameObject pendingCardObj;
+
+    /// <summary>지금 [회수] 버튼을 띄우고 있는 카드. 한 번에 하나뿐이다.</summary>
+    private CardInteraction _recallTarget;
     private bool pendingIsReveal = true;
 
     /// <summary>이번 세트 선택을 엔진 콜백이 아니라 네트워크로 보내야 하는가 (온라인 호스트).</summary>
@@ -345,6 +348,9 @@ public class PlayerUIManager : MonoBehaviour
         DimHandCard(cardObj);
         ShowSetGhost(isReveal);
 
+        // 여기서부터 [레디] 직전까지가 되돌릴 수 있는 유일한 구간이다.
+        SetRecallTarget(cardObj);
+
         if (readyButtonObj != null) readyButtonObj.SetActive(true);
     }
 
@@ -353,6 +359,11 @@ public class PlayerUIManager : MonoBehaviour
         if ((pendingSetCallback != null || _sendSetOverNetwork) && pendingCardToSet != null)
         {
             if (readyButtonObj != null) readyButtonObj.SetActive(false);
+
+            // ★ 선택을 보내는 순간 되돌리기는 닫는다.
+            //   이 뒤에 되돌리면 엔진·서버에 이미 보낸 선택과 어긋난다.
+            //   (손패 카드의 흐림은 실제 세트가 일어날 때까지 그대로 둔다)
+            SetRecallTarget(null);
 
             // 잔상은 여기서 지우지 않는다.
             // 엔진의 실제 세트는 양측이 모두 준비된 뒤에 일어나므로, 지금 지우면 그 사이 세트존이 비어 보인다.
@@ -574,11 +585,31 @@ public class PlayerUIManager : MonoBehaviour
 
     private void ClearPendingSelection()
     {
+        SetRecallTarget(null);
         RestoreDimmedHandCard();
         DestroySetGhost();
 
         pendingCardToSet = null;
         pendingCardObj = null;
+    }
+
+    /// <summary>
+    /// [회수] 버튼을 띄울 카드를 옮긴다. null이면 모두 닫는다.
+    ///
+    /// 한 장에만 떠 있어야 한다 — 다른 카드를 다시 고르면 이전 카드의 것은 닫는다.
+    /// (카드가 파괴됐을 수도 있으므로 null 검사 후에 만진다)
+    /// </summary>
+    private void SetRecallTarget(GameObject cardObj)
+    {
+        CardInteraction next = cardObj != null ? cardObj.GetComponent<CardInteraction>() : null;
+
+        if (_recallTarget != null && _recallTarget != next)
+            _recallTarget.SetRecallAvailable(false);
+
+        _recallTarget = next;
+
+        if (_recallTarget != null)
+            _recallTarget.SetRecallAvailable(true);
     }
 
     private void HandleCardStacked(Card card, Player player)
