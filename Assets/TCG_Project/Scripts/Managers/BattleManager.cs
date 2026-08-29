@@ -67,6 +67,9 @@ public class BattleManager : MonoBehaviour
         EventManager.OnRequireCardPick += HandleQA_CardPick;
         EventManager.OnRequireOptionalAction += HandleQA_OptionalAction; // Yes/No 자동 응답기
         EventManager.OnCharacterAbilityUsed += HandleCharacterAbilityUsed;
+
+        // 3. 간접 발동([기뢰] 등)에 대한 스택 응답 위임 수신
+        EventManager.OnRequireIndirectStackResponse += HandleIndirectStackResponse;
     }
 
     private void OnDisable()
@@ -79,6 +82,25 @@ public class BattleManager : MonoBehaviour
         EventManager.OnRequireCardPick -= HandleQA_CardPick;
         EventManager.OnRequireOptionalAction -= HandleQA_OptionalAction;
         EventManager.OnCharacterAbilityUsed -= HandleCharacterAbilityUsed;
+
+        EventManager.OnRequireIndirectStackResponse -= HandleIndirectStackResponse;
+    }
+
+    /// <summary>
+    /// 효과가 다른 카드를 간접 발동시켰을 때, 오픈 페이즈와 <b>같은</b> 스택 응답 단계를 돌린다.
+    ///
+    /// 효과 클래스는 코루틴을 돌릴 수 없어 이 단계를 부를 방법이 없다.
+    /// 그래서 이벤트로 받아 여기서 대신 돌리고, 끝나면 콜백으로 알린다.
+    /// </summary>
+    private void HandleIndirectStackResponse(Player stackOwner, Player cardPlayer, Card playedCard, Action<bool> done)
+    {
+        StartCoroutine(RunIndirectStackResponse(stackOwner, cardPlayer, playedCard, done));
+    }
+
+    private IEnumerator RunIndirectStackResponse(Player stackOwner, Player cardPlayer, Card playedCard, Action<bool> done)
+    {
+        yield return StartCoroutine(HandleStackActivation(stackOwner, cardPlayer, playedCard));
+        done?.Invoke(true);
     }
 
     private void HandleCharacterAbilityUsed(Player owner, string characterCardId)

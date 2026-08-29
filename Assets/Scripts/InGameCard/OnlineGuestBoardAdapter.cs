@@ -1,4 +1,4 @@
-// OnlineGuestBoardAdapter.cs — 게스트 화면을 board_state로 복원하는 어댑터
+﻿// OnlineGuestBoardAdapter.cs — 게스트 화면을 board_state로 복원하는 어댑터
 //
 // ★ 왜 필요한가
 //   호스트는 ServerGameManager라는 진짜 엔진이 돌고, 보드 UI는 그 엔진이 쏘는
@@ -487,6 +487,11 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         {
             _lastPhase = state.CurrentPhase;
             EventManager.OnLogMessage?.Invoke($"[ {PhaseLabel(state.CurrentPhase)} ]");
+
+            // ★ 로그에만 적고 끝내면 게스트의 가운데 띠에는 페이즈 이름이 영영 뜨지 않는다.
+            //   화면은 페이즈 이벤트를 구독해 "ROUND 3 · 세트 페이즈"를 만드는데,
+            //   그 이벤트를 발행하는 곳이 호스트 엔진뿐이었다.
+            BroadcastPhase(state.CurrentPhase, state.ActivePlayer, state.CurrentTurn);
         }
 
         // 5) 종료
@@ -1123,6 +1128,25 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
             Debug.LogWarning($"[GuestBoard] 모르는 존 문자열: '{zone}' — 이 카드는 건너뛴다.");
 
         return false;
+    }
+
+    /// <summary>
+    /// 서버가 알려 준 페이즈 이름을 화면이 아는 이벤트로 바꿔 발행한다.
+    ///
+    /// 호스트에서는 엔진이 직접 쏘는 것들이다. 게스트에는 엔진이 없으므로 여기서 흉내 낸다.
+    /// 이것이 없으면 게스트의 가운데 띠는 "ROUND 3"에서 멈추고 페이즈 이름이 붙지 않는다.
+    /// </summary>
+    private static void BroadcastPhase(string phase, string subject, int turn)
+    {
+        switch (phase)
+        {
+            case "ResourcePhase": EventManager.OnResourcePhase?.Invoke(subject, turn); break;
+            case "DrawPhase":     EventManager.OnDrawPhase?.Invoke(subject, turn); break;
+            case "SetPhase":      EventManager.OnSetPhase?.Invoke(subject, turn); break;
+            case "OpenPhase":     EventManager.OnOpenPhase?.Invoke(subject, turn); break;
+            case "MainPhase":     EventManager.OnMainPhase?.Invoke(subject, turn); break;
+            case "EndPhase":      EventManager.OnEndPhase?.Invoke(subject, turn); break;
+        }
     }
 
     private static string PhaseLabel(string phase)

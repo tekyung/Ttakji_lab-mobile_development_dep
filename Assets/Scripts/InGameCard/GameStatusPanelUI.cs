@@ -1,4 +1,4 @@
-// GameStatusPanelUI.cs — 인게임 상태 표시 패널 (턴·페이즈 / 로그 / 결과)
+﻿// GameStatusPanelUI.cs — 인게임 상태 표시 패널 (턴·페이즈 / 로그 / 결과)
 //
 // 엔진은 이미 필요한 이벤트를 모두 쏘고 있었는데 화면에 표시하는 곳이 없었다. 이 스크립트가 그 소비자다.
 //
@@ -6,53 +6,54 @@
 //   2) 진행 로그    — 화면 좌측에 최근 N줄 (엔진이 보내는 <color> 리치 텍스트 그대로 표시)
 //   3) 결과 오버레이 — 게임/매치가 끝나면 전체 화면 딤 + 결과 문구
 //
-// 씬 배선이 필요 없다. RuntimeInitializeOnLoadMethod로 자가 생성하고 UI도 코드로 만든다.
-// 로그 패널 좌측 상단은 톱니바퀴 버튼(DeckInfoPanelUI) 자리를 피해 아래쪽에서 시작한다.
+// ── 화면은 프리팹이 갖는다 ────────────────────────────────────────────
+//   프리팹 — 위치·크기·앵커·글꼴·바탕색·버튼 색·정렬 순서
+//   코드   — 표시할 문구 · 로그 줄 쌓기 · 오버레이를 열고 닫기 · 승패에 따른 글자색
+//
+//   Resources/Build/GameStatusPanelRoot
+//
+//   씬에 미리 놓여 있으면 그것을 쓰고, 없으면 프리팹을 찍는다.
+//   로직 싱글턴은 씬을 넘어 살아남지만 화면은 씬 캔버스에 붙으므로 수명이 다르다.
+//
+// ★ 가운데 띠와 로그는 UiSortingLayer(100)로 자리를 명시한다.
+//   예전에는 정렬 순서가 없어, '실행 중에 캔버스 맨 뒤에 붙는다'는 사정만으로 맨 앞에 그려졌다.
+//   그 바람에 씬에 놓인 설정 패널을 덮어 버렸다.
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using TCG_Project.Scripts.Systems;
-using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public class GameStatusPanelUI : MonoBehaviour
 {
     public static GameStatusPanelUI Instance { get; private set; }
 
-    [Header("Log")]
-    [Tooltip("화면에 유지할 최근 로그 줄 수")]
+    /// <summary>Resources 아래에서 이 화면을 찾을 경로.</summary>
+    private const string PanelResourcePath = "Build/GameStatusPanelRoot";
+
+    [Header("로그")]
+    [Tooltip("화면에 유지할 최근 로그 줄 수. 패널 크기·색·자리는 프리팹이 갖는다.")]
     public int maxLogLines = 10;
-    public Vector2 logPanelSize = new Vector2(430f, 250f);
-    [Tooltip("톱니바퀴 버튼 아래에서 시작하도록 띄우는 간격")]
-    public float logPanelTopOffset = 74f;
-    public Color logPanelColor = new Color(0.08f, 0.08f, 0.10f, 0.62f);
 
-    [Header("Turn / Phase")]
-    public Color headerColor = new Color(0.08f, 0.08f, 0.10f, 0.72f);
-    [Tooltip("화면 세로 중앙 기준 오프셋. 0이면 정중앙")]
-    public float headerCenterOffsetY = 0f;
-
-    [Header("Result Overlay")]
-    public Color overlayColor = new Color(0f, 0f, 0f, 0.78f);
+    [Header("승패에 따라 코드가 바꾸는 글자색")]
     public Color winColor = new Color(0.35f, 0.85f, 1f, 1f);
     public Color loseColor = new Color(1f, 0.45f, 0.45f, 1f);
     public Color drawColor = new Color(0.9f, 0.9f, 0.6f, 1f);
-    public Color retryColor = new Color(0.20f, 0.55f, 0.95f, 1f);
-    public Color menuColor = new Color(0.36f, 0.36f, 0.42f, 1f);
+
+    [Header("이동")]
     [Tooltip("[메인 메뉴로] 버튼이 로드할 씬 이름 (Build Settings에 포함되어 있어야 한다)")]
     public string mainMenuSceneName = "MainMenu";
 
     private Canvas _hostCanvas;
-    private TMP_FontAsset _font;
 
-    private TextMeshProUGUI _headerText;
-    private TextMeshProUGUI _logText;
-    private GameObject _overlay;
-    private TextMeshProUGUI _overlayTitle;
-    private TextMeshProUGUI _overlayDetail;
+    private GameObject _root;
+    private GameStatusPanelView _view;
+
+    /// <summary>내가 찍은 것인가. 씬에서 빌려 온 것은 절대 파괴하지 않는다.</summary>
+    private bool _ownsRoot;
 
     private readonly Queue<string> _logLines = new Queue<string>();
     private int _currentTurn = 1;
@@ -106,6 +107,12 @@ public class GameStatusPanelUI : MonoBehaviour
         EventManager.OnGameDraw += HandleGameDraw;
         EventManager.OnMatchSet += HandleMatchSet;
         EventManager.OnMatchDraw += HandleMatchDraw;
+
+        // ★ 씬이 로드되면 **게임 시작을 기다리지 않고** 곧바로 화면을 정리한다.
+        //   씬에 놓인 UI는 편집하기 좋도록 켜진 채 저장되므로,
+        //   여기서 결과 오버레이를 꺼 주지 않으면 진입하자마자 화면을 가로막는다.
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        StartCoroutine(AdoptSceneRootSoon());
     }
 
     private void OnDisable()
@@ -132,6 +139,22 @@ public class GameStatusPanelUI : MonoBehaviour
         EventManager.OnGameDraw -= HandleGameDraw;
         EventManager.OnMatchSet -= HandleMatchSet;
         EventManager.OnMatchDraw -= HandleMatchDraw;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode) => StartCoroutine(AdoptSceneRootSoon());
+
+    /// <summary>
+    /// 한 프레임 기다렸다가 씬에 놓인 화면을 거둔다.
+    /// 씬 로드 직후에는 캔버스·레이아웃이 아직 자리를 잡지 않았다.
+    /// </summary>
+    private IEnumerator AdoptSceneRootSoon()
+    {
+        yield return null;
+
+        // 씬에 없으면 아무 일도 하지 않는다 — 로비처럼 이 화면이 없는 곳도 있다.
+        AdoptSceneRootIfPresent();
     }
 
     // ─── 이벤트 핸들러 ──────────────────────────────────────────────────
@@ -146,7 +169,7 @@ public class GameStatusPanelUI : MonoBehaviour
 
         EnsureUI();
         _logLines.Clear();
-        if (_logText != null) _logText.text = "";
+        if (_view != null && _view.logText != null) _view.logText.text = "";
         HideOverlay();
 
         _currentTurn = 1;
@@ -237,7 +260,7 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void RefreshHeader()
     {
-        if (_headerText == null) return;
+        if (_view == null || _view.headerText == null) return;
 
         string baseText = string.IsNullOrEmpty(_currentPhase)
             ? $"ROUND {_currentTurn}"
@@ -250,7 +273,7 @@ public class GameStatusPanelUI : MonoBehaviour
             baseText += $"   <color={color}>{_inputLabel} {remain}초</color>";
         }
 
-        _headerText.text = baseText;
+        _view.headerText.text = baseText;
     }
 
     private void HandleLogMessage(string message)
@@ -258,7 +281,7 @@ public class GameStatusPanelUI : MonoBehaviour
         if (string.IsNullOrWhiteSpace(message)) return;
 
         EnsureUI();
-        if (_logText == null) return;
+        if (_view == null || _view.logText == null) return;
 
         // 엔진 로그에는 앞뒤 개행이 섞여 있다. 빈 줄이 화면을 잡아먹지 않도록 정리한다.
         foreach (var raw in message.Split('\n'))
@@ -270,7 +293,7 @@ public class GameStatusPanelUI : MonoBehaviour
             while (_logLines.Count > maxLogLines) _logLines.Dequeue();
         }
 
-        _logText.text = string.Join("\n", _logLines);
+        _view.logText.text = string.Join("\n", _logLines);
     }
 
     /// <summary>
@@ -364,29 +387,32 @@ public class GameStatusPanelUI : MonoBehaviour
     private void ShowOverlay(string title, string detail, Color color)
     {
         EnsureUI();
-        if (_overlay == null) return;
+        if (_view == null || _view.overlay == null) return;
 
         // 페이즈 표시가 화면 중앙에 있어 결과 문구를 가린다. 결과가 뜨는 동안에는 숨긴다.
         SetHeaderVisible(false);
 
-        _overlay.SetActive(true);
-        _overlay.transform.SetAsLastSibling();
+        _view.overlay.SetActive(true);
+        if (_root != null) _root.transform.SetAsLastSibling();
 
-        _overlayTitle.text = title;
-        _overlayTitle.color = color;
-        _overlayDetail.text = detail;
+        if (_view.overlayTitle != null)
+        {
+            _view.overlayTitle.text = title;
+            _view.overlayTitle.color = color;
+        }
+
+        if (_view.overlayDetail != null) _view.overlayDetail.text = detail;
     }
 
     private void HideOverlay()
     {
-        if (_overlay != null) _overlay.SetActive(false);
+        if (_view != null && _view.overlay != null) _view.overlay.SetActive(false);
         SetHeaderVisible(true);
     }
 
     private void SetHeaderVisible(bool visible)
     {
-        if (_headerText != null && _headerText.transform.parent != null)
-            _headerText.transform.parent.gameObject.SetActive(visible);
+        if (_view != null && _view.header != null) _view.header.SetActive(visible);
     }
 
     // ─── UI 생성 ────────────────────────────────────────────────────────
@@ -395,15 +421,24 @@ public class GameStatusPanelUI : MonoBehaviour
     {
         Canvas canvas = ResolveCanvas();
         if (canvas == null) return;
-        if (_headerText != null && _hostCanvas == canvas) return;
 
-        if (_headerText != null) Destroy(_headerText.transform.parent.gameObject);
-        if (_logText != null) Destroy(_logText.transform.parent.gameObject);
-        if (_overlay != null) Destroy(_overlay);
+        if (_view != null && _hostCanvas == canvas) return;
+
+        // 씬이 바뀌어 캔버스가 교체되면 화면을 다시 마련한다 (로직 싱글턴은 그대로 산다).
+        // ★ 우리가 찍은 것만 파괴한다. 씬에 놓인 것을 지우면 기획자의 작업이 사라진다.
+        if (_root != null && _ownsRoot) Destroy(_root);
+        _root = null;
+        _view = null;
+        _ownsRoot = false;
 
         _hostCanvas = canvas;
-        _font = UiFontResolver.Resolve();
-        Build(canvas);
+
+        // ① 씬에 이미 놓여 있으면 그것을 쓴다.
+        //    이 검사가 없으면 씬에 배치한 것 위에 하나를 더 찍어 둘이 겹친다.
+        if (AdoptSceneRootIfPresent()) return;
+
+        // ② 없으면 프리팹을 찍는다
+        BuildFromPrefab(canvas);
     }
 
     private Canvas ResolveCanvas()
@@ -416,98 +451,148 @@ public class GameStatusPanelUI : MonoBehaviour
         return FindFirstObjectByType<Canvas>();
     }
 
-    private void Build(Canvas canvas)
+    /// <summary>
+    /// 씬에 미리 놓인 화면을 찾아 연결한다. 위치·크기는 손대지 않는다.
+    /// </summary>
+    private bool AdoptSceneRootIfPresent()
     {
-        // ── 상단 중앙: 턴 / 페이즈 ──
-        var headerGo = new GameObject("StatusHeader", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-        // 화면 가로 중앙 · 세로도 중앙에 배치한다.
-        // 게임이 끝나면 결과 문구를 가리므로 ShowOverlay에서 숨긴다.
-        var headerRect = (RectTransform)headerGo.transform;
-        headerRect.SetParent(canvas.transform, false);
-        headerRect.anchorMin = new Vector2(0.5f, 0.5f);
-        headerRect.anchorMax = new Vector2(0.5f, 0.5f);
-        headerRect.pivot = new Vector2(0.5f, 0.5f);
-        headerRect.sizeDelta = new Vector2(360f, 48f);
-        headerRect.anchoredPosition = new Vector2(0f, headerCenterOffsetY);
-        var headerBg = headerGo.GetComponent<Image>();
-        headerBg.color = headerColor;
-        headerBg.raycastTarget = false;
+        // 이미 우리가 찍은 것을 쓰고 있으면 그대로 둔다.
+        // (씬이 바뀌면 그것은 씬과 함께 사라져 _view가 null이 되므로 자연스럽게 다시 찾는다)
+        if (_ownsRoot && _view != null) return true;
 
-        _headerText = CreateText(headerRect, "ROUND 1", 24f, TextAlignmentOptions.Center);
-        Stretch(_headerText.rectTransform);
+        foreach (GameStatusPanelView candidate in FindObjectsByType<GameStatusPanelView>(
+                     FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (candidate == null) continue;
+            if (candidate == _view) return true;   // 이미 쓰고 있다
 
-        // ── 좌측: 진행 로그 ──
-        var logGo = new GameObject("StatusLog", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(RectMask2D));
-        var logRect = (RectTransform)logGo.transform;
-        logRect.SetParent(canvas.transform, false);
-        logRect.anchorMin = new Vector2(0f, 1f);
-        logRect.anchorMax = new Vector2(0f, 1f);
-        logRect.pivot = new Vector2(0f, 1f);
-        logRect.sizeDelta = logPanelSize;
-        logRect.anchoredPosition = new Vector2(12f, -logPanelTopOffset);
-        var logBg = logGo.GetComponent<Image>();
-        logBg.color = logPanelColor;
-        logBg.raycastTarget = false;
+            if (!candidate.Validate(out string reason))
+            {
+                Debug.LogWarning(
+                    $"[GameStatusPanel] 씬의 '{candidate.name}'은 참조가 온전하지 않아 건너뜁니다 — {reason}");
+                continue;
+            }
 
-        _logText = CreateText(logRect, "", 16f, TextAlignmentOptions.BottomLeft);
-        var logTextRect = _logText.rectTransform;
-        logTextRect.anchorMin = Vector2.zero;
-        logTextRect.anchorMax = Vector2.one;
-        logTextRect.offsetMin = new Vector2(10f, 8f);
-        logTextRect.offsetMax = new Vector2(-10f, -8f);
-        _logText.richText = true;   // 엔진이 보내는 <color> 태그를 그대로 살린다
-        _logText.enableWordWrapping = true;
+            // ★ 꺼진 부모 아래에 있으면 무슨 짓을 해도 화면에 나오지 않는다.
+            //   여기서는 결과 오버레이가 안 뜬다는 뜻이고, 그러면 게임이 끝난 뒤
+            //   화면에서 빠져나갈 방법이 사라진다.
+            if (FindInactiveAncestor(candidate.transform) is Transform blocker)
+            {
+                Debug.LogError(
+                    $"[GameStatusPanel] 씬의 '{candidate.name}'은 꺼져 있는 '{blocker.name}' 아래에 있어 화면에 뜰 수 없습니다. " +
+                    "캔버스 바로 아래로 옮기거나 씬에서 지우세요. 지금은 프리팹을 새로 찍어 씁니다.");
+                continue;
+            }
 
-        // ── 결과 오버레이 ──
-        _overlay = new GameObject("ResultOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Canvas), typeof(GraphicRaycaster));
-        var ovRect = (RectTransform)_overlay.transform;
-        ovRect.SetParent(canvas.transform, false);
-        Stretch(ovRect);
-        _overlay.GetComponent<Image>().color = overlayColor;
+            Canvas canvas = candidate.GetComponentInParent<Canvas>();
 
-        var ovCanvas = _overlay.GetComponent<Canvas>();
-        ovCanvas.overrideSorting = true;
-        ovCanvas.sortingOrder = 900; // 선택 다이얼로그(500)보다 위
+            _root = candidate.gameObject;
+            _view = candidate;
+            _ownsRoot = false;   // 빌려 쓰는 것이다
+            _hostCanvas = canvas != null ? (canvas.rootCanvas != null ? canvas.rootCanvas : canvas) : null;
 
-        _overlayTitle = CreateText(ovRect, "", 72f, TextAlignmentOptions.Center);
-        var titleRect = _overlayTitle.rectTransform;
-        titleRect.anchorMin = new Vector2(0.5f, 0.5f);
-        titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.pivot = new Vector2(0.5f, 0.5f);
-        titleRect.sizeDelta = new Vector2(700f, 110f);
-        titleRect.anchoredPosition = new Vector2(0f, 40f);
+            PrepareView();
 
-        _overlayDetail = CreateText(ovRect, "", 26f, TextAlignmentOptions.Center);
-        var detailRect = _overlayDetail.rectTransform;
-        detailRect.anchorMin = new Vector2(0.5f, 0.5f);
-        detailRect.anchorMax = new Vector2(0.5f, 0.5f);
-        detailRect.pivot = new Vector2(0.5f, 0.5f);
-        detailRect.sizeDelta = new Vector2(700f, 44f);
-        detailRect.anchoredPosition = new Vector2(0f, -40f);
+            Debug.Log($"[GameStatusPanel] 씬에 배치된 '{candidate.name}'을 사용합니다.");
+            return true;
+        }
 
-        // ── 종료 후 이탈 버튼 ──
-        // 이게 없으면 게임이 끝난 뒤 화면이 그대로 멈춰 에디터를 껐다 켜야 한다.
-        TextMeshProUGUI retryLabel, menuLabel;
+        return false;
+    }
 
-        Button retry = CreateButton(ovRect, "RetryButton", "다시 하기", retryColor, out retryLabel);
-        var retryRect = retry.GetComponent<RectTransform>();
-        retryRect.anchorMin = new Vector2(0.5f, 0.5f);
-        retryRect.anchorMax = new Vector2(0.5f, 0.5f);
-        retryRect.pivot = new Vector2(1f, 0.5f);
-        retryRect.sizeDelta = new Vector2(210f, 60f);
-        retryRect.anchoredPosition = new Vector2(-12f, -150f);
-        retry.onClick.AddListener(RestartMatch);
+    /// <summary>
+    /// 자기 자신을 뺀 조상 중에 꺼져 있는 것이 있으면 돌려준다. 없으면 null.
+    /// (자기 자신은 코드가 켜고 끄므로 검사에서 뺀다)
+    /// </summary>
+    private static Transform FindInactiveAncestor(Transform t)
+    {
+        for (Transform p = t.parent; p != null; p = p.parent)
+        {
+            if (!p.gameObject.activeSelf) return p;
+        }
 
-        Button menu = CreateButton(ovRect, "MainMenuButton", "메인 메뉴로", menuColor, out menuLabel);
-        var menuRect = menu.GetComponent<RectTransform>();
-        menuRect.anchorMin = new Vector2(0.5f, 0.5f);
-        menuRect.anchorMax = new Vector2(0.5f, 0.5f);
-        menuRect.pivot = new Vector2(0f, 0.5f);
-        menuRect.sizeDelta = new Vector2(210f, 60f);
-        menuRect.anchoredPosition = new Vector2(12f, -150f);
-        menu.onClick.AddListener(GoToMainMenu);
+        return null;
+    }
 
-        _overlay.SetActive(false);
+    /// <summary>
+    /// 프리팹을 씬 캔버스 아래에 찍고 참조를 연결한다.
+    ///
+    /// ★ 씬 캔버스의 자식으로 두어야 CanvasScaler를 물려받아 글자 크기가 보드와 맞는다.
+    /// </summary>
+    private void BuildFromPrefab(Canvas canvas)
+    {
+        GameObject prefab = Resources.Load<GameObject>(PanelResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError(
+                $"[GameStatusPanel] 프리팹을 찾지 못했습니다: Resources/{PanelResourcePath}. " +
+                "턴 표시·진행 로그·결과 화면이 모두 나오지 않습니다.");
+            return;
+        }
+
+        _root = Instantiate(prefab, canvas.transform);
+        _root.name = prefab.name;   // (Clone) 꼬리표 제거
+
+        _view = _root.GetComponent<GameStatusPanelView>()
+                ?? _root.GetComponentInChildren<GameStatusPanelView>(true);
+
+        if (_view == null)
+        {
+            Debug.LogError(
+                $"[GameStatusPanel] '{prefab.name}'에 GameStatusPanelView가 없습니다. " +
+                "프리팹 루트에 컴포넌트를 붙여 주세요.");
+            Destroy(_root);
+            _root = null;
+            return;
+        }
+
+        if (!_view.Validate(out string reason))
+        {
+            Debug.LogError($"[GameStatusPanel] 프리팹 참조가 온전하지 않습니다 — {reason}");
+            Destroy(_root);
+            _root = null;
+            _view = null;
+            return;
+        }
+
+        _ownsRoot = true;
+        PrepareView();
+    }
+
+    /// <summary>
+    /// 찍었든 빌려 왔든, 쓰기 전에 똑같이 해 두어야 하는 것들.
+    ///
+    /// ★ 씬에 놓인 것은 편집하기 좋도록 결과 오버레이가 켜진 채 저장돼 있을 수 있다.
+    ///   여기서 꺼 주지 않으면 화면 진입부터 딤이 덮인다.
+    /// </summary>
+    private void PrepareView()
+    {
+        WireButtons();
+
+        if (_view.overlay != null) _view.overlay.SetActive(false);
+        if (_view.header != null) _view.header.SetActive(true);
+
+        // 씬을 다시 들어왔을 때 지난 판의 로그가 남아 있지 않도록 비운다.
+        if (_view.logText != null) _view.logText.text = string.Empty;
+    }
+
+    /// <summary>
+    /// 프리팹 버튼에 동작을 건다.
+    /// 인스펙터에 남아 있을지 모를 배선과 겹치지 않도록 먼저 비운다.
+    /// </summary>
+    private void WireButtons()
+    {
+        if (_view.retryButton != null)
+        {
+            _view.retryButton.onClick.RemoveAllListeners();
+            _view.retryButton.onClick.AddListener(RestartMatch);
+        }
+
+        if (_view.mainMenuButton != null)
+        {
+            _view.mainMenuButton.onClick.RemoveAllListeners();
+            _view.mainMenuButton.onClick.AddListener(GoToMainMenu);
+        }
     }
 
     // ─── 종료 후 이동 ───────────────────────────────────────────────────
@@ -541,44 +626,5 @@ public class GameStatusPanelUI : MonoBehaviour
         OnlineMatchStarter.ClearSession();
 
         SceneManager.LoadScene(mainMenuSceneName);
-    }
-
-    private Button CreateButton(Transform parent, string name, string label, Color color, out TextMeshProUGUI labelText)
-    {
-        var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = color;
-
-        labelText = CreateText(go.transform, label, 24f, TextAlignmentOptions.Center);
-        var r = labelText.rectTransform;
-        r.anchorMin = Vector2.zero;
-        r.anchorMax = Vector2.one;
-        r.offsetMin = Vector2.zero;
-        r.offsetMax = Vector2.zero;
-
-        return go.GetComponent<Button>();
-    }
-
-    private static void Stretch(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
-
-    private TextMeshProUGUI CreateText(Transform parent, string text, float size, TextAlignmentOptions align)
-    {
-        var go = new GameObject("Text", typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        if (_font != null) tmp.font = _font; // 기본 폰트는 한글 글리프가 없어 ㅁ로 깨진다
-        tmp.text = text;
-        tmp.fontSize = size;
-        tmp.alignment = align;
-        tmp.color = Color.white;
-        tmp.raycastTarget = false;
-        return tmp;
     }
 }

@@ -274,6 +274,10 @@ public class EnemyVisualTester : MonoBehaviour
             {
                 CardMoveTween.Complete(adoptCard.transform);
                 CardBoardRegistry.ResetVisualState(adoptCard);
+
+                // ★ 숨김 풀에서 돌아온 카드는 꺼져 있다. 내 보드 쪽과 같은 이유다.
+                adoptCard.SetActive(true);
+
                 if (board.StackBar != null && adoptCard.transform.parent != board.StackBar)
                     adoptCard.transform.SetParent(board.StackBar, true);
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -457,7 +457,13 @@ namespace TCG_Project.Scripts.Systems
                     ["mode"] = "Choose",
                     ["count"] = 1,
                     ["filter"] = filter,
-                    ["excludeSelf"] = true // 자기 자신 제외
+                    ["excludeSelf"] = true, // 자기 자신 제외
+
+                    // ★ 고른 카드를 곧바로 발동시키는 효과다.
+                    //   낼 수 없는 카드를 후보에 두면 코스트도 안 내고 효과만 터진다.
+                    //   실제로 깎일 양(reduction)까지 넘겨야 후보와 결과가 어긋나지 않는다.
+                    ["requireAffordable"] = true,
+                    ["costReduction"] = reduction
                 };
                 var moveEff = new MoveEffect();
                 moveEff.Initialize(moveParams);

@@ -1,4 +1,4 @@
-// 룰북 6페이즈 구조 (자원→드로우→세트→오픈→메인→엔드) + 3판 2선승 매치
+﻿// 룰북 6페이즈 구조 (자원→드로우→세트→오픈→메인→엔드) + 3판 2선승 매치
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,6 +35,10 @@ namespace TCG_Project
             EventManager.OnGameSet += OnGameSetLog;
             //EventManager.OnGameDraw += OnGameDrawLog;
             EventManager.OnMatchSet += OnMatchSetLog;
+
+            // 간접 발동([기뢰] 등)에 대한 스택 응답 위임.
+            // 콘솔은 동기라 그 자리에서 처리하고 바로 알린다.
+            EventManager.OnRequireIndirectStackResponse += HandleIndirectStackResponse;
             //EventManager.OnMatchDraw += OnMatchDrawLog;
 
 
@@ -145,6 +149,8 @@ namespace TCG_Project
             EventManager.OnGameSet -= OnGameSetLog;
             //EventManager.OnGameDraw -= OnGameDrawLog;
             EventManager.OnMatchSet -= OnMatchSetLog;
+
+            EventManager.OnRequireIndirectStackResponse -= HandleIndirectStackResponse;
             //EventManager.OnMatchDraw -= OnMatchDrawLog;
         }
         private static void OnTurnStartLog(int turn, string _) => Console.WriteLine($"\n========== [ ROUND {turn} ] ==========");
@@ -702,6 +708,17 @@ namespace TCG_Project
         /// 스택 발동: stackOwner가 스택 카드를 보유 중이고 상대 카드에 반응할 수 있으면 봇이 자동 발동.
         /// (수집 -> 강제 횟수 계산 -> 순차 발동 파이프라인 적용)
         /// </summary>
+        /// <summary>
+        /// 효과가 다른 카드를 간접 발동시켰을 때, 오픈 페이즈와 같은 스택 응답 단계를 돌린다.
+        /// (콘솔은 전부 동기라 그 자리에서 끝내고 콜백을 부른다)
+        /// </summary>
+        private static void HandleIndirectStackResponse(
+            Player stackOwner, Player cardPlayer, Card playedCard, Action<bool> done)
+        {
+            HandleStackActivation(stackOwner, cardPlayer, playedCard);
+            done?.Invoke(true);
+        }
+
         private static void HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
         {
             // 스택 발동 조건: 스택존에 카드가 있고, 무적 상태가 아니어야 함

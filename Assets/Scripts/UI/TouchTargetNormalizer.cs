@@ -1,4 +1,4 @@
-// TouchTargetNormalizer.cs — 버튼이 "손가락으로 누를 만한 크기"인지 보장한다.
+﻿// TouchTargetNormalizer.cs — 버튼이 "손가락으로 누를 만한 크기"인지 보장한다.
 //
 // 왜 코드로 하는가:
 //   씬·프리팹은 유니티 에디터에서 열어야 제대로 고칠 수 있고, 화면마다 버튼이 흩어져 있어
@@ -30,8 +30,8 @@ public class TouchTargetNormalizer : MonoBehaviour
     // ─────────────────────────────────────────────────────────────
 
     [Header("끄고 켜기")]
-    [Tooltip("끄면 아무것도 보정하지 않는다. 씬 배치를 손으로 잡을 때 꺼 두면 편하다.")]
-    [SerializeField] private bool normalizeEnabled = true;
+    [Tooltip("켜면 버튼 크기·겹침을 자동으로 보정한다. 기본은 꺼져 있다 — 배치는 손으로 잡는 쪽이 예측 가능하다.")]
+    [SerializeField] private bool normalizeEnabled = false;
 
     [Header("최소 크기")]
     [Tooltip("캔버스 높이 대비 최소 버튼 높이 비율. 1080p 기준 0.05 ≈ 54px.")]
@@ -58,22 +58,21 @@ public class TouchTargetNormalizer : MonoBehaviour
 
     private static TouchTargetNormalizer _instance;
 
+    /// <summary>
+    /// 씬에 올려 둔 것이 있으면 그것을 쓴다.
+    ///
+    /// ★ 예전에는 없으면 <b>스스로 만들어</b> 모든 씬에서 켜진 채로 돌았다.
+    ///   배치를 프리팹·씬에서 직접 잡는 방향으로 바뀌면서, 자동 보정이 손으로 잡은 자리를
+    ///   되돌려 놓는 쪽이 됐다. 이제 자동 생성하지 않는다 —
+    ///   쓰려면 <b>씬에 직접 올리고 normalizeEnabled를 켜야 한다.</b>
+    ///   (모바일 터치 대응을 다시 할 때 되살릴 자리다)
+    /// </summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
         if (_instance != null) return;
 
-        // 씬에 직접 올려 둔 것이 있으면 그 설정을 쓴다 (인스펙터로 조절하려는 의도)
-        TouchTargetNormalizer existing = FindFirstObjectByType<TouchTargetNormalizer>(FindObjectsInactive.Include);
-        if (existing != null)
-        {
-            _instance = existing;
-            return;
-        }
-
-        var go = new GameObject("TouchTargetNormalizer");
-        _instance = go.AddComponent<TouchTargetNormalizer>();
-        DontDestroyOnLoad(go);
+        _instance = FindFirstObjectByType<TouchTargetNormalizer>(FindObjectsInactive.Include);
     }
 
     private void Awake()

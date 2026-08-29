@@ -70,6 +70,10 @@ public class ServerGameManager : MonoBehaviour
         EventManager.OnLogMessage += HandleLogMessage;
         EventManager.OnGameSet += HandleGameSet;
         EventManager.OnGameDraw += HandleGameDraw;
+
+        // 간접 발동([기뢰] 등)에 대한 스택 응답 위임 수신.
+        // 스택 응답 단계는 여기(진행 코드)에만 있어서, 효과가 직접 부를 수가 없다.
+        EventManager.OnRequireIndirectStackResponse += HandleIndirectStackResponse;
     }
 
     private void OnDisable()
@@ -77,6 +81,25 @@ public class ServerGameManager : MonoBehaviour
         EventManager.OnLogMessage -= HandleLogMessage;
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
+
+        EventManager.OnRequireIndirectStackResponse -= HandleIndirectStackResponse;
+    }
+
+    /// <summary>
+    /// 효과가 다른 카드를 간접 발동시켰을 때, 오픈 페이즈와 <b>같은</b> 스택 응답 단계를 돌린다.
+    /// 끝나면 콜백으로 알린다 — 효과 쪽이 그때까지 기다린다.
+    /// </summary>
+    private void HandleIndirectStackResponse(
+        Player stackOwner, Player cardPlayer, Card playedCard, System.Action<bool> done)
+    {
+        StartCoroutine(RunIndirectStackResponse(stackOwner, cardPlayer, playedCard, done));
+    }
+
+    private System.Collections.IEnumerator RunIndirectStackResponse(
+        Player stackOwner, Player cardPlayer, Card playedCard, System.Action<bool> done)
+    {
+        yield return StartCoroutine(HandleStackActivation(stackOwner, cardPlayer, playedCard));
+        done?.Invoke(true);
     }
 
     private void HandleLogMessage(string msg)

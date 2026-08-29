@@ -507,6 +507,358 @@ Assets/Scripts/
 
 ## 5. Phase별 완료 현황
 
+### [2026-08-25 후속 3] 점검 3건 — 간접 발동 코스트 / 타이브레이커 설명 / 존 장수 호버
+
+#### ① 기뢰가 낼 수 없는 카드를 공짜로 발동시키던 문제 (고침)
+
+두 곳이 비어 있었다.
+
+**후보를 안 걸렀다.** ReplayCardEffect의 필터는 `type:Effect,replayable:true`뿐이었다.
+`CardSelector.ApplyFilter`는 <b>정적 메서드라 플레이어의 자원 상황을 알 수 없어</b>
+필터 문자열로는 해결되지 않는다. → `MoveEffect`에 `requireAffordable` / `costReduction`을
+추가해, 후보를 뽑은 <b>뒤에</b> 거른다. 깎일 양까지 넘겨야 후보와 실제가 어긋나지 않는다.
+
+**코스트를 안 냈다.** `PlayFromBufferEffect`는 그냥 `Play`만 불렀다.
+정작 그 클래스의 주석에는 "코스트 지불 불가 시 카드를 폐기존에만 이동하고 효과는 취소한다"고
+적혀 있었다 — <b>의도만 적히고 구현된 적이 없는 주석</b>이었다.
+보통 경로와 같은 `owner.PayCost(GetEffectiveCost(...))`를 넣고,
+못 내면 발동을 취소하고 폐기존으로만 보낸다.
+
+> 주석이 코드보다 앞서 있으면 읽는 사람이 "이미 된다"고 믿는다.
+> 이번에도 그 주석 때문에 코스트 쪽을 한 번 더 확인하지 않았다.
+
+#### ② 타이브레이커가 어느 단계에서 갈렸는지 (추가)
+
+`TiebreakerResolver`가 결과만 돌려줘서, 판정이 맞는지 확인할 방법이 없었다.
+단계마다 비교값과 결과를 로그로 남긴다.
+
+```
+[타이브레이커] 동시 종료 — Player vs Bot_Blue 단계별 비교를 시작합니다.
+    [1단계] 폐기존(적은 쪽 승): Player 7 vs Bot_Blue 7 → 동률, 다음 단계로
+    [2단계] 자원존(많은 쪽 승): Player 4 vs Bot_Blue 3 → Player 승리로 판정
+```
+
+6단계까지 동률이면 "코인 토스로 넘어갑니다"를 남긴다.
+판정 로직 자체는 바꾸지 않았다 — 비교 순서와 대소 규칙은 그대로다.
+
+#### ③ 덱·폐기존 장수 호버 (신규)
+
+카드가 겹쳐 쌓여 있어 몇 장인지 셀 수 없었다. 커서를 올리면 말풍선으로 보여 준다.
+내 쪽과 상대 쪽 모두, 덱과 폐기존 넷 다.
+
+| 경로 | 내용 |
+|------|------|
+| `Assets/Resources/Build/ZoneCountTooltip.prefab` | 말풍선 (사람이 저장) |
+| `Assets/Scripts/InGameCard/ZoneCountTooltipView.cs` | 참조 2개 + `Validate` |
+| `Assets/Scripts/InGameCard/ZoneCountHoverUI.cs` | 판정·표시 |
+
+정렬 순서 **420** (보드·페이즈 띠 위, 설정 패널 아래). 클릭은 받지 않는다 —
+말풍선이 아래 카드를 가리면 안 된다.
+
+> ⚠️ **알려진 한계**: 커서 좌표를 매 프레임 확인하는 방식이라,
+> 에디터에서 Game 뷰에 포커스가 없으면 `Input.mousePosition`이 갱신되지 않아 안 뜬다.
+> 손패 호버 미리보기가 겪는 것과 같은 문제다(섹션 5 ★). 빌드에서는 정상이다.
+> 포인터 이벤트 방식을 쓰지 않은 이유는, 이 보드가 카드마다 중첩 Canvas를 붙이고
+> 존마다 레이캐스트를 껐다 켜서 존까지 이벤트가 오지 않기 때문이다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 3회 완주.
+미검증: ①의 실기 재현(자원이 모자란 상태에서 기뢰), ②는 동시 라이프 0 상황, ③은 실기 호버.
+
+---
+
+### [2026-08-25 후속 2] 실기 확인 3건 — 간접 발동 정착 + 자동 보정 종료
+
+#### ① 기뢰로 낸 스택 카드가 화면에 안 보이던 문제 (고침)
+
+지난번 `OnCardStacked`를 추가한 것은 맞았지만 **한 단계가 더 있었다.**
+
+```
+[기뢰]   폐기존 → PlayBuffer → 스택존
+                     ↑ PlaceHidden()이 SetActive(false) 를 한다
+```
+
+`PlayBuffer`는 숨김 풀로 보내는 존이라 카드 오브젝트가 **꺼진다.**
+그런데 `PlayerUIManager.HandleCardMove`의 스택 분기는 `ApplyZoneMove`를 거치지 않고
+직접 재부모만 하는데, 거기에 `SetActive(true)`가 없었다.
+그래서 엔진 스택존에는 들어갔는데 화면에는 없고, `SyncMyStack`이 엔진 목록으로 배치하니
+**자리는 차지해** 다음 스택 카드가 그 오른쪽에 놓였다.
+
+세트존에서 오는 보통 경로는 이미 켜져 있어 여태 드러나지 않았다.
+`EnemyVisualTester`에도 같은 코드가 있어 함께 고쳤다.
+
+> **교훈**: 지름길로 만든 경로(`ApplyZoneMove`를 우회하는 분기)는
+> 원래 경로가 해 주던 일을 빠뜨리기 쉽다. 이번엔 그게 `SetActive`였다.
+
+#### ② 간접 발동이 상대 스택 응답을 건너뛰던 문제 (고침 — 구조 변경)
+
+스택 응답 단계는 카드가 아니라 **대전 진행 코드**에 있고, 그것도 세 곳에 각각 있다:
+`BattleManager`(로컬) · `ServerGameManager`(온라인 호스트) · `ConsoleRunner`(콘솔).
+
+```csharp
+// 보통 경로
+yield return StartCoroutine(HandleStackActivation(enemy, player, card));  // ← 물어봄
+card.Play(context, …);
+
+// PlayFromBufferEffect (기뢰)
+bufferedCard.Play(context, …);   // 물어보는 단계가 없다
+```
+
+효과 클래스는 코루틴을 돌릴 수 없어 저걸 부를 방법이 없다. **이벤트로 위임했다.**
+
+```csharp
+EventManager.OnRequireIndirectStackResponse   // stackOwner, cardPlayer, playedCard, done
+```
+
+- `PlayFromBufferEffect`가 카드 발동 **직전에** 이 훅을 쏘고 기다린다
+  (`Execute`를 `async void`로 바꾸고 `AsyncTimeoutHelper`로 시간 제한을 뒀다)
+- 세 드라이버가 각자 구독해 자기 방식으로 `HandleStackActivation`을 돌린 뒤 콜백
+- 구독자가 없거나 상대 스택존이 비었으면 그냥 지나간다
+
+⚠️ **서버 파일 변경**: `ServerGameManager`에 구독 2줄 + 위임 메서드 2개. 담당자 공유 필요.
+
+> `Execute`를 async로 바꿀 때 try/catch로 감쌌다. async void에서 예외가 나면 조용히 삼켜져
+> `onComplete`가 영영 안 불리고 게임이 멈춘다 — MoveEffect에서 이미 한 번 겪은 일이다.
+
+#### ③ UI 자동 보정 종료
+
+`MainMenu`·`BuildDeck`의 씬 인스턴스는 이미 꺼져 있었지만,
+**`TestGameScene`·`GameScene`에서는 계속 돌고 있었다.** 씬에 없으면 스스로 만들어 붙는
+부트스트랩이 있었고 그때 기본값이 켜짐이었다.
+
+- 자동 생성 제거 — 씬에 직접 올린 것만 쓴다
+- `normalizeEnabled` 기본값 `false`
+
+지우지는 않았다. 모바일 터치 대응을 다시 할 때 되살릴 자리다.
+참고로 `TouchTargetExempt`(면제 표식)는 지금 쓰는 씬이 0개다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 3회 완주.
+콘솔도 새 훅을 구독하므로, 위임이 교착됐다면 콘솔이 멈춘다 — 완주는 그 경로의 신호다.
+미검증: 실기에서 기뢰 → 풀 버스트로 상대 방어 스택이 실제로 발동하는지.
+
+---
+
+### [2026-08-25 후속] TestGameScene — 양쪽 덱·용병을 골라 시작 ✅
+
+`LocalMatchStarter`가 하드코딩 덱·고정 용병으로만 시작해서, 덱 빌더에서 만든 덱이나
+다른 용병 조합을 대전에서 확인할 방법이 없었다. 실행 시 설정 창을 띄우도록 했다.
+
+#### 만든 것
+
+| 경로 | 내용 |
+|------|------|
+| `Assets/Resources/Build/MatchSetupRoot.prefab` | 설정 창 (양쪽 덱·용병 드롭다운 6개 + 모드 + [시작]) |
+| `Assets/Scripts/InGameCard/MatchSetupView.cs` | 참조 5개 + `Validate` |
+| `Assets/Scripts/InGameCard/MatchSetupSideView.cs` | 한쪽 참조 5개 (양쪽이 같은 모양이라 공유) |
+| `Assets/Scripts/Utils/DeckLoader.cs` | 덱 이름 → 카드 목록 + 용병 목록 |
+
+#### ★ 하드코딩 덱은 지우지 않았다
+
+`(기본 테스트 덱)`이라는 **드롭다운 첫 항목**이 되어 살아 있다.
+저장된 덱이 하나도 없어도 그대로 시작된다. `useSetupPanel`을 끄면 예전처럼 곧장 시작한다.
+
+#### `DeckLoader` — 세 번째 사본을 막으려고 뺐다
+
+덱 파일을 읽는 곳이 이미 셋인데, 그때마다 같은 함정 두 개를 밟았다:
+
+1. **중복 20장인지 유니크 10종인지** 구분해야 한다. 안 하면 20장짜리가 40장이 된다
+2. **구버전 덱은 `characterIdList`가 비어 있다.** 그때는 카드 접두사로 역산해야 한다
+
+`session_game_manage.BuildMainDeck`과 같은 규칙이다. 그쪽도 나중에 이걸 쓰면 좋지만
+서버 담당 파일이라 이번에는 건드리지 않았다.
+
+#### 드롭다운은 손으로 짜지 않았다
+
+TMP 드롭다운은 `Template > Viewport > Content > Item > …` 로 계층이 깊다.
+임시 빌더에서 `TMP_DefaultControls.CreateDropdown`을 썼다 — 유니티 메뉴로 만드는 것과 같은 결과다.
+
+> 받은 프리팹 점검: 계층·참조 모두 정확. `Item Background`의 스프라이트만 비어 있는데
+> (내장 `Background.psd`를 못 찾은 듯) 색이 흰색(0.96)이고 글자가 진회색이라 읽는 데 지장은 없다.
+> 모서리가 둥글지 않을 뿐이다. 신경 쓰이면 인스펙터에서 스프라이트만 꽂으면 된다.
+
+#### 정렬 순서 950
+
+결과 오버레이(900)보다 위. 시작 전에는 무엇보다 앞에 있어야 한다.
+사다리 주석에 자리를 추가했다.
+
+#### 범위 밖 — 로컬 사람 vs 사람
+
+`LocalPlayerContext.IsMine`이 로컬에서 `Type == UserType.Human`으로 "나"를 판정한다.
+한 화면에 사람이 둘이면 **양쪽 보드가 모두 내 것**이 되어 입력·표시가 무너진다.
+판정 기준을 새로 만들어야 해서 넣지 않았다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+엔진을 건드리지 않았으므로 콘솔은 **바뀌지 않는 것이 정상**이다.
+씬 배치 확인: `MatchSetupRoot`가 TestGameScene의 Canvas 바로 아래, GameScene에는 없음(맞다).
+
+---
+
+### [2026-08-25] 커밋 전 확인에서 나온 2건
+
+#### ① 기뢰로 발동한 스택 카드가 스택존에 안 보인다 (고침)
+
+`PlayFromBufferEffect`가 **`OnCardMove`만 쏘고 짝 이벤트를 빠뜨리고 있었다.**
+
+화면은 두 신호를 따로 받는다:
+- `OnCardMove` — "어디에서 어디로 옮겨졌다"
+- `OnCardStacked` / `OnCardBattlefield` / `OnCardResourceAdded` — "무엇이 되었다"
+
+**정렬·뒤집기·개수 표시는 뒤엣것이 맡는다.** `PlayerUIManager.HandleCardStacked`가
+스택존을 다시 그리는데, 그 신호가 안 와서 엔진에는 들어간 카드가 화면에는 없었다.
+
+> 게스트 화면 미러링에서 겪은 것과 **똑같은 함정**이다(2026-08-18 기록 참조).
+> 그때도 "카드가 움직였다"만 흉내 내고 "스택에 쌓였다"를 빠뜨려 카드가 뒷면으로 남았다.
+> 존을 옮기는 코드를 새로 쓸 때는 **BattleManager의 라우팅 블록과 짝을 맞출 것.**
+
+세 갈래 모두 보강했다(스택 / 전장 / 자원 — 자원은 `OnResourceChange`까지).
+
+카드는 다이나 **DAIN-10 [기뢰]** → **DAIN-07 [강도 테스트]** 조합에서 재현된다.
+
+#### ② 매칭을 취소하면 메인 메뉴 버튼이 전부 죽는다 (고침)
+
+`LobbyUI`(파일명은 `MainMenuPopupUI.cs`)에 **여는 짝만 있고 닫는 짝이 없었다.**
+
+```
+Canvas > Popups > PopupDim            ← 전체 화면 반투명 막, raycastTarget = 1
+                  ├── PopupMatchMode
+                  └── PopupRandomMatching
+```
+
+`OpenMatchMode()`가 막과 창을 함께 켜는데, 취소 버튼은 `CancelRandomMatch()`와
+`PopupMatchMode.SetActive(false)`만 부른다. **막이 그대로 남아 모든 클릭을 먹는다.**
+화면은 멀쩡해 보이는데 아무 버튼도 안 눌리는 이유가 이것이었다.
+
+조치:
+- `LobbyUI.CloseMatchMode()` 신설 — 창과 막을 함께 닫는다
+- `RandomMatchUI.CancelRandomMatch()`가 이것을 부른다.
+  버튼 인스펙터 배선에 맡기지 않는다 — 취소 경로가 늘어도 새지 않게.
+
+> **알아 둘 것**: `MainMenuPopupUI.cs` 안의 클래스 이름은 `LobbyUI`다(파일명과 다르다).
+> 동작에는 문제가 없지만 찾을 때 헷갈린다. 이 파일의 `OnClickMatch()`는 쓰는 곳이 없고,
+> 주석 한 줄이 CP949 손상으로 복구 불가 상태다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+미검증: ①의 실기 재현(기뢰 → 강도 테스트), ②는 메인 메뉴에서 취소 후 재매칭.
+
+---
+
+### [2026-08-24] GameStatusPanelUI 프리팹 전환 ✅ **전환 완료**
+
+네 번째 대상. 턴·페이즈 띠 / 진행 로그 / 결과 오버레이를 한 라운드에 옮겼다.
+
+#### 만든 것
+
+| 경로 | 내용 |
+|------|------|
+| `Assets/Resources/Build/GameStatusPanelRoot.prefab` | 띠 + 로그 + 결과 오버레이 |
+| `Assets/Scripts/InGameCard/GameStatusPanelView.cs` | 참조 9개 + `Validate` |
+
+#### ★ 정렬 순서를 우연이 아니라 규칙으로
+
+이 화면이 설정 패널을 덮었던 이유는 **정렬 순서가 없어서**였다.
+코드가 실행 중에 만들어 캔버스에 붙이면 언제나 맨 뒤에 붙고, 그래서 맨 앞에 그려졌다.
+자리가 정해져 있어서가 아니라 **붙는 시점 때문에 우연히 앞이었다.**
+
+이제 띠와 로그에 `UiSortingLayer(100)`이 붙는다. 사다리에 자리를 새로 냈다:
+
+```
+   0  보드·씬 UI        10  집어 든 카드
+ 100  페이즈 띠 · 진행 로그   ← 새로 명시
+ 450  설정 패널         500  카드 선택        600  톱니바퀴
+ 700  덱 리스트         780·800  폐기존       850  확대       900  결과 오버레이
+```
+
+띠와 로그는 `raycastTarget`을 꺼 두었다 — 화면 한가운데를 가로지르는 띠가
+보드 클릭을 가로채면 안 된다.
+
+#### 몫 나누기
+
+| | 소유 |
+|---|---|
+| 프리팹 | 위치·크기·앵커·글꼴·바탕색·**버튼 색**·**정렬 순서** |
+| 코드 | 표시할 문구 · 로그 줄 쌓기 · 오버레이 열고 닫기 · **승패에 따른 글자색** |
+
+인스펙터에 남은 것은 넷뿐이다: `maxLogLines`, `winColor`/`loseColor`/`drawColor`,
+`mainMenuSceneName`. 프리팹으로 넘어간 것: `logPanelSize` · `logPanelTopOffset` ·
+`logPanelColor` · `headerColor` · `headerCenterOffsetY` · `overlayColor` ·
+`retryColor` · `menuColor`.
+
+#### 삭제한 것
+
+`Build()` · `CreateText()` · `CreateButton()` · `Stretch()` · `_font`
+그리고 `using TMPro` · `using UnityEngine.UI` — 이제 타입을 직접 쓰지 않는다(전부 View 경유).
+
+`new GameObject` **6곳 → 1곳**(로직 싱글턴).
+`UiFontResolver` 의존도 사라졌다 — 글꼴은 프리팹이 갖는다.
+
+> 파일은 584줄 → 630줄로 늘었다. 세 번째 전환에서와 같은 이유다.
+> 이 작업의 이득은 코드가 줄어드는 것이 아니라 **배치를 손으로 만질 수 있게 되는 것**이다.
+
+#### 세 규칙 + 꺼진 부모 검사
+
+`OnEnable`에서 즉시 정리 / `EnsureUI`가 씬 → 프리팹 순으로 확보 / `_ownsRoot`로 소유권 구분.
+여기에 **조상이 꺼져 있는지** 검사도 넣었다(앞서 두 화면과 같다).
+이 화면에서 그 사고가 나면 **결과 오버레이가 안 떠서 게임이 끝난 뒤 빠져나갈 수 없다.**
+
+`Validate`도 그 점을 반영해, 이탈 버튼 두 개가 없으면 경고가 아니라 **`LogError`**로 알린다.
+
+#### 후속 확인 3건
+
+**① 게스트에는 페이즈 이름이 안 뜬다 (고침)**
+
+`OnlineGuestBoardAdapter`가 발행하는 이벤트 목록을 훑어 보니
+**페이즈 이벤트 6종이 통째로 빠져 있었다.** 페이즈 변화를 로그에만 적고 있었다.
+
+- 남은 시간(`세트 12초`)은 게스트에도 뜬다 — `OnRequireSetPhaseAction` 등은 발행하고 있다
+- 하지만 `SetPhase`가 불리지 않아 **가운데 띠가 "ROUND 3"에서 멈춘다.** 페이즈 이름이 안 붙는다
+- 부작용 하나 더: 페이즈가 넘어갈 때 타이머를 끄는 `StopInputTimer`도 안 불린다
+
+→ `BroadcastPhase()`를 추가해 `state.CurrentPhase`를 해당 이벤트로 바꿔 발행한다.
+
+**② 카운트다운 숫자와 실제 대기가 다를 수 있다 (기록만)**
+
+띠가 보여 주는 숫자는 `GameRules.ChooseWaitTime`(현재 **120000ms**)이다.
+`ServerGameManager`의 대기 루프도 같은 값을 쓰므로 대체로 맞다.
+
+다만 `OnlineMatchStarter.UnlimitedInputForTesting = true`인 동안
+`GameLogicHelpers`는 사람에게 **무제한**을 돌려준다. 그 경로를 타는 대기는
+0이 돼도 아무 일이 일어나지 않는다. 두 임시값을 되돌릴 때 함께 확인할 것.
+
+**③ 덱 편집 화면의 `UnassignedReferenceException` (고침)**
+
+`BuildDeck` 씬의 **`CharacterPicker` 프리팹 인스턴스에 `DeckBuilderManager`가
+하나 더 붙어 있었다**(`m_AddedComponents`). `cardPrefab`이 비어 있어
+`Start` → `InitCollection`에서 터졌다.
+
+씬에서 그 컴포넌트를 제거했다. 문서 2개(MonoBehaviour + stripped GameObject)만 사라졌고
+새로 생긴 미해결 참조는 없다.
+
+> 프리팹을 만들 때 원본 오브젝트의 컴포넌트가 딸려 가거나,
+> 인스턴스 위에 실수로 컴포넌트가 추가되는 일이 있다.
+> **`Start`에서 도는 매니저가 씬에 둘 이상 있지 않은지** 가끔 확인할 것.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 `[MATCH SET]` 완주.
+**콘솔 회귀는 이 UI를 전혀 타지 않는다.** 실기 확인 항목:
+
+1. 가운데 띠에 **"ROUND n · OO 페이즈"**가 뜨는가
+2. 내 차례에 **"세트 12초"** 같은 남은 시간이 붙고, 5초 이하에서 빨개지는가
+3. 좌측 **진행 로그**가 쌓이고 오래된 줄이 밀려 나가는가
+4. 게임이 끝나면 **결과 오버레이**가 뜨고 가운데 띠가 사라지는가
+5. **[다시 하기] / [메인 메뉴로]**가 동작하는가
+6. **설정 패널을 열었을 때 띠가 가리지 않는가** (100 vs 450)
+7. 로비 → 대전 → 로비 → 대전을 반복해도 계속 정상인가
+
+---
+
 ### [2026-08-23 후속 5] 회수 버튼 정착 + 설정 패널 정렬 순서
 
 #### ① [회수]를 '뒷면인가'가 아니라 '내 세트존 카드인가'에 묶었다

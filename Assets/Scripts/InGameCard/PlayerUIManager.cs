@@ -238,6 +238,14 @@ public class PlayerUIManager : MonoBehaviour
             {
                 CardMoveTween.Complete(adopt.transform);
                 CardBoardRegistry.ResetVisualState(adopt);
+
+                // ★ 숨김 풀에 들어간 카드는 꺼져 있다(PlaceHidden이 SetActive(false)를 한다).
+                //   [기뢰]처럼 PlayBuffer를 거쳐 스택으로 오는 카드가 그 경우인데,
+                //   여기서 켜 주지 않으면 엔진 스택존에는 들어갔는데 화면에는 안 보인다.
+                //   (자리는 차지하므로 다음 스택 카드가 그 오른쪽에 놓인다)
+                //   세트존에서 오는 보통 경로는 이미 켜져 있어 아무 영향이 없다.
+                adopt.SetActive(true);
+
                 if (myStackZoneRoot != null && adopt.transform.parent != myStackZoneRoot)
                     adopt.transform.SetParent(myStackZoneRoot, true);
 

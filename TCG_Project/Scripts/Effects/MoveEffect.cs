@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -34,6 +34,16 @@ namespace TCG_Project.Scripts.Effects
         private string _filter = "";
         private bool _shuffleAfter = false;
         private bool _excludeSelf = false;
+
+        /// <summary>
+        /// 지금 코스트를 낼 수 있는 카드만 후보로 삼을지.
+        /// [기뢰]처럼 <b>고른 카드를 곧바로 발동시키는</b> 효과에 쓴다 —
+        /// 낼 수 없는 카드를 고르게 두면 코스트도 안 내고 효과만 터진다.
+        /// </summary>
+        private bool _requireAffordable = false;
+
+        /// <summary>발동 시 깎일 코스트. 후보를 추릴 때 이만큼 빼고 계산해야 실제와 맞는다.</summary>
+        private int _costReduction = 0;
         public bool RequirePreviousSuccess { get; set; } = false; // 기본값은 false (독립 실행)
         public bool IsStackAction { get; set; } = false; // 기본값은 false (카드의 IsStack을 따라가되, JSON에서 오버라이드 가능)
         /// <summary>
@@ -71,6 +81,12 @@ namespace TCG_Project.Scripts.Effects
 
             if (parameters.ContainsKey("excludeSelf"))
                 _excludeSelf = Convert.ToBoolean(parameters["excludeSelf"]);
+
+            if (parameters.ContainsKey("requireAffordable"))
+                _requireAffordable = Convert.ToBoolean(parameters["requireAffordable"]);
+
+            if (parameters.ContainsKey("costReduction"))
+                _costReduction = Convert.ToInt32(parameters["costReduction"]);
 
             if (parameters.ContainsKey("mode"))
             {
@@ -165,6 +181,24 @@ namespace TCG_Project.Scripts.Effects
                 Mode = SelectMode.All // 일단 필터에 맞는 모든 카드를 가져옴
             };
             List<Card> candidates = selector.SelectCards(self, opponent, exclude);
+
+            // ★ 낼 수 없는 카드를 후보에서 뺀다.
+            //   필터 문자열(CardSelector.ApplyFilter)은 정적이라 자원 상황을 알 수 없어 여기서 거른다.
+            if (_requireAffordable)
+            {
+                int budget = self.GetResourceCount();
+                int before = candidates.Count;
+
+                candidates = candidates
+                    .Where(c => Math.Max(0, GameLogicHelpers.GetEffectiveCost(c, self) - _costReduction) <= budget)
+                    .ToList();
+
+                if (before != candidates.Count)
+                {
+                    EventManager.OnLogMessage?.Invoke(
+                        $"    [후보 제외] 코스트를 낼 수 없는 카드 {before - candidates.Count}장을 뺐습니다. (자원 {budget})");
+                }
+            }
 
             List<Card> finalSelected = new List<Card>();
 

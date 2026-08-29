@@ -3158,59 +3158,13 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 7590834319400264412, guid: cbc37c5355984614fb207315d0f59316, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 507237802}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: cbc37c5355984614fb207315d0f59316, type: 3}
 --- !u!224 &507237800 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 7290693763739480389, guid: cbc37c5355984614fb207315d0f59316, type: 3}
   m_PrefabInstance: {fileID: 507237799}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &507237801 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 7590834319400264412, guid: cbc37c5355984614fb207315d0f59316, type: 3}
-  m_PrefabInstance: {fileID: 507237799}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &507237802
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 507237801}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6eb3c31098abf574aa5ae4d49e5bf09f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::DeckBuilderManager
-  deckContent: {fileID: 0}
-  collectionContent: {fileID: 0}
-  cardPrefab: {fileID: 0}
-  deckCountText: {fileID: 0}
-  PopupPanel: {fileID: 0}
-  warningPopup: {fileID: 0}
-  okPopup: {fileID: 0}
-  savePopup: {fileID: 0}
-  saveText: {fileID: 0}
-  deleteConfirmPopup: {fileID: 0}
-  deleteConfirmText: {fileID: 0}
-  newDeckPopup: {fileID: 0}
-  cardZoomPopup: {fileID: 0}
-  zoomedCardUI: {fileID: 0}
-  deckNameInput: {fileID: 0}
-  deckListDropdown: {fileID: 0}
-  characterSlots: []
-  characterSlotBarPrefab: {fileID: 0}
-  editingDeckNameText: {fileID: 0}
-  characterPickerPanel: {fileID: 507237801}
-  characterPickerContent: {fileID: 0}
-  characterPickerRowPrefab: {fileID: 0}
-  characterPickerTitle: {fileID: 0}
-  pickerCurrentColor: {r: 0.28, g: 0.44, b: 0.3, a: 1}
-  pickerNormalColor: {r: 0.26, g: 0.26, b: 0.32, a: 1}
-  pickerDisabledColor: {r: 0.18, g: 0.18, b: 0.2, a: 1}
 --- !u!1 &515623313
 GameObject:
   m_ObjectHideFlags: 0

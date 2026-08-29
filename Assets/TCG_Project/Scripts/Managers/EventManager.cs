@@ -175,6 +175,21 @@ namespace TCG_Project.Scripts.Managers
         public static Action<Player, Card, Card, Action<bool>> OnRequireStackResponse;
 
         /// <summary>
+        /// <b>간접 발동한 카드에 대해 상대의 스택 응답 단계를 진행해 달라</b>는 요청.
+        ///
+        /// ★ 스택 응답은 카드가 아니라 <b>대전 진행 코드</b>가 쥐고 있다
+        ///   (BattleManager / ServerGameManager / ConsoleRunner에 각각 있다).
+        ///   그래서 [기뢰]처럼 효과가 다른 카드를 직접 발동시키면 그 단계를 통째로 건너뛰어,
+        ///   상대가 깔아 둔 방어 스택이 무시된 채 데미지가 들어갔다.
+        ///
+        ///   효과 쪽에서 진행 코드를 부를 방법이 없으므로 이 훅으로 위임한다.
+        ///   구독자는 자기 방식(코루틴/동기)으로 스택 응답을 마친 뒤 콜백을 부른다.
+        ///
+        /// 인자: stackOwner(막는 쪽) · cardPlayer(낸 쪽) · playedCard(간접 발동된 카드) · 완료 콜백
+        /// </summary>
+        public static Action<Player, Player, Card, Action<bool>> OnRequireIndirectStackResponse;
+
+        /// <summary>
         /// 제시된 카드 목록에서 선택: "이 목록 중 N장을 선택해 주세요" 요청.
         /// 예: VERONICA 덱 탑 3장 중 1장 선택.
         ///

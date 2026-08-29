@@ -78,6 +78,25 @@ public class RandomMatchUI : MonoBehaviour
             matchManager.onMatchedAndReady = null;
             matchManager.OnClickExitSession();
         }
+
+        // ★ 창만 닫으면 전체 화면 막(PopupDim)이 남아 모든 클릭을 먹는다.
+        //   버튼 인스펙터에 맡기지 않고 여기서 확실히 걷는다 — 취소 경로가 늘어도 새지 않는다.
+        CloseMatchPopups();
+    }
+
+    /// <summary>매칭 팝업과 그 뒤의 막을 함께 닫는다. 같은 오브젝트에 있는 LobbyUI가 막을 쥐고 있다.</summary>
+    private void CloseMatchPopups()
+    {
+        LobbyUI lobby = GetComponent<LobbyUI>();
+        if (lobby == null) lobby = FindAnyObjectByType<LobbyUI>();
+
+        if (lobby != null)
+        {
+            lobby.CloseMatchMode();
+            return;
+        }
+
+        Debug.LogWarning("[RandomMatchUI] LobbyUI를 찾지 못해 화면 막을 걷지 못했습니다. 버튼이 눌리지 않을 수 있습니다.");
     }
 
     private void HandleStatusUpdate(string msg)
