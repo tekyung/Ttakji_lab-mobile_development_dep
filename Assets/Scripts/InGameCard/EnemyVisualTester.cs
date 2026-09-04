@@ -33,7 +33,7 @@ public class EnemyVisualTester : MonoBehaviour
     public TextMeshProUGUI enemyDeckCountText;
     public TextMeshProUGUI enemyResourceDeckCountText;
 
-    public float enemyCardWidth = 200f;
+    public float enemyCardWidth = 120f;
 
     private Player _p1;
     private Player _p2;
@@ -394,7 +394,7 @@ public class EnemyVisualTester : MonoBehaviour
         rect.anchoredPosition = Vector2.zero;
         rect.localScale = Vector3.one;
 
-        if (applySize) rect.sizeDelta = new Vector2(200f, 280f);
+        if (applySize) rect.sizeDelta = new Vector2(120f, 168f);
     }
 
     private void HandleCardStateChanged(Card card)

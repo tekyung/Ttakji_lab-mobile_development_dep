@@ -17,7 +17,7 @@ public class PlayerUIManager : MonoBehaviour
     public Transform myGraveyardTransform;
     public Transform myDeckTransform;
     public Transform myStackZoneRoot;
-    public float myStackCardWidth = 200f;
+    public float myStackCardWidth = 120f;
     public Transform myBattlefieldTransform;
     public Transform myResourceZoneTransform;
 
@@ -37,8 +37,8 @@ public class PlayerUIManager : MonoBehaviour
     // 이렇게 하면 엔진 존과 hierarchy가 계속 일치하고, OnCardMove도 발행되지 않아
     // 온라인(사람 vs 사람)에서 확정 전 정보가 새지 않는다.
     [Header("Set Zone Preview (확정 전 잔상)")]
-    public Vector2 setGhostSize = new Vector2(200f, 280f);
-    public float setGhostBorderThickness = 6f;
+    public Vector2 setGhostSize = new Vector2(120f, 168f);
+    public float setGhostBorderThickness = 3.6f;
     [Range(0f, 1f)] public float pendingHandCardAlpha = 0.4f;
     [Range(0f, 1f)] public float setGhostAlpha = 0.45f;
     [Range(0f, 1f)] public float setGhostConfirmedAlpha = 0.8f;
@@ -463,6 +463,9 @@ public class PlayerUIManager : MonoBehaviour
 
     private void DestroySetGhost()
     {
+        // ★ 먼저 되돌린다. 순서가 바뀌면 [회수] 버튼이 잔상과 함께 파괴된다.
+        RestoreRecallButton();
+
         if (_setGhost != null) Destroy(_setGhost);
 
         _setGhost = null;
@@ -520,8 +523,8 @@ public class PlayerUIManager : MonoBehaviour
         labelBgRect.anchorMin = new Vector2(1f, 1f);
         labelBgRect.anchorMax = new Vector2(1f, 1f);
         labelBgRect.pivot = new Vector2(1f, 1f);
-        labelBgRect.sizeDelta = new Vector2(66f, 32f);
-        labelBgRect.anchoredPosition = new Vector2(-6f, -6f);
+        labelBgRect.sizeDelta = new Vector2(39.6f, 19.2f);
+        labelBgRect.anchoredPosition = new Vector2(-3.6f, -3.6f);
         labelBgGo.GetComponent<Image>().raycastTarget = false;
 
         var labelGo = new GameObject("Label", typeof(RectTransform));
@@ -529,7 +532,7 @@ public class PlayerUIManager : MonoBehaviour
 
         _setGhostLabel = labelGo.AddComponent<TextMeshProUGUI>();
         _setGhostLabel.font = UiFontResolver.Resolve(); // 기본 폰트로 두면 한글이 ㅁ로 깨진다
-        _setGhostLabel.fontSize = 20f;
+        _setGhostLabel.fontSize = 12f;
         _setGhostLabel.alignment = TextAlignmentOptions.Center;
         _setGhostLabel.raycastTarget = false;
 
@@ -614,10 +617,100 @@ public class PlayerUIManager : MonoBehaviour
         if (_recallTarget != null && _recallTarget != next)
             _recallTarget.SetRecallAvailable(false);
 
+        // 대상이 바뀌거나 사라지면 옮겨 둔 버튼부터 제자리로 돌린다.
+        RestoreRecallButton();
+
         _recallTarget = next;
 
         if (_recallTarget != null)
+        {
             _recallTarget.SetRecallAvailable(true);
+            MoveRecallButtonToGhost();
+        }
+    }
+
+    // ─── [회수] 버튼을 잔상 위로 ──────────────────────────────────
+    //
+    // 버튼은 카드 프리팹(CardSlotInGame) 안에 있어 그대로 두면 <b>손패의 흐린 카드</b> 위에 뜬다.
+    // 그런데 되돌릴 대상은 세트존에 올라간 그 카드다 — 잔상 위에 있어야 읽힌다.
+    //
+    // ★ 새로 만들지 않고 <b>그 버튼을 잠시 옮겼다가 돌려놓는다.</b>
+    //   onClick이 카드의 CardInteraction을 직접 가리키므로 부모가 바뀌어도 그대로 동작하고,
+    //   버튼의 모양(크기·글꼴·색)은 프리팹이 계속 쥐고 있는다.
+
+    private GameObject _movedRecallButton;
+    private Transform _recallHomeParent;
+    private int _recallHomeIndex;
+    private Vector2 _recallHomeAnchorMin;
+    private Vector2 _recallHomeAnchorMax;
+    private Vector2 _recallHomePivot;
+    private Vector2 _recallHomePos;
+
+    private void MoveRecallButtonToGhost()
+    {
+        if (_recallTarget == null || _setGhost == null) return;
+
+        GameObject button = _recallTarget.recallButton;
+        if (button == null) return;
+        if (_movedRecallButton == button) return;
+
+        RestoreRecallButton();
+
+        var rect = button.transform as RectTransform;
+        if (rect == null) return;
+
+        _movedRecallButton = button;
+        _recallHomeParent = rect.parent;
+        _recallHomeIndex = rect.GetSiblingIndex();
+        _recallHomeAnchorMin = rect.anchorMin;
+        _recallHomeAnchorMax = rect.anchorMax;
+        _recallHomePivot = rect.pivot;
+        _recallHomePos = rect.anchoredPosition;
+
+        rect.SetParent(_setGhost.transform, false);
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.localScale = Vector3.one;
+        rect.SetAsLastSibling();   // 뒷면 그림 위로
+
+        // ★ 잔상의 CanvasGroup은 흐리고 blocksRaycasts가 꺼져 있다.
+        //   그대로 두면 버튼이 함께 흐려지고 눌리지도 않는다.
+        //   자체 CanvasGroup으로 부모의 영향을 끊는다(CardInteraction도 같은 방식을 쓴다).
+        CanvasGroup group = button.GetComponent<CanvasGroup>();
+        if (group == null) group = button.AddComponent<CanvasGroup>();
+
+        group.ignoreParentGroups = true;
+        group.alpha = 1f;
+        group.blocksRaycasts = true;
+        group.interactable = true;
+    }
+
+    /// <summary>
+    /// 옮겨 둔 [회수]를 카드로 되돌린다.
+    ///
+    /// ★ <b>잔상을 지우기 전에 반드시 불러야 한다.</b> 버튼이 아직 잔상 밑에 있으면
+    ///   Destroy(_setGhost)에 <b>함께 파괴되어</b> 다음 세트부터 [회수]가 영영 뜨지 않는다.
+    /// </summary>
+    private void RestoreRecallButton()
+    {
+        if (_movedRecallButton == null) return;
+
+        var rect = _movedRecallButton.transform as RectTransform;
+        if (rect != null && _recallHomeParent != null)
+        {
+            rect.SetParent(_recallHomeParent, false);
+            rect.SetSiblingIndex(_recallHomeIndex);
+            rect.anchorMin = _recallHomeAnchorMin;
+            rect.anchorMax = _recallHomeAnchorMax;
+            rect.pivot = _recallHomePivot;
+            rect.anchoredPosition = _recallHomePos;
+            rect.localScale = Vector3.one;
+        }
+
+        _movedRecallButton = null;
+        _recallHomeParent = null;
     }
 
     private void HandleCardStacked(Card card, Player player)
@@ -731,7 +824,7 @@ public class PlayerUIManager : MonoBehaviour
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(myStackCardWidth, 280f);
+        rect.sizeDelta = new Vector2(myStackCardWidth, 168f);
         rect.localScale = Vector3.one;
     }
 }

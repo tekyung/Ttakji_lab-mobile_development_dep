@@ -504,7 +504,13 @@ public class HumanChoiceDialogUI : MonoBehaviour
         string capturedKey = key;
 
         view.button.onClick.RemoveAllListeners();
-        view.button.onClick.AddListener(() => ToggleSelection(captured, capturedKey));
+        view.button.onClick.AddListener(() =>
+        {
+            ToggleSelection(captured, capturedKey);
+
+            // 고르는 것과 별개로, 무슨 카드인지 좌측 확대로 읽을 수 있게 한다.
+            if (CardZoomPopupUI.Instance != null) CardZoomPopupUI.Instance.ShowSub(captured);
+        });
     }
 
     /// <summary>카드 칸 템플릿을 한 번만 불러 둔다.</summary>
@@ -604,7 +610,7 @@ public class HumanChoiceDialogUI : MonoBehaviour
         var tmp = go.AddComponent<TextMeshProUGUI>();
         if (_font != null) tmp.font = _font;
         tmp.text = card.Name;
-        tmp.fontSize = 22;
+        tmp.fontSize = 13.2f;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
         tmp.raycastTarget = false;

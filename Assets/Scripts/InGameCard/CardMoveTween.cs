@@ -51,6 +51,12 @@ public static class CardMoveTween
             _runner.Complete(card);
     }
 
+    /// <summary>지금 이 카드가 날아가는 중인가. 남의 이동을 잘라먹지 않으려면 먼저 물어본다.</summary>
+    public static bool IsPlaying(Transform card)
+    {
+        return card != null && _runner != null && _runner.IsPlaying(card);
+    }
+
     public static void CompleteChildren(Transform root, Transform except = null)
     {
         if (_runner == null || root == null)
@@ -133,6 +139,8 @@ public static class CardMoveTween
             Coroutine routine = StartCoroutine(Animate(card, fromAnchored, toAnchored));
             _running[card] = routine;
         }
+
+        public bool IsPlaying(Transform card) => card != null && _running.ContainsKey(card);
 
         public void Complete(Transform card)
         {

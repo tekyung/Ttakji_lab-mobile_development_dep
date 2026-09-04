@@ -94,6 +94,15 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private void HandleIndirectStackResponse(Player stackOwner, Player cardPlayer, Card playedCard, Action<bool> done)
     {
+        // ★ 이 매니저가 돌리는 매치가 아니면 **답하지 않는다.**
+        //   온라인에서는 이 BattleManager가 카드 데이터 제공자로만 씬에 올라와 context가 null이다.
+        //   그래도 이벤트는 구독돼 있어, 가드가 없으면 HandleStackActivation이
+        //   null context를 붙들고 돌다가 WaitUntil 안에서 매 프레임 터진다(실제로 그렇게 멈췄다).
+        //
+        //   done을 부르지 않는 것이 맞다 — 진짜 진행 주체(ServerGameManager)가 답한다.
+        //   여기서 대신 답해 버리면 상대의 스택 응답을 기다리지 않고 넘어간다.
+        if (context == null) return;
+
         StartCoroutine(RunIndirectStackResponse(stackOwner, cardPlayer, playedCard, done));
     }
 
@@ -1037,6 +1046,8 @@ public class BattleManager : MonoBehaviour
     /// </summary>
     private IEnumerator HandleStackActivation(Player stackOwner, Player cardPlayer, Card playedCard)
     {
+        // 아래에서 context를 여러 번 만진다. 매치를 돌리지 않는 매니저면 손대지 않는다.
+        if (context == null || stackOwner == null || playedCard == null) yield break;
         if (stackOwner.StackZone.Count == 0 || stackOwner.IsInvincible) yield break;
 
         int incomingHits = 0;

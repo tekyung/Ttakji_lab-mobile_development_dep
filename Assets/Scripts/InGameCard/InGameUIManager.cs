@@ -41,7 +41,6 @@ public class InGameUIManager : MonoBehaviour
                 // 패널 Rect 비율에 맞춰 늘어나지 않고, 원본 이미지 비율을 유지한 채 확대되도록 한다
                 zoomCardImage.preserveAspect = true;
 
-                Debug.Log($"📸 줌 패널 사진 복사 완료! 가져온 사진 이름: {cardUI.cardImage.sprite.name}");
             }
 
             // ⭐ 2. 카드 이름 복사
@@ -62,7 +61,6 @@ public class InGameUIManager : MonoBehaviour
         if (popupPanel != null) popupPanel.SetActive(true);
         if (cardZoomPanel != null) cardZoomPanel.SetActive(true);
 
-        Debug.Log("🔍 줌 패널 켜짐! 원본 카드 기억 완료.");
     }
 
     // 배경을 터치해서 닫을 때 호출될 함수

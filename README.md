@@ -2,7 +2,7 @@
 
 실물 보드게임 **"전투! 용병의 시대"**를 Unity 모바일 온라인 게임으로 구현하는 프로젝트입니다.
 
-최종 갱신: 2026-08-18 · 현재 브랜치: `M2_milestone`
+최종 갱신: 2026-09-03 · 현재 브랜치: `M2_milestone`
 
 ---
 
@@ -58,17 +58,19 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
 | ---- | ---- |
 | 전송·프로토콜 (Firebase) | ✅ 실전 검증됨 |
 | 호스트 진행(엔진) · 화면 | ✅ 동작 |
-| 게스트 화면 | ✅ 보드 미러링·진행 로그 (용병 슬롯 제외) |
-| 게스트 입력 | 🔶 세트·오픈만. 카드 선택·예/아니오·스택 응답은 미연결 |
-| 덱·용병 주입 | ❌ **덱이 하드코딩**이고 캐릭터 ID가 비어 있어 **용병 능력 4종이 발동하지 않는다** |
-| 끊김·재접속 | 🔶 상대 이탈 감지·방 정리만. 재접속 없음 |
+| 게스트 화면 | ✅ 보드 미러링·진행 로그·용병 슬롯 (`OnlineGuestBoardAdapter`) |
+| 게스트 입력 | ✅ 세트·오픈·카드 선택·예/아니오·스택 응답 모두 연결됨 |
+| 덱·용병 주입 | ✅ 고른 덱과 용병이 그대로 올라간다 (`session_manage` → `UploadDeck` → `AssignCharacters`) |
+| 끊김·재접속 | 🔶 이탈 감지·방 정리·20초 시작 감시까지. **재접속은 없다** |
 
 ### 지금 상태에서 "정상인데 이상해 보이는 것"
 
-- 어떤 덱을 골라도 **같은 덱으로 대전**한다 (덱 주입 미완)
-- **용병 카드 4장이 안 보이고 용병 능력이 안 나온다** (캐릭터 ID 미주입)
 - 게스트의 진행 로그는 호스트와 내용이 다르다 (호스트 엔진 로그를 중계하지 않는다)
 - **한 판으로 끝난다** — 단판제가 기획 결정이다
+- 게스트 화면은 호스트보다 **한 박자 늦게, 뭉텅이로** 움직인다 —
+  스냅샷이 네트워크 간격으로 오기 때문이다. `OnlineGuestBoardAdapter`가 이동 사이에
+  간격(`moveIntervalSeconds`)을 두어 호스트와 비슷한 리듬을 만든다
+- 새 덱을 만들면 카드 목록이 **비어 보인다.** 용병을 먼저 골라야 그 용병 카드가 나타난다
 
 ---
 
@@ -76,42 +78,45 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
 
 ### 서버 담당
 
-1. **덱·용병 주입** — `session_game_manage.HostGameSetupRoutine`이 덱을 하드코딩하고 있고
-   `CharacterCardId` / `SecondaryCharacterId`를 넣지 않는다. 업로드된 `decks/{role}`을 읽어
-   `PlayerSetupData` 경유로 통일할 것. **용병 능력이 안 도는 원인이 여기 하나다**
-2. **알림 도착 훅** — 게스트가 카드 선택·예/아니오·스택에 답하려면 알림이 왔다는 것을 알아야 한다.
-   전송 API(`SubmitCardPickFromUI` 등)는 이미 공개돼 있으므로 아래 한 줄이면 UI 쪽에서 바로 붙인다
-   ```csharp
-   public event Action<RequireCardPickNotification> OnCardPickRequested;
-   ```
-3. `LogNotification` 발행 — 게스트에게 엔진 로그 중계
-4. 항복 DTO, `onDisconnect` 기반 세션 정리, 재접속
+1. `LogNotification` 발행 — 게스트에게 엔진 로그 중계 (지금 게스트 로그는 어댑터가 따로 만든다)
+2. 항복 DTO
+3. **재접속** — 지금은 끊기면 그대로 끝난다
+4. **인증** — 아래 "공통·출시 전" 참조. 서버 쪽에서 가장 급한 항목이다
 
-> 📌 **이번 작업에서 서버 파일을 4곳 최소 수정했습니다. 확인해 주세요.**
-> `ServerGameManager` — 단판제 적용 / `OnGameStart`를 시작 드로우 **앞으로** 이동
-> `session_manage` — 덱 경로 한 줄 / `IsHost` 읽기 전용 접근자
+> 📌 **서버 파일이 여러 번 수정됐습니다. 담당자 확인이 필요합니다.**
+>
+> | 파일 | 무엇 |
+> | ---- | ---- |
+> | `ServerGameManager` | 단판제 · `OnGameStart`를 시작 드로우 **앞으로** 이동 |
+> | `session_manage` | 덱·용병 업로드 경로 · `IsHost` 접근자 · 20초 시작 감시(`WatchReadyStart`) |
+> | `session_game_manage` | 덱·용병 주입 · 게스트 입력 배선 · **연출 재생을 어댑터에 양보**(`IsDrivingBoard`) |
+> | `firebase_network` | `onDisconnect` 기반 방 정리 (`ArmDisconnectCleanup` 등) |
+> | `EventService` | `board_state`에 용병 ID 기입 |
 
 ### 클라이언트·UI 담당
 
-1. **용병 2종 선택 UI** — 덱 빌더에 없다. 지금은 덱에 담긴 카드로 테마를 역산한다
-2. 게스트 입력 3종 연결 (위 서버 항목 2번이 선행)
-3. 덱 빌딩 → 대전 연결 (`DataManager.selectedDeckList`를 읽는 곳이 없다)
+1. **안드로이드 실기 확인** — 가로 고정·세이프에어리어·터치 경로까지 코드는 들어갔으나 기기 검증 전이다
+2. `Canvas/Buttons`가 UI 오브젝트가 아니다 (일반 `Transform`) — 16:9가 아닌 화면에서 어긋날 수 있다.
+   `HANDOFF.md` 2026-09-03 항목 참조
+3. `Sync`의 낭비 — 카드가 한 장 움직일 때마다 그 존의 카드를 전부 다시 바인딩한다.
+   데스크톱에서는 안 보이지만 **모바일에서는 다르다**
 4. 자원존 가시화 (현재 의도적 미구현)
+5. 예/아니오 다이얼로그 사양 확정 — 지금은 카드 선택 패널을 재사용한 스톱갭
 
 ### 로직 담당
 
 1. 콘솔 실행 환경 정리 — `.csproj`에 `<RollForward>LatestMajor</RollForward>` 추가 또는 TFM 변경.
-   지금은 환경변수 없이 `dotnet run`이 실패한다 (**강화학습 확장의 선행 조건**)
+   지금은 환경변수 없이 `dotnet run`이 실패한다 (**강화학습 확장의 선행 조건**). **아직 그대로다**
 2. 죽은 계약 2개 정리 — `OnRequireStackResponse` / `OnRequireCardChoice` (발행처 0곳)
 
 ### 공통 · 출시 전
 
 | 항목 | 내용 |
 | ---- | ---- |
-| **Firebase 인증** | 현재 **인증이 전혀 없다.** DB가 전면 공개 상태이고, 테스트 규칙이면 만료 시 접속이 통째로 끊긴다 |
-| **Android 패키지명** | `google-services.json`은 `com.Ttakji.server`인데 ProjectSettings에 Android 항목이 없다. 실기에서 Firebase 초기화 실패 |
+| **Firebase 인증** | 현재 **인증이 전혀 없다.** DB가 전면 공개 상태이고, 테스트 규칙이면 만료 시 접속이 통째로 끊긴다. **가장 급하다** |
 | **임시 설정 되돌리기** | `choose_wait_time` 2분(원래 10초), `OnlineMatchStarter.UnlimitedInputForTesting = true` |
-| 터치 입력 | 현재 UI는 마우스 전제(호버 미리보기 등) |
+| 안드로이드 실기 | 코드는 준비됨(가로 고정 · `SafeAreaFitter` · 터치 탭 경로 · CanvasScaler 1920×1080). **기기 검증만 남았다** |
+| ~~Android 패키지명~~ | ✅ 해결 — `applicationIdentifier.Android: com.Ttakji.server`가 `google-services.json`과 일치한다 |
 
 ---
 

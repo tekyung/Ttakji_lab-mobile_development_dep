@@ -1,4 +1,4 @@
-// CardZoomPopupUI.cs — 공개 정보 카드 확대 보기 + 폐기존 목록 패널
+﻿// CardZoomPopupUI.cs — 공개 정보 카드 확대 보기 + 폐기존 목록 패널
 //
 //   · 클릭하면 확대되는 대상: 양측 용병 카드 / 스택 카드 / 세트존 카드(앞면 한정) / 폐기존 목록의 카드
 //   · 폐기존을 클릭하면 화면 오른쪽에 세로로 긴 패널이 열리고, 버려진 순서대로 세로 스크롤로 볼 수 있다
@@ -9,40 +9,48 @@
 //
 // 클릭 감지는 EventSystem 레이캐스트로 직접 처리한다.
 // 카드 GO에 컴포넌트를 붙이거나 CardBoardRegistry를 고치지 않아도 되므로 기존 코드를 건드리지 않는다.
+//
+// ── 화면은 프리팹이 갖는다 ────────────────────────────────────────────
+//   프리팹 — 위치·크기·앵커·글꼴·바탕색·정렬 순서
+//   코드   — 어떤 카드를 보여 줄지 · 열고 닫기 · 목록 채우기 · 제목 문구
+//
+//   Resources/Build/CardZoomPopupRoot     서브 팝업(780) · 확대 팝업(850) · 폐기존 패널(800)
+//   Resources/Build/GraveyardEntryItem    폐기존 목록 한 줄
+//
+// ★ 예전에는 서브 팝업과 확대 상자의 크기를 실행 중에 캔버스 높이로 계산했다.
+//   이제 프리팹에 적힌 크기를 그대로 쓴다 — 해상도는 CanvasScaler가 맡는다.
+using System.Collections;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Managers;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class CardZoomPopupUI : MonoBehaviour
 {
     public static CardZoomPopupUI Instance { get; private set; }
 
-    [Header("중앙 팝업 (용병 클릭 / 서브 팝업에서 한 번 더 클릭)")]
-    [Tooltip("확대 이미지가 차지할 최대 높이 (화면 높이 대비 비율)")]
-    [Range(0.3f, 0.95f)] public float zoomHeightRatio = 0.62f;
-    public Color dimColor = new Color(0f, 0f, 0f, 0.80f);
+    /// <summary>Resources 아래에서 세 화면을 찾을 경로.</summary>
+    private const string PopupResourcePath = "Build/CardZoomPopupRoot";
 
-    [Header("서브 팝업 (화면 왼쪽 중앙, 읽기 전용 미리보기)")]
-    [Tooltip("원본 카드 넓이의 몇 배로 볼지. 비율은 유지된다 (화면 높이를 넘으면 자동으로 줄인다)")]
-    public float subZoomWidthScale = 3f;
-    public Vector2 subZoomBaseSize = new Vector2(200f, 280f);
-    public float subZoomLeftMargin = 16f;
-    public Color subZoomBackColor = new Color(0.08f, 0.08f, 0.11f, 0.86f);
+    /// <summary>Resources 아래에서 폐기존 목록 한 줄 템플릿을 찾을 경로.</summary>
+    private const string GraveEntryResourcePath = "Build/GraveyardEntryItem";
 
-    [Header("Graveyard Panel")]
-    public float graveyardPanelWidth = 260f;
-    public Vector2 graveyardEntrySize = new Vector2(200f, 280f);
-    public float graveyardEntryScale = 0.85f;
-    public float graveyardEntrySpacing = 10f;
-    public Color graveyardPanelColor = new Color(0.09f, 0.09f, 0.12f, 0.94f);
+    // 크기·색·자리는 전부 프리팹이 갖는다. 인스펙터에 남길 값이 없다.
 
     // ─── 상태 ───────────────────────────────────────────────────────────
     private Canvas _hostCanvas;
-    private TMP_FontAsset _font;
+
+    private GameObject _root;
+    private CardZoomPopupView _view;
+
+    /// <summary>내가 찍은 것인가. 씬에서 빌려 온 것은 절대 파괴하지 않는다.</summary>
+    private bool _ownsRoot;
+
+    private GameObject _graveEntryTemplate;
 
     private Player _p1;
     private Player _p2;
@@ -95,6 +103,12 @@ public class CardZoomPopupUI : MonoBehaviour
         EventManager.OnGameSet += HandleGameEnd;
         EventManager.OnCharacterFieldSync += HandleFieldSync;
         EventManager.OnCharacterSlotUpdated += HandleSlotUpdated;
+
+        // ★ 씬이 로드되면 게임 시작을 기다리지 않고 곧바로 화면을 정리한다.
+        //   씬에 놓인 것은 편집하기 좋도록 켜진 채 저장될 수 있어, 여기서 꺼 주지 않으면
+        //   진입하자마자 딤이나 폐기존 패널이 화면을 덮는다.
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        StartCoroutine(AdoptSceneRootSoon());
     }
 
     private void OnDisable()
@@ -103,6 +117,20 @@ public class CardZoomPopupUI : MonoBehaviour
         EventManager.OnGameSet -= HandleGameEnd;
         EventManager.OnCharacterFieldSync -= HandleFieldSync;
         EventManager.OnCharacterSlotUpdated -= HandleSlotUpdated;
+
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode) => StartCoroutine(AdoptSceneRootSoon());
+
+    /// <summary>
+    /// 한 프레임 기다렸다가 씬에 놓인 화면을 거둔다.
+    /// 씬 로드 직후에는 캔버스·레이아웃이 아직 자리를 잡지 않았다.
+    /// </summary>
+    private IEnumerator AdoptSceneRootSoon()
+    {
+        yield return null;
+        AdoptSceneRootIfPresent();
     }
 
     private void HandleGameStart(Player p1, Player p2)
@@ -110,9 +138,7 @@ public class CardZoomPopupUI : MonoBehaviour
         _p1 = p1;
         _p2 = p2;
         _hoveredHandInstanceId = null;
-        _hoverReadinessLogged = false;
-        _hoverHitMethod = null;
-        _hoverState = null;
+        _focusWarned = false;
         EnsureUI();
         CloseAll();
     }
@@ -239,25 +265,23 @@ public class CardZoomPopupUI : MonoBehaviour
         if (_subRoot == null)
         {
             // 매치 전(메뉴 씬)에는 만들지 않는다. 씬 재로드로 날아간 경우에만 다시 만든다
-            if (_p1 == null) { LogHoverStateOnce("매치 시작 전"); return; }
+            if (_p1 == null) return;   // 매치 시작 전
             EnsureUI();
-            if (_subRoot == null) { LogHoverStateOnce("서브 팝업 생성 실패(캔버스 없음)"); return; }
+            if (_subRoot == null) return;   // 캔버스를 못 찾아 화면을 못 만든 상태
         }
 
         // 드래그 중엔 집은 카드를 계속 보여 준다
-        if (CardInteraction.IsDraggingAny) { LogHoverStateOnce("드래그 중 — 호버 갱신 정지"); return; }
+        if (CardInteraction.IsDraggingAny) return;   // 드래그 중엔 집은 카드를 계속 보여 준다
 
         // 모달이나 손패를 덮는 패널이 열려 있으면 그 아래 카드를 집지 않는다
         if (_zoomRoot != null && _zoomRoot.activeSelf)
         {
             _hoveredHandInstanceId = null;
-            LogHoverStateOnce("중앙 확대 팝업이 열려 있음");
             return;
         }
         if (HumanChoiceDialogUI.Instance != null && HumanChoiceDialogUI.Instance.IsOpen)
         {
             _hoveredHandInstanceId = null;
-            LogHoverStateOnce("선택 다이얼로그가 열려 있음");
             return;
         }
 
@@ -267,11 +291,27 @@ public class CardZoomPopupUI : MonoBehaviour
         if (_graveRoot != null && _graveRoot.activeSelf && ContainsPoint(_graveRoot.transform, pos, cam))
         {
             _hoveredHandInstanceId = null;
-            LogHoverStateOnce("폐기존 패널 위");
             return;
         }
 
-        LogHoverStateOnce("판정 동작 중");
+        // ★ 여기가 4번 헤맨 자리다.
+        //   StandaloneInputModule은 UpdateModule()/Process() 첫 줄에서
+        //   `!eventSystem.isFocused` 이면 통째로 돌아간다(uGUI 2.0.0 기준).
+        //   그러면 포인터 이벤트도, 커서 좌표 갱신도 멈춘다 —
+        //   Update()는 runInBackground=1 덕에 계속 돌지만 판정할 좌표가 낡은 것이다.
+        //   마우스를 누르면 포커스가 돌아와 그때만 호버가 살아난 것이 이 증상의 정체다.
+        if (EventSystem.current != null && !EventSystem.current.isFocused)
+        {
+            if (!_focusWarned)
+            {
+                _focusWarned = true;
+                Debug.Log("[CardZoomPopupUI] 게임 화면에 포커스가 없어 커서 좌표가 멈춰 있습니다. 화면을 한 번 클릭하세요.");
+            }
+
+            return;
+        }
+
+        _focusWarned = false;
 
         string hovered = FindHandCardUnder(pos, cam);
         if (hovered == _hoveredHandInstanceId) return; // 같은 카드 위 = 할 일 없음
@@ -282,18 +322,14 @@ public class CardZoomPopupUI : MonoBehaviour
         else if (_subFromHand) CloseSub(); // 손패에서 띄운 것만 닫는다 (스택·폐기 열람은 유지)
     }
 
-    private string _hoverState;
-
     /// <summary>
-    /// 호버 판정의 현재 상태를 <b>바뀔 때만</b> 한 줄 남긴다.
-    /// 호버가 안 먹을 때 어느 관문에서 멈췄는지 콘솔에서 바로 보인다.
+    /// 포커스가 없다고 이미 알렸는가. 매 프레임 찍지 않으려고 둔다.
+    ///
+    /// ★ 이 안내만 남긴 이유: 에디터에서 Game 뷰에 포커스가 없으면 커서 좌표가 갱신되지 않아
+    ///   호버가 통째로 죽는다. 원인을 찾는 데 다섯 번을 헤맸으므로, 다음 사람은
+    ///   침묵 대신 이 한 줄을 보게 한다. (빌드에서는 창이 포커스를 가지므로 뜨지 않는다)
     /// </summary>
-    private void LogHoverStateOnce(string state)
-    {
-        if (_hoverState == state) return;
-        _hoverState = state;
-        Debug.Log($"[CardZoomPopupUI] 손패 호버 상태: {state}");
-    }
+    private bool _focusWarned;
 
     /// <summary>
     /// 커서 아래에 있는 손패 카드의 InstanceId. 없으면 null.
@@ -306,19 +342,10 @@ public class CardZoomPopupUI : MonoBehaviour
         Player human = ResolveOwnerForMyBoard();
         if (human == null) return null;
 
-        LogHoverReadinessOnce(human);
-
         string byRaycast = FindHandCardByRaycast(pos, human);
-        if (byRaycast != null)
-        {
-            LogHoverHitOnce("레이캐스트");
-            return byRaycast;
-        }
+        if (byRaycast != null) return byRaycast;
 
-        string byRect = FindHandCardByRect(pos, cam, human);
-        if (byRect != null) LogHoverHitOnce("Rect 판정");
-
-        return byRect;
+        return FindHandCardByRect(pos, cam, human);
     }
 
     /// <summary>커서 아래 맨 위 카드가 내 손패 카드면 그 InstanceId.</summary>
@@ -380,34 +407,6 @@ public class CardZoomPopupUI : MonoBehaviour
             if (Matches(card, instanceId)) return true;
 
         return false;
-    }
-
-    private string _hoverHitMethod;
-
-    /// <summary>어느 수단으로 카드를 잡았는지 처음 한 번만 남긴다.</summary>
-    private void LogHoverHitOnce(string method)
-    {
-        if (_hoverHitMethod == method) return;
-        _hoverHitMethod = method;
-        Debug.Log($"[CardZoomPopupUI] 손패 호버 감지 성공 — {method}");
-    }
-
-    private bool _hoverReadinessLogged;
-
-    /// <summary>
-    /// 호버 미리보기가 카드 GO를 찾을 수 있는 상태인지 매치당 한 번만 기록한다.
-    /// 호버가 안 먹을 때 "누구 손패를 보고 있는지 / GO 연결이 됐는지"를 바로 알 수 있다.
-    /// </summary>
-    private void LogHoverReadinessOnce(Player human)
-    {
-        if (_hoverReadinessLogged || human.Hand.Count == 0) return;
-        _hoverReadinessLogged = true;
-
-        int linked = 0;
-        foreach (var c in human.Hand)
-            if (c != null && CardBoardRegistry.TryGet(c.InstanceId, out GameObject go) && go != null) linked++;
-
-        Debug.Log($"[CardZoomPopupUI] 손패 호버 준비 — 대상 '{human.Name}' 손패 {human.Hand.Count}장 / 카드 GO 연결 {linked}장");
     }
 
     private static readonly List<RaycastResult> RaycastBuffer = new List<RaycastResult>();
@@ -706,39 +705,73 @@ public class CardZoomPopupUI : MonoBehaviour
         {
             Card card = _graveOwner.Graveyard[i];
             if (card == null) continue;
-            _graveEntries.Add(CreateGraveyardEntry(card));
+            GameObject entry = CreateGraveyardEntry(card);
+            if (entry != null) _graveEntries.Add(entry);
         }
     }
 
+    /// <summary>
+    /// 폐기존 목록에 카드 한 줄을 올린다.
+    /// 줄 크기·비율은 <b>프리팹이 정한다.</b> 코드는 어떤 그림을 넣을지와 누를 수 있는지만 다룬다.
+    /// </summary>
     private GameObject CreateGraveyardEntry(Card card)
     {
-        var entryGo = new GameObject($"Grave_{card.Id}", typeof(RectTransform), typeof(Image));
-        var rect = (RectTransform)entryGo.transform;
-        rect.SetParent(_graveContent, false);
-        rect.sizeDelta = graveyardEntrySize * graveyardEntryScale;
+        GameObject template = ResolveGraveEntryTemplate();
+        if (template == null) return null;
 
-        var img = entryGo.GetComponent<Image>();
-        if (!CardImageLoader.ApplyToImage(img, card.ImagePath))
-            img.color = new Color(0.22f, 0.22f, 0.26f, 1f);
-        img.preserveAspect = true;
+        GameObject entryGo = Instantiate(template, _graveContent);
+        entryGo.name = $"Grave_{card.Id}";
+        entryGo.SetActive(true);
 
-        var layout = entryGo.AddComponent<LayoutElement>();
-        layout.preferredWidth = rect.sizeDelta.x;
-        layout.preferredHeight = rect.sizeDelta.y;
-
-        // 자원 카드는 확대해 볼 내용이 없으므로 클릭 대상에서 제외한다
-        if (card.Type != CardType.Resource)
+        var view = entryGo.GetComponent<GraveyardEntryItemView>();
+        if (view == null)
         {
-            var button = entryGo.AddComponent<Button>();
-            Card captured = card;
-            button.onClick.AddListener(() => ShowSub(captured)); // 중앙 모달이 아니라 서브 팝업
+            Debug.LogError("[CardZoomPopupUI] 폐기존 줄 템플릿에 GraveyardEntryItemView가 없습니다.");
+            Destroy(entryGo);
+            return null;
         }
-        else
+
+        if (!view.Validate(out string reason))
         {
-            img.raycastTarget = false;
+            Debug.LogError($"[CardZoomPopupUI] 폐기존 줄 템플릿이 온전하지 않습니다 — {reason}");
+            Destroy(entryGo);
+            return null;
+        }
+
+        // 그림을 못 읽으면 프리팹의 바탕색이 그대로 남는다 (빈 칸이 되지 않게)
+        if (CardImageLoader.ApplyToImage(view.image, card.ImagePath))
+            view.image.color = Color.white;
+
+        // 자원 카드는 확대해 볼 내용이 없으므로 누를 수 없게 한다.
+        bool clickable = card.Type != CardType.Resource;
+        view.button.interactable = clickable;
+        view.image.raycastTarget = clickable;
+
+        view.button.onClick.RemoveAllListeners();
+        if (clickable)
+        {
+            Card captured = card;
+            view.button.onClick.AddListener(() => ShowSub(captured)); // 중앙 모달이 아니라 서브 팝업
         }
 
         return entryGo;
+    }
+
+    /// <summary>폐기존 줄 템플릿을 한 번만 불러 둔다.</summary>
+    private GameObject ResolveGraveEntryTemplate()
+    {
+        if (_graveEntryTemplate != null) return _graveEntryTemplate;
+
+        _graveEntryTemplate = Resources.Load<GameObject>(GraveEntryResourcePath);
+
+        if (_graveEntryTemplate == null)
+        {
+            Debug.LogError(
+                $"[CardZoomPopupUI] 폐기존 줄 템플릿을 찾지 못했습니다: Resources/{GraveEntryResourcePath}. " +
+                "폐기존 목록을 그릴 수 없습니다.");
+        }
+
+        return _graveEntryTemplate;
     }
 
     // ─── UI 생성 ────────────────────────────────────────────────────────
@@ -747,64 +780,24 @@ public class CardZoomPopupUI : MonoBehaviour
     {
         Canvas canvas = ResolveCanvas();
         if (canvas == null) return;
-        if (_zoomRoot != null && _hostCanvas == canvas) return;
 
-        if (_zoomRoot != null) Destroy(_zoomRoot);
-        if (_graveRoot != null) Destroy(_graveRoot);
+        if (_view != null && _hostCanvas == canvas) return;
+
+        // 씬이 바뀌어 캔버스가 교체되면 화면을 다시 마련한다 (로직 싱글턴은 그대로 산다).
+        // ★ 우리가 찍은 것만 파괴한다. 씬에 놓인 것을 지우면 기획자의 작업이 사라진다.
+        if (_root != null && _ownsRoot) Destroy(_root);
+        _root = null;
+        _view = null;
+        _ownsRoot = false;
+        ClearViewFields();
 
         _hostCanvas = canvas;
-        _font = UiFontResolver.Resolve();
-        BuildZoom(canvas);
-        BuildSub(canvas);
-        BuildGraveyard(canvas);
-    }
 
-    private void BuildSub(Canvas canvas)
-    {
-        Vector2 size = new Vector2(
-            subZoomBaseSize.x * subZoomWidthScale,
-            subZoomBaseSize.y * subZoomWidthScale); // 비율 유지 — 넓이 배수를 높이에도 동일 적용
+        // ① 씬에 이미 놓여 있으면 그것을 쓴다 (중복 방지)
+        if (AdoptSceneRootIfPresent()) return;
 
-        // 배수를 키우면 세로가 화면을 넘칠 수 있다. 넘치면 비율을 지킨 채 함께 줄인다
-        var canvasRect = canvas.GetComponent<RectTransform>();
-        float canvasHeight = canvasRect != null && canvasRect.rect.height > 1f ? canvasRect.rect.height : Screen.height;
-        float maxHeight = canvasHeight * 0.92f;
-        if (size.y > maxHeight)
-        {
-            size *= maxHeight / size.y;
-        }
-
-        _subRoot = new GameObject("CardSubPopup",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button),
-            typeof(Canvas), typeof(GraphicRaycaster));
-        var rect = (RectTransform)_subRoot.transform;
-        rect.SetParent(canvas.transform, false);
-        rect.anchorMin = new Vector2(0f, 0.5f);
-        rect.anchorMax = new Vector2(0f, 0.5f);
-        rect.pivot = new Vector2(0f, 0.5f);
-        rect.sizeDelta = size;
-        rect.anchoredPosition = new Vector2(subZoomLeftMargin, 0f);
-
-        _subRoot.GetComponent<Image>().color = subZoomBackColor;
-        _subRoot.GetComponent<Button>().onClick.AddListener(OnSubClicked);
-
-        var sc = _subRoot.GetComponent<Canvas>();
-        sc.overrideSorting = true;
-        sc.sortingOrder = 780; // 폐기존 패널(800)보다 아래, 보드보다는 위
-
-        var imgGo = new GameObject("SubImage", typeof(RectTransform), typeof(Image));
-        var imgRect = (RectTransform)imgGo.transform;
-        imgRect.SetParent(rect, false);
-        imgRect.anchorMin = Vector2.zero;
-        imgRect.anchorMax = Vector2.one;
-        imgRect.offsetMin = Vector2.one * 6f;
-        imgRect.offsetMax = Vector2.one * -6f;
-
-        _subImage = imgGo.GetComponent<Image>();
-        _subImage.preserveAspect = true;
-        _subImage.raycastTarget = false; // 클릭은 루트 Button이 받는다
-
-        _subRoot.SetActive(false);
+        // ② 없으면 프리팹을 찍는다
+        BuildFromPrefab(canvas);
     }
 
     private Canvas ResolveCanvas()
@@ -817,190 +810,159 @@ public class CardZoomPopupUI : MonoBehaviour
         return FindFirstObjectByType<Canvas>();
     }
 
-    private void BuildZoom(Canvas canvas)
+    /// <summary>씬에 미리 놓인 화면을 찾아 연결한다. 위치·크기는 손대지 않는다.</summary>
+    private bool AdoptSceneRootIfPresent()
     {
-        _zoomRoot = new GameObject("CardZoomPopup",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button),
-            typeof(Canvas), typeof(GraphicRaycaster));
-        var rootRect = (RectTransform)_zoomRoot.transform;
-        rootRect.SetParent(canvas.transform, false);
-        Stretch(rootRect);
-        _zoomRoot.GetComponent<Image>().color = dimColor;
-        _zoomRoot.GetComponent<Button>().onClick.AddListener(CloseZoom); // 배경 클릭 = 닫기
+        if (_ownsRoot && _view != null) return true;
 
-        var zc = _zoomRoot.GetComponent<Canvas>();
-        zc.overrideSorting = true;
-        zc.sortingOrder = 850; // 덱 패널(700)보다 위, 결과 오버레이(900)보다 아래
+        foreach (CardZoomPopupView candidate in FindObjectsByType<CardZoomPopupView>(
+                     FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (candidate == null) continue;
+            if (candidate == _view) return true;
 
-        // 확대 이미지
-        var imgGo = new GameObject("ZoomImage", typeof(RectTransform), typeof(Image));
-        var imgRect = (RectTransform)imgGo.transform;
-        imgRect.SetParent(rootRect, false);
-        imgRect.anchorMin = new Vector2(0.5f, 0.5f);
-        imgRect.anchorMax = new Vector2(0.5f, 0.5f);
-        imgRect.pivot = new Vector2(0.5f, 0.5f);
-        imgRect.anchoredPosition = new Vector2(0f, 60f);
-        imgRect.sizeDelta = ComputeZoomBox(canvas);
-        _zoomImage = imgGo.GetComponent<Image>();
-        _zoomImage.preserveAspect = true;
-        _zoomImage.raycastTarget = false;
+            if (!candidate.Validate(out string reason))
+            {
+                Debug.LogWarning(
+                    $"[CardZoomPopupUI] 씬의 '{candidate.name}'은 참조가 온전하지 않아 건너뜁니다 — {reason}");
+                continue;
+            }
 
-        // 이름
-        _zoomName = CreateText(rootRect, "", 34f, TextAlignmentOptions.Center);
-        var nameRect = _zoomName.rectTransform;
-        nameRect.anchorMin = new Vector2(0.5f, 0.5f);
-        nameRect.anchorMax = new Vector2(0.5f, 0.5f);
-        nameRect.pivot = new Vector2(0.5f, 1f);
-        nameRect.sizeDelta = new Vector2(760f, 46f);
-        nameRect.anchoredPosition = new Vector2(0f, 60f - imgRect.sizeDelta.y * 0.5f - 12f);
+            // ★ 꺼진 부모 아래에 있으면 무슨 짓을 해도 화면에 나오지 않는다.
+            if (FindInactiveAncestor(candidate.transform) is Transform blocker)
+            {
+                Debug.LogError(
+                    $"[CardZoomPopupUI] 씬의 '{candidate.name}'은 꺼져 있는 '{blocker.name}' 아래에 있어 화면에 뜰 수 없습니다. " +
+                    "캔버스 바로 아래로 옮기거나 씬에서 지우세요. 지금은 프리팹을 새로 찍어 씁니다.");
+                continue;
+            }
 
-        // 설명
-        _zoomDesc = CreateText(rootRect, "", 22f, TextAlignmentOptions.Top);
-        var descRect = _zoomDesc.rectTransform;
-        descRect.anchorMin = new Vector2(0.5f, 0.5f);
-        descRect.anchorMax = new Vector2(0.5f, 0.5f);
-        descRect.pivot = new Vector2(0.5f, 1f);
-        descRect.sizeDelta = new Vector2(760f, 120f);
-        descRect.anchoredPosition = nameRect.anchoredPosition + new Vector2(0f, -50f);
-        _zoomDesc.enableWordWrapping = true;
+            Canvas canvas = candidate.GetComponentInParent<Canvas>();
 
-        _zoomRoot.SetActive(false);
+            _root = candidate.gameObject;
+            _view = candidate;
+            _ownsRoot = false;   // 빌려 쓰는 것이다
+            _hostCanvas = canvas != null ? (canvas.rootCanvas != null ? canvas.rootCanvas : canvas) : null;
+
+            PrepareView();
+
+            Debug.Log($"[CardZoomPopupUI] 씬에 배치된 '{candidate.name}'을 사용합니다.");
+            return true;
+        }
+
+        return false;
     }
 
-    private Vector2 ComputeZoomBox(Canvas canvas)
+    /// <summary>자기 자신을 뺀 조상 중에 꺼져 있는 것이 있으면 돌려준다. 없으면 null.</summary>
+    private static Transform FindInactiveAncestor(Transform t)
     {
-        var canvasRect = canvas.GetComponent<RectTransform>();
-        float h = canvasRect != null && canvasRect.rect.height > 1f ? canvasRect.rect.height : Screen.height;
+        for (Transform p = t.parent; p != null; p = p.parent)
+        {
+            if (!p.gameObject.activeSelf) return p;
+        }
 
-        float boxH = h * zoomHeightRatio;
-        // preserveAspect가 실제 비율을 맞추므로 박스는 넉넉히 잡아 두면 된다 (카드 원본 200x280 기준)
-        return new Vector2(boxH * (200f / 280f), boxH);
+        return null;
     }
 
-    private void BuildGraveyard(Canvas canvas)
+    /// <summary>
+    /// 프리팹을 씬 캔버스 아래에 찍고 참조를 연결한다.
+    /// ★ 씬 캔버스의 자식이어야 CanvasScaler를 물려받아 크기가 보드와 맞는다.
+    /// </summary>
+    private void BuildFromPrefab(Canvas canvas)
     {
-        _graveRoot = new GameObject("GraveyardPanel",
-            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
-            typeof(Canvas), typeof(GraphicRaycaster));
-        // 화면 오른쪽 벽에 붙인다 (왼쪽은 진행 로그 패널 자리)
-        var rect = (RectTransform)_graveRoot.transform;
-        rect.SetParent(canvas.transform, false);
-        rect.anchorMin = new Vector2(1f, 0f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.pivot = new Vector2(1f, 0.5f);
-        rect.sizeDelta = new Vector2(graveyardPanelWidth, 0f);
-        rect.anchoredPosition = Vector2.zero;
-        _graveRoot.GetComponent<Image>().color = graveyardPanelColor;
+        GameObject prefab = Resources.Load<GameObject>(PopupResourcePath);
+        if (prefab == null)
+        {
+            Debug.LogError(
+                $"[CardZoomPopupUI] 프리팹을 찾지 못했습니다: Resources/{PopupResourcePath}. " +
+                "카드 확대와 폐기존 목록을 쓸 수 없습니다.");
+            return;
+        }
 
-        var gc = _graveRoot.GetComponent<Canvas>();
-        gc.overrideSorting = true;
-        gc.sortingOrder = 800; // 확대 팝업(850)보다 아래
+        _root = Instantiate(prefab, canvas.transform);
+        _root.name = prefab.name;   // (Clone) 꼬리표 제거
 
-        // 제목
-        _graveTitle = CreateText(rect, "폐기존", 20f, TextAlignmentOptions.Center);
-        var titleRect = _graveTitle.rectTransform;
-        titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.sizeDelta = new Vector2(-16f, 40f);
-        titleRect.anchoredPosition = new Vector2(0f, -8f);
+        _view = _root.GetComponent<CardZoomPopupView>()
+                ?? _root.GetComponentInChildren<CardZoomPopupView>(true);
 
-        // 닫기
-        TextMeshProUGUI closeLabel;
-        Button close = CreateButton(rect, "GraveClose", "닫기", new Color(0.32f, 0.32f, 0.38f, 1f), out closeLabel);
-        var closeRect = close.GetComponent<RectTransform>();
-        closeRect.anchorMin = new Vector2(0.5f, 0f);
-        closeRect.anchorMax = new Vector2(0.5f, 0f);
-        closeRect.pivot = new Vector2(0.5f, 0f);
-        closeRect.sizeDelta = new Vector2(graveyardPanelWidth - 40f, 42f);
-        closeRect.anchoredPosition = new Vector2(0f, 12f);
-        close.onClick.AddListener(CloseGraveyard);
+        if (_view == null)
+        {
+            Debug.LogError($"[CardZoomPopupUI] '{prefab.name}'에 CardZoomPopupView가 없습니다.");
+            Destroy(_root);
+            _root = null;
+            return;
+        }
 
-        // 세로 스크롤
-        var scrollGo = new GameObject("GraveScroll", typeof(RectTransform), typeof(ScrollRect));
-        var scrollRect = (RectTransform)scrollGo.transform;
-        scrollRect.SetParent(rect, false);
-        scrollRect.anchorMin = new Vector2(0f, 0f);
-        scrollRect.anchorMax = new Vector2(1f, 1f);
-        scrollRect.offsetMin = new Vector2(8f, 62f);   // 닫기 버튼 위
-        scrollRect.offsetMax = new Vector2(-8f, -52f); // 제목 아래
+        if (!_view.Validate(out string reason))
+        {
+            Debug.LogError($"[CardZoomPopupUI] 프리팹 참조가 온전하지 않습니다 — {reason}");
+            Destroy(_root);
+            _root = null;
+            _view = null;
+            return;
+        }
 
-        var scroll = scrollGo.GetComponent<ScrollRect>();
-        scroll.horizontal = false;
-        scroll.vertical = true;
-        scroll.scrollSensitivity = 30f;
-
-        var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
-        var viewportRect = (RectTransform)viewportGo.transform;
-        viewportRect.SetParent(scrollRect, false);
-        Stretch(viewportRect);
-        var vpImage = viewportGo.GetComponent<Image>();
-        vpImage.color = new Color(0f, 0f, 0f, 0.001f);
-        vpImage.raycastTarget = true;
-
-        var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-        _graveContent = (RectTransform)contentGo.transform;
-        _graveContent.SetParent(viewportRect, false);
-        _graveContent.anchorMin = new Vector2(0.5f, 1f);
-        _graveContent.anchorMax = new Vector2(0.5f, 1f);
-        _graveContent.pivot = new Vector2(0.5f, 1f);
-        _graveContent.anchoredPosition = Vector2.zero;
-
-        var vlg = contentGo.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = graveyardEntrySpacing;
-        vlg.childAlignment = TextAnchor.UpperCenter;
-        vlg.childControlWidth = false;
-        vlg.childControlHeight = false;
-        vlg.childForceExpandWidth = false;
-        vlg.childForceExpandHeight = false;
-        vlg.padding = new RectOffset(0, 0, 6, 6);
-
-        var fitter = contentGo.GetComponent<ContentSizeFitter>();
-        fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        scroll.viewport = viewportRect;
-        scroll.content = _graveContent;
-
-        _graveRoot.SetActive(false);
+        _ownsRoot = true;
+        PrepareView();
     }
 
-    private static void Stretch(RectTransform rect)
+    /// <summary>
+    /// 찍었든 빌려 왔든, 쓰기 전에 똑같이 해 두어야 하는 것들.
+    ///
+    /// 참조를 예전 필드에 그대로 옮겨 담는다 — 쓰는 곳이 서른 곳이 넘어
+    /// 한꺼번에 갈아 끼우기보다 여기서 한 번 이어 주는 편이 안전하다.
+    /// </summary>
+    private void PrepareView()
     {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
+        _zoomRoot = _view.zoomRoot;
+        _zoomImage = _view.zoomImage;
+        _zoomName = _view.zoomName;
+        _zoomDesc = _view.zoomDesc;
+
+        _subRoot = _view.subRoot;
+        _subImage = _view.subImage;
+
+        _graveRoot = _view.graveRoot;
+        _graveTitle = _view.graveTitle;
+        _graveContent = _view.graveContent;
+
+        WireButtons();
+
+        // ★ 씬에 놓인 것은 켜진 채 저장돼 있을 수 있다. 셋 다 확실히 닫는다.
+        if (_zoomRoot != null) _zoomRoot.SetActive(false);
+        if (_subRoot != null) _subRoot.SetActive(false);
+        if (_graveRoot != null) _graveRoot.SetActive(false);
     }
 
-    private TextMeshProUGUI CreateText(Transform parent, string text, float size, TextAlignmentOptions align)
+    private void ClearViewFields()
     {
-        var go = new GameObject("Text", typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        if (_font != null) tmp.font = _font;
-        tmp.text = text;
-        tmp.fontSize = size;
-        tmp.alignment = align;
-        tmp.color = Color.white;
-        tmp.raycastTarget = false;
-        return tmp;
+        _zoomRoot = null; _zoomImage = null; _zoomName = null; _zoomDesc = null;
+        _subRoot = null; _subImage = null;
+        _graveRoot = null; _graveTitle = null; _graveContent = null;
     }
 
-    private Button CreateButton(Transform parent, string name, string label, Color color, out TextMeshProUGUI labelText)
+    /// <summary>
+    /// 프리팹 버튼에 동작을 건다.
+    /// 인스펙터에 남아 있을지 모를 배선과 겹치지 않도록 먼저 비운다.
+    /// </summary>
+    private void WireButtons()
     {
-        var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = color;
+        if (_view.subButton != null)
+        {
+            _view.subButton.onClick.RemoveAllListeners();
+            _view.subButton.onClick.AddListener(OnSubClicked);
+        }
 
-        labelText = CreateText(go.transform, label, 20f, TextAlignmentOptions.Center);
-        var r = labelText.rectTransform;
-        r.anchorMin = Vector2.zero;
-        r.anchorMax = Vector2.one;
-        r.offsetMin = Vector2.zero;
-        r.offsetMax = Vector2.zero;
+        if (_view.zoomBackground != null)
+        {
+            _view.zoomBackground.onClick.RemoveAllListeners();
+            _view.zoomBackground.onClick.AddListener(CloseZoom);   // 배경 클릭 = 닫기
+        }
 
-        return go.GetComponent<Button>();
+        if (_view.graveCloseButton != null)
+        {
+            _view.graveCloseButton.onClick.RemoveAllListeners();
+            _view.graveCloseButton.onClick.AddListener(CloseGraveyard);
+        }
     }
 }

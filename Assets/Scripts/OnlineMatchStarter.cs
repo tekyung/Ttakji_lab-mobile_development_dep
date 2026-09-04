@@ -1,4 +1,4 @@
-// OnlineMatchStarter.cs — 온라인(사람 vs 사람) 대전 준비 부트스트랩
+﻿// OnlineMatchStarter.cs — 온라인(사람 vs 사람) 대전 준비 부트스트랩
 //
 // 로컬 봇전의 LocalMatchStarter에 대응하는 온라인 쪽 짝이다.
 // 매칭(session_manage)이 GameData에 세션 정보를 채우고 넘어온 경우에만 동작한다.
@@ -200,6 +200,8 @@ public class OnlineMatchStarter : MonoBehaviour
 
         try
         {
+            // ★ 예약을 먼저 취소한다. 남겨 두면 다음 접속 때 엉뚱한 방을 지울 수 있다.
+            network.CancelDisconnectCleanup(code);
             _ = network.ExitSession(code, id);
             Debug.Log($"[OnlineMatchStarter] 세션 {code} 정리 요청");
         }

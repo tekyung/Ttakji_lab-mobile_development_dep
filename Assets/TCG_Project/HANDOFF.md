@@ -1,7 +1,7 @@
 ﻿# TCG_Project 작업 인수인계 문서
 
 최초 작성일: 2026-02-28  
-최종 수정일: 2026-08-23 (HumanChoiceDialogUI 프리팹 전환 완료)
+최종 수정일: 2026-09-03 (덱 빌더 정리 · 모바일 대응 · 게스트 화면 · UI 크기 조정)
 목적: 새 AI가 현재까지의 작업을 이어받아 계속 진행하기 위한 컨텍스트 제공 (로직 레이어 + Unity 보드 UI)
 
 > **2026-08-16 갱신 범위**  
@@ -28,18 +28,29 @@
 
 ---
 
-## 0. 지금 상태 한눈에 (2026-08-18)
+## 0. 지금 상태 한눈에 (2026-09-03)
 
-**온라인 1대1 단판제 대전이 처음부터 끝까지 진행된다.** 다만 아래 제약이 남아 있다.
+**온라인 1대1 단판제 대전이 처음부터 끝까지 진행되고, 고른 덱·용병이 그대로 반영된다.**
 
 | 모드 | 엔진 | 화면·입력 |
 | ---- | ---- | --------- |
 | 봇 vs 봇 | ✅ | ✅ 회귀 기준선 |
-| 사람 vs 봇 | ✅ | ✅ |
-| **사람 vs 사람** | ✅ | 🔶 게스트 입력 절반(세트·오픈만) / 용병 능력 미작동 |
+| 사람 vs 봇 | ✅ | ✅ 대전 설정 화면에서 양쪽 덱·용병을 고른다 |
+| **사람 vs 사람** | ✅ | ✅ 게스트 화면·입력 모두 연결됨 |
 
-**가장 큰 공백은 덱·용병 주입이다** — 덱이 하드코딩이고 캐릭터 ID가 비어 있어 용병 능력 4종이 발동하지 않는다.
-서버 담당 영역이다(섹션 11 F-1 #2·#3).
+**2026-08-18 판에 "가장 큰 공백"으로 적혀 있던 덱·용병 주입은 해결됐다.**
+`session_manage`가 고른 덱을 읽어 `GameData.MyDeck`·`MyCharacters`를 채우고,
+`session_game_manage`가 업로드하며, `AssignCharacters`가 `CharacterCardId`를 넣는다 → 용병 능력이 돈다.
+
+**지금 가장 급한 것은 두 가지다.**
+
+| 항목 | 왜 |
+| ---- | ---- |
+| **Firebase 인증이 없다** | DB가 전면 공개 상태다. 테스트 규칙이면 만료되는 순간 접속이 통째로 끊긴다 |
+| **안드로이드 실기 미검증** | 코드는 다 들어갔다(가로 고정 · 세이프에어리어 · 터치 경로 · CanvasScaler). 기기에서 한 번도 안 돌려 봤다 |
+
+그 밖에 남은 것: 재접속 없음 · 게스트 진행 로그가 호스트와 다름 · 예/아니오 UI 사양 미확정 ·
+`.csproj`의 `RollForward` (RL 확장 선행 조건).
 
 > 프로젝트 소개·역할별 남은 일·공통 규칙은 **저장소 루트 `README.md`**를 먼저 본다.
 > 이 문서는 그다음에 읽는 상세 인수인계서다.
@@ -506,6 +517,381 @@ Assets/Scripts/
 ---
 
 ## 5. Phase별 완료 현황
+
+### [2026-08-26 후속 5] 빌드 테스트 전 정리 4건 ✅
+
+에디터에서만 돌려 오던 것을 스탠드얼론 빌드로 넘기기 전에, **빌드에서만 드러나는 것들**을 치웠다.
+
+#### ① 로그 정리 — 176 → 157
+
+**지운 것**: `CardZoomPopupUI`의 호버 계측 일체(`DiagnoseHover`·`LogHoverStateOnce`·
+`LogHoverHitOnce`·`LogHoverReadinessOnce`), 매 동작마다 찍히던 개발 로그
+(`CardInteraction` 6건 — 그중 "드래그 이동중"은 **매 프레임**이었다, `InGameUIManager` 2건,
+`session_game_manage` 3건 — 그중 "이벤트 수신"은 **파이어베이스 이벤트마다**, `DeckBuilderManager` 5건).
+
+**남긴 것**: 경고·오류 전부, 한 판에 몇 번만 찍히는 흐름 로그, `EventManager.OnLogMessage`(화면 진행 로그).
+
+**포커스 안내만은 남겼다** — 두 호버 화면 모두. 진단이 아니라 다음 사람이 다섯 번 헤매지 않게 하는 장치다.
+
+#### ② 메인 메뉴에 봇전 진입로
+
+`SceneChanger.StartBotMatch()` 신설. 씬을 열기 전에 **`OnlineMatchStarter.ClearSession()`을 먼저 부른다.**
+
+> `GameData.SessionCode`는 static이라 씬을 넘어 살아남는다. 앞서 온라인 대전을 하고 돌아왔다면
+> 그 코드가 남아 `LocalMatchStarter`가 "온라인이다"라며 물러나고 **봇전이 시작되지 않는다.**
+
+씬에 들어가면 이미 만든 대전 설정 화면이 뜬다 — 새 UI가 없다.
+**사람이 할 일**: MainMenu에 버튼 추가 → `SceneChanger.StartBotMatch()` 연결.
+
+#### ③ 씬 루프 — 빌드에서 깨질 죽은 경로 2개 제거
+
+| 지운 것 | 이유 |
+|---|---|
+| `LobbyUI.OnClickDeckEdit` | `"SampleScene"` — **빌드 설정에 없는 씬** |
+| `DeckSelector.OnClickStartButton` | `"server ui"` — 빌드 설정에서 비활성 |
+| `LobbyUI.OnClickMatch` / `OnClickQuit` | 연결처 0곳 |
+
+넷 다 어느 버튼에도 연결돼 있지 않았다. **누가 연결하는 순간 빌드에서 멈췄을 것이다.**
+
+**Build Settings 정리**:
+- `LobbyScene.unity` — 파일이 없는데 목록에 남아 있었다 → 항목 제거
+- `GameScene.unity` — 여는 코드가 0곳 → 비활성 (파일은 남긴다)
+- `URP2DSceneTemplate.unity` — 템플릿인데 켜져 있었다 → 비활성
+
+남은 활성 씬은 **MainMenu · TestGameScene · BuildDeck** 셋뿐이고, 첫 활성 씬이 MainMenu라 시작 씬도 맞다.
+
+> ⚠️ **이름이 헷갈린다**: `TestGameScene`이 실제 운영 대전 씬이고 `GameScene`이 안 쓰이는 쪽이다.
+
+#### ④ 세션 자동 정리 ⚠️ 서버 파일
+
+**서버에 남아야 할 방은 `WAITING`(사람 찾는 중)과 `PLAYING`(진행 중)뿐**이라는 규칙을 세우고,
+그것을 어기는 두 경로를 막았다.
+
+**연결이 끊겼을 때** — `firebase_network.ArmDisconnectCleanup` / `ArmDisconnectRemoveRoom` /
+`CancelDisconnectCleanup`. 앱이 강제 종료되면 "나갑니다"를 보낼 기회가 없으므로,
+**들어갈 때 미리** 서버에 뒷정리를 부탁해 둔다.
+
+| 시점 | 예약 내용 |
+|---|---|
+| 방 생성(호스트) | 방 전체 삭제 |
+| 방 입장(게스트) | `guest=""` + `state=WAITING` (호스트는 계속 기다린다) |
+| 대전 시작(양쪽) | **방 전체 삭제로 변경** |
+
+대전 중에 게스트만 빠져 WAITING이 되면 **이미 판이 도는 방에 제3자가 매칭될 수 있다.**
+그래서 시작 시점에 예약을 바꾼다.
+
+정상적으로 나갈 때는 `CancelDisconnectCleanup`을 먼저 부른다 — 남겨 두면 다음 접속 때 엉뚱하게 발동한다.
+
+**시작이 안 될 때** — `session_manage`의 READY 감시(20초).
+매칭 성사 후 20초 안에 `PLAYING`이 되지 않으면 연결이 끊긴 것으로 보고 방을 정리한다.
+타임아웃 직후 서버에 상태를 한 번 더 물어본다 — 알림을 놓쳤을 뿐 이미 시작됐을 수도 있다.
+방을 떠났거나 다른 방에 들어갔으면 **남의 방을 건드리지 않는다**(코드 대조).
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+엔진을 건드리지 않았으므로 콘솔은 바뀌지 않는 것이 정상이다.
+미검증: 스탠드얼론 빌드 전반 — 그게 이번 작업의 목적이다.
+
+---
+
+### [2026-08-26 후속 4] [기뢰] 코스트 계산 점검 — 버그 2건 발견
+
+"폐기존의 [풀 버스트](5)가 후보에 안 뜬다"는 신고를 확인하다가 **다른 버그 둘**을 찾았다.
+
+#### 신고 건 자체 — 코드상으로는 감소를 반영하고 있다
+
+```csharp
+Math.Max(0, GameLogicHelpers.GetEffectiveCost(c, self) - _costReduction) <= budget
+```
+
+`GetEffectiveCost`는 전장 할인까지 반영하고, 거기서 [기뢰]의 감소(1)를 또 뺀다.
+[기뢰] 자신의 코스트는 `ResolveOpenPhase`에서 **먼저 지불**되므로,
+자원 6이면 예산 4 / 풀 버스트 5-1=4 → `4 <= 4`로 통과해야 한다.
+
+즉 숫자를 봐야 확정된다. **후보에서 빠진 카드마다 산식을 남기도록** 했다:
+
+```
+[후보 제외] '풀 버스트!' 코스트 5 (감소 1 → 4) > 자원 3
+```
+
+#### ① 전장 할인이 두 번 적용되고 있었다 (고침)
+
+```csharp
+// TemporaryCostEffect — 고치기 전
+int CurrentCost = GameLogicHelpers.GetEffectiveCost(card, owner);  // 전장 할인 반영됨
+card.Cost = Math.Max(0, CurrentCost - _reduction);                 // 그 값을 card.Cost에 씀
+```
+
+그리고 지불 시점(`PlayFromBufferEffect`)에서 `GetEffectiveCost(card, owner)`를 **다시** 부른다.
+[노을지는 활주로](SONI-11)가 깔려 있고 소니아 카드를 [기뢰]로 쓰면 **-1이 두 번** 들어갔다.
+
+→ `TemporaryCostEffect`는 **자기 몫만** 깎는다. 전장 할인은 지불 시점 한 번만 적용된다.
+
+> 신고 내용("전장 카드도 같이 적용되는가")의 답: **적용된다. 오히려 두 번 되고 있었다.**
+
+#### ② 카드 코스트가 영구히 줄어들고 있었다 (고침)
+
+`TemporaryCostEffect`가 `card.Cost`를 직접 쓰는데 **되돌리는 코드가 어디에도 없었다.**
+카드 인스턴스는 폐기존에 남아 다시 쓰이므로, 같은 카드를 [기뢰]로 반복해서 쓰면
+코스트가 5 → 4 → 3 … 으로 계속 깎였다.
+
+두 파일의 주석은 이렇게 적혀 있었다:
+- `TemporaryCostEffect`: "원본 코스트는 OriginalCost 필드를 유지하므로 복원은 PlayFromBufferEffect가 담당한다"
+- `PlayFromBufferEffect`: "발동 완료 후 OriginalCost를 복원한 뒤 폐기존으로 이동한다"
+
+**둘 다 구현된 적이 없다.** `Card.ResetState()`(코스트 복구를 하는 유일한 메서드)는
+정의만 되어 있고 **호출처가 0곳**이다.
+
+→ `PlayFromBufferEffect.RestoreCost()` 신설. 발동을 마쳤든 코스트 부족으로 취소했든 되돌린다.
+
+> ★ **이 파일 쌍에서 "주석만 있고 구현은 없는" 것을 찾은 게 두 번째다.**
+> 첫 번째는 코스트 지불 자체였다(2026-08-25). 주석을 근거로 삼지 말 것.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+미검증: 신고 건의 실제 숫자 — 새 로그로 한 번 더 재현 필요.
+
+---
+
+### [2026-08-26 후속 3] 대인전에서 [기뢰] 발동 시 게임이 멈추던 문제 ✅
+
+`BattleManager.cs:1129`의 `NullReferenceException`이 매 프레임 반복되며 진행이 멈췄다.
+
+#### 원인 — 내가 넣은 훅에 가드가 빠졌다
+
+지난 라운드에서 간접 발동의 스택 응답을 이벤트로 위임했다:
+
+```csharp
+EventManager.OnRequireIndirectStackResponse += HandleIndirectStackResponse;   // BattleManager.OnEnable
+```
+
+**온라인에서는 이 BattleManager가 카드 데이터 제공자로만 씬에 올라와 `context`가 null이다.**
+그런데도 구독은 살아 있어서, [기뢰]가 훅을 쏘는 순간 `HandleStackActivation`이 실행되고
+그 안의 `WaitUntil(() => done || context.IsGameOver)`에서 **매 프레임 터졌다.**
+
+같은 파일 118·126행에는 이미 `if (context == null) return; // 이 매니저가 돌리는 매치가 아니다`가
+있다 — **똑같은 가드를 새 핸들러에 붙이는 것을 잊었다.**
+
+에러가 둘인 이유: 같은 버그를 두 경로로 밟았다.
+하나는 호스트 자신의 선택창 확정(`HumanChoiceDialogUI.OnConfirmClicked`),
+하나는 게스트의 응답 도착(`EventService.ProcessEvent`).
+
+#### 조치
+
+1. `BattleManager.HandleIndirectStackResponse` — `context == null`이면 **답하지 않고 반환**.
+   대신 답해 버리면 진짜 진행 주체(ServerGameManager)의 스택 응답을 기다리지 않고 넘어간다.
+2. `HandleStackActivation` 진입부에도 같은 가드 — 앞으로 누가 부르든 null context를 만지지 않는다.
+3. `ServerGameManager.HandleIndirectStackResponse`에도 대칭으로 같은 가드.
+
+#### ★ 함께 막은 것 — 무한 대기
+
+"답하지 않는 구독자"를 만들면 **아무도 답하지 않는 경우**가 생긴다.
+그때 `PlayFromBufferEffect.RequestStackResponse`의 대기가 문제가 된다:
+
+```csharp
+GameLogicHelpers.GetChooseTimeoutMs(stackOwner)   // 사람 + 무제한 설정이면 NoTimeout(-1)
+→ Task.Delay(-1)                                   // 영원히 기다린다 → 게임 정지
+```
+
+제한이 0 이하로 나오면 `GameRules.ChooseWaitTime`으로 바꾼다.
+사람이 실제로 고르는 시간은 안쪽(`HandleStackActivation`)에서 따로 기다리므로,
+여기 제한은 **"아무도 안 받았을 때 빠져나오는 안전망"**이다.
+
+> **교훈**: 이벤트로 위임할 때는 두 가지를 함께 정해야 한다 —
+> ① 구독자 중 <b>누가 답할 자격이 있는가</b> ② <b>아무도 답하지 않으면 어떻게 되는가.</b>
+> 지난 라운드에는 ①만 생각하고 ②를 비워 뒀다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+미검증: 온라인 2인에서 [기뢰] 재현.
+
+---
+
+### [2026-08-26 후속 2] 대인전에 대전 설정 창이 뜨던 문제 ✅
+
+#### 원인 — 주인이 물러나면 정리도 함께 사라진다
+
+```csharp
+// LocalMatchStarter.Awake
+if (IsOnlineSessionActive) { enabled = false; return; }   // 온라인이면 통째로 물러난다
+```
+
+Awake에서 꺼진 컴포넌트는 **Start를 받지 못한다.** 그래서 `ShowSetupSoon` → `PrepareSetupView()`가
+한 번도 불리지 않고, 프리팹에 **켜진 채 저장된 `Panel`이 그대로 남는다.**
+버튼 배선도 `PrepareSetupView`에서 하므로 눌러도 아무 일이 없다 —
+"창은 떠 있는데 상호작용은 안 된다"는 증상이 정확히 이 조합이다.
+
+#### 조치 — 닫는 일을 주인이 아니라 자기 자신이 한다
+
+`MatchSetupView.Awake()`에서 스스로 `panel`을 닫는다. 누가 오든 안 오든 지켜진다.
+여는 것은 여전히 `LocalMatchStarter`의 몫이다.
+
+#### ★ 같은 실수 여섯 번째 — 이번엔 변주가 있었다
+
+지금까지 다섯 번은 "정리 코드를 <b>쓸 때</b>만 부르고 <b>시작할 때</b>는 안 불렀다"였다.
+이번엔 **정리 코드가 시작할 때 제대로 있었는데, 그 주인이 통째로 물러나서** 안 불렸다.
+
+> **규칙 보강**: 씬에 놓이는 UI의 "닫아 두기"는 <b>그 UI 자신</b>이 한다.
+> 주인이 조건부로 물러날 수 있으면 주인에게 맡기지 않는다.
+
+다른 프리팹들은 안전하다 — 주인이 전부 `DontDestroyOnLoad` 싱글턴이라 항상 돈다.
+온라인에서 스스로 물러나는 컴포넌트는 `LocalMatchStarter` 하나뿐이다.
+
+#### 확인한 사실 — 온라인이 TestGameScene을 여는 것은 의도된 것이다
+
+- `MainMenu`의 `nextSceneName: TestGameScene`, `CustomRoomUI.nextSceneName`도 같다
+- 보드 UI가 통째로 든 씬을 복제하면 두 벌을 계속 맞춰야 해서, 한 씬이 세션 유무로 갈리게 했다
+  (2026-08-18 기록)
+
+**다만 `GameScene`을 여는 코드가 한 곳도 없다.** 빌드 설정에는 enabled로 들어 있지만
+문자열 `"GameScene"`이 코드에 0번 나온다. 지금 이 씬은 **아무도 열지 않는다.**
+프리팹을 여기에도 배치해 두었는데, 쓰이지 않는 씬이라면 정리하거나 용도를 정해야 한다.
+
+---
+
+### [2026-08-26 후속] ★ 손패 호버 — 원인 규명 (코드 문제가 아니다)
+
+> ## ✅ 2026-09-01 — 지금은 정상 동작한다 (사용자 확인)
+> "이제 카드가 의도대로 잘 호버링 되고 있어."
+>
+> **무엇이 고쳤는지는 확정하지 못했다.** 계측이 가리킨 것은 `Input.mousePosition`이
+> 얼어 있다는 **환경 조건**이었고, 이 저장소에는 그것을 만들 코드가 없었다.
+> 그 조건이 풀린 것으로 본다(에디터 재시작·Game 뷰 포커스 등).
+> 아래 기록은 **재발할 때를 위한 지도**로 남긴다 — 다시 안 되면 판정 방식을 고치지 말고
+> 곧바로 좌표부터 찍어 볼 것. 그것이 다섯 번의 실패와 한 번의 규명을 가른 차이였다.
+
+2026-08-17부터 미해결로 남아 있던 "커서만 올리면 안 뜨고 버튼을 누른 채여야 뜬다".
+**감지 방식을 다섯 번 바꿔 봤지만 매번 실패했다.** 이번에는 방식을 또 바꾸는 대신
+좌표가 실제로 들어오는지를 **계측했다.**
+
+#### 측정 결과
+
+`CardZoomPopupUI.DiagnoseHover`로 0.5초마다 `Input.mousePosition`을 찍어 본 결과:
+
+> **버튼을 누르지 않으면 마우스를 움직여도 좌표가 변하지 않는다. 클릭이 있을 때만 갱신된다.**
+
+이것으로 끝이다. 호버 판정은 레이캐스트든 Rect든 **전부 이 좌표 하나에 대한 계산**이므로,
+좌표가 얼어 있으면 어떤 방식을 써도 결과가 같다.
+**다섯 번의 시도가 모두 실패한 이유가 이것이다** — 매번 판정 방식만 바꾸고,
+그 아래로 들어오는 좌표를 의심하지 않았다.
+
+#### "누른 채면 되는" 이유
+
+누르고 있는 동안에는 **다른 경로**가 동작한다.
+`UpdateHandHover`는 첫머리에서 `CardInteraction.IsDraggingAny`면 그대로 돌아가므로
+그때 뜨는 미리보기는 이 폴링이 아니라 `CardInteraction`의 `IPointerEnterHandler`가 띄운 것이다.
+(그래서 누른 채로는 `[호버진단]` 로그도 찍히지 않는다 — 앞단에서 반환하기 때문)
+
+#### 코드 쪽에서 배제한 것
+
+- `Cursor.lockState` 등 커서를 잠그는 코드 — 프로젝트에 **없다**
+- `runInBackground: 1`, `visibleInBackground: 1` — 이미 허용 상태
+- `activeInputHandler: 2`(Both)이고 `com.unity.inputsystem` 패키지는 **설치돼 있지 않다**
+  → 레거시 `Input`만 동작하는 정상 구성. 클릭이 먹히는 것이 그 증거다
+- `StandaloneInputModule`은 `!eventSystem.isFocused`면 `UpdateModule()`/`Process()`를
+  통째로 건너뛴다(uGUI 2.0.0). 다만 클릭 후에도 안 되는 것으로 보아 포커스만의 문제는 아니다
+
+즉 **이 저장소 안에서 고칠 수 있는 것이 없다.**
+
+#### 남은 단 하나의 질문 — 빌드에서도 그런가
+
+스탠드얼론 빌드에서는 창이 실제 포커스를 갖고 OS의 마우스 이동 메시지를 정상적으로 받는다.
+- **빌드에서 되면** → 에디터 환경 특성. 미해결 목록에서 지우고, 호버는 빌드에서만 검증한다
+- **빌드에서도 안 되면** → 기기·드라이버·원격 세션 쪽. 그때는 호버를 쓰지 않는 설계로 바꾼다
+
+이 시험은 2026-08-17 기록에도 "스탠드얼론 빌드로 확인할 것"으로 적혀 있었지만 아직 하지 않았다.
+
+#### 그때까지의 실용적 대비
+
+호버를 못 믿는 동안에도 정보는 얻을 수 있어야 한다.
+- 폐기존: 클릭하면 목록이 열리고 제목에 `(N장)`이 이미 나온다
+- 메인덱: 클릭 대체 수단이 **없다** → 필요하면 덱 클릭 시 말풍선을 잠깐 띄우는 길을 열 수 있다
+- 손패 카드: 클릭으로도 서브 팝업이 뜬다 (이미 동작)
+
+#### ⚠️ 남겨 둔 계측
+
+`CardZoomPopupUI`의 `DiagnoseHover`와 `LogHoverDiagnostics` 상수는 **확인용 임시 코드**다.
+빌드 시험이 끝나면 지울 것.
+
+---
+
+### [2026-08-26] CardZoomPopupUI 프리팹 전환 ✅ **전환 완료**
+
+다섯 번째이자 가장 큰 대상. 세 화면(서브 팝업 / 확대 팝업 / 폐기존 패널)과
+폐기존 목록의 한 줄을 함께 옮겼다.
+
+#### 만든 것
+
+| 경로 | 내용 |
+|------|------|
+| `Assets/Resources/Build/CardZoomPopupRoot.prefab` | 서브(780) · 확대(850) · 폐기존(800) |
+| `Assets/Resources/Build/GraveyardEntryItem.prefab` | 폐기존 목록 한 줄 (170×238) |
+| `Assets/Scripts/InGameCard/CardZoomPopupView.cs` | 참조 12개 + `Validate` |
+| `Assets/Scripts/InGameCard/GraveyardEntryItemView.cs` | 참조 3개 + `Validate` |
+
+#### ★ 실행 중 크기 계산이 사라졌다
+
+이 화면은 크기를 <b>매번 캔버스 높이로 계산</b>했다:
+
+- 서브 팝업 = 200×280 × `subZoomWidthScale`(3배), 화면 92%를 넘으면 비율 유지한 채 축소
+- 확대 상자 = 캔버스 높이 × `zoomHeightRatio`(0.62), 비율 200:280으로 너비 역산
+
+이제 프리팹에 적힌 크기를 그대로 쓴다(600×840 / 478×670 — 1080 기준 계산값 그대로).
+해상도는 CanvasScaler가 맡으므로 계산이 한 겹 줄고, 손으로 조절할 수 있게 됐다.
+
+> ⚠️ **사라진 동작 하나**: "화면이 아주 낮으면 서브 팝업을 자동으로 줄인다"가 없어졌다.
+> 세로가 짧은 해상도에서 잘리면 프리팹 크기를 줄이면 된다.
+
+#### 인스펙터가 비었다
+
+`zoomHeightRatio` · `dimColor` · `subZoomWidthScale` · `subZoomBaseSize` ·
+`subZoomLeftMargin` · `subZoomBackColor` · `graveyardPanelWidth` · `graveyardEntrySize` ·
+`graveyardEntryScale` · `graveyardEntrySpacing` · `graveyardPanelColor` — **11개가 전부 프리팹으로.**
+상태에 따라 바뀌는 값이 하나도 없는 화면이라 남길 것이 없었다.
+
+`new GameObject` **12곳 → 1곳**(로직 싱글턴). `UiFontResolver` 의존도 사라졌다.
+
+#### 참조를 옛 필드에 옮겨 담았다
+
+`_zoomRoot` 같은 private 필드를 쓰는 곳이 서른 곳이 넘는다. 전부 `_view.x`로 갈아 끼우는 대신
+`PrepareView()`에서 한 번 이어 준다. 생성 코드는 지웠으므로 이중 경로는 남지 않고,
+바꿔야 할 곳이 한 군데로 줄어 사고 확률이 낮다.
+
+#### 세 규칙 + 꺼진 부모 검사
+
+`OnEnable`에서 즉시 정리 / 씬 → 프리팹 순으로 확보 / `_ownsRoot`로 소유권 구분,
+그리고 조상이 꺼져 있으면 에러를 남기고 우리 것을 찍는다.
+`PrepareView()`가 **세 화면을 모두 닫고** 시작한다 — 하나라도 켜진 채 저장되면
+딤이나 폐기존 패널이 진입부터 화면을 덮는다.
+
+#### 폐기존 줄
+
+자원 카드는 확대해 볼 내용이 없어 못 누르게 한다. 예전에는 `Button`을 <b>붙이지 않는</b> 것으로
+구분했는데, 프리팹에는 항상 붙어 있으므로 `interactable`과 `raycastTarget`으로 끈다.
+
+#### 남은 것 — 호버
+
+이번 전환에 손패 호버 미리보기 문제는 넣지 않았다. 전환은 배치를 옮기는 작업이고
+호버는 원인 규명이 필요한 별개 문제다. 지금 호버를 쓰는 곳이 둘(손패 미리보기 · 존 장수 말풍선)이고
+같은 한계를 공유하므로, 한 번에 다루는 편이 낫다.
+
+#### 검증
+
+Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / sync `-Check` ok / 콘솔 봇 회귀 완주.
+씬 배치 확인: 두 대전 씬 모두 `CardZoomPopupRoot`가 Canvas 바로 아래.
+
+실기 확인 항목:
+1. 용병 카드를 누르면 **가운데 확대**가 뜨고, 배경을 누르면 닫히는가
+2. 스택·세트존(앞면) 카드도 확대되는가
+3. 폐기존을 누르면 오른쪽 목록이 열리고 **최신 카드가 맨 위**인가
+4. 목록의 카드를 누르면 **왼쪽 서브 팝업**으로 크게 보이는가. 자원 카드는 안 눌리는가
+5. [닫기]로 목록이 닫히는가
+6. 로비 ↔ 대전을 반복해도 계속 정상인가
+
+---
 
 ### [2026-08-25 후속 3] 점검 3건 — 간접 발동 코스트 / 타이브레이커 설명 / 존 장수 호버
 
@@ -2791,6 +3177,10 @@ if (currentCount < data.max_deck_count)   // 0 < 0 → false
 `TestDeck`, `new`)가 경로 변경만으로 사라진 것처럼 보이므로, 새 폴더에 같은 이름이 없을 때만 한 번 복사한다.
 안드로이드에서는 구 폴더를 읽을 수 없어 조용히 건너뛴다(예외를 삼키고 로그만 남긴다).
 
+> ⚠️ **이 이관 기능은 2026-09-03에 제거됐다. 지금은 없다.**
+> `_migrationChecked`가 static이라 **앱을 켤 때마다** 돌았고, 그래서 지운 덱이 되살아났다.
+> `Assets/MyDeck` 폴더도 저장소에서 지웠다. 자세한 것은 2026-09-03 항목 참조. **다시 넣지 말 것.**
+
 > 새 코드에서 `Application.dataPath`를 직접 부르지 말 것. 현재 이 경로를 아는 곳은 `DeckStorage` 하나뿐이다.
 
 **검증:** Assembly-CSharp 오류 0 / 엔진 빌드 오류 0 / `sync -Check` ok.
@@ -3813,23 +4203,516 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | ---- | ---- | ---- | -------- |
 | 예/아니오 UI 사양 미정 | `HumanChoiceDialogUI` | 카드 선택 패널을 재사용한 **스톱갭**. 디자인 확정 후 교체 필요 | 중 |
 | .NET 9 런타임 부재 | 개발 PC | 콘솔 빌드는 통과하나 실행 불가. `DOTNET_ROLL_FORWARD=LatestMajor`로 우회 중. **RL 확장 전에 `RollForward` 속성 추가 또는 TFM 변경으로 정리 필요** | 중 |
-| 구 API 참조 위험 | 덱 빌딩 화면 | `ValidateDeck` / `ValidateResourceDeck` / `IsValidCharacterDeck`가 삭제되었다. 구 API를 호출하는 UI 코드가 남아 있으면 컴파일 실패 | 중 |
 | 특수문자 폴백이 OS 폰트 의존 | `UiFontResolver.EnsureSymbolFallback` | 안드로이드 실기에서 후보 목록에 없는 폰트만 있으면 다시 ㅁ로 깨진다. 확실히 하려면 기호용 폰트 에셋을 프로젝트에 포함할 것 | 중 |
-| 미커밋 산출물 | 작업 트리 | `CardBoardRegistry.cs`, `DeckGraveyardStackUI.cs`, `CardMoveTween.cs`, `GameSceneBoardBinder.cs`, `StackZoneRowUI.cs`, `QaInjection.cs`, `HumanChoiceDialogUI.cs`, `UiFontResolver.cs`, `GameStatusPanelUI.cs`, `DeckInfoPanelUI.cs`, `CardZoomPopupUI.cs`, `.editorconfig`, `tools/` 등이 미추적/미커밋 상태 | 중 |
+| `Sync`의 낭비 | `DeckGraveyardStackUI` | 카드 한 장이 움직일 때마다 그 존의 카드를 **전부** 다시 바인딩한다(스프라이트 재대입 + `SetSiblingIndex`). 데스크톱에서는 0.5초에 한 번이라 안 보이지만 **모바일에서는 다르다**. 카드 GO에 마지막 상태를 기억시켜 같으면 건너뛰면 된다 | 중 |
+| `Canvas/Buttons`가 UI가 아님 | `BuildDeck` 씬 | 일반 `Transform`이라 자식 앵커가 화면 크기를 따라가지 못한다. 16:9가 아닌 화면에서 어긋날 수 있다. 고치려면 UI 빈 오브젝트로 갈아 끼우고 자식을 옮겨야 해 배치가 한 번 틀어진다 | 중 |
 | 미러의 유령 BattleManager | `TCG_Project/Scripts/Managers/BattleManager.cs` | 동기화·컴파일 모두 제외된 옛 사본이 남아 혼란을 준다. sync 스크립트 `$deleteFromMirror`에 추가하면 정리됨 | 낮음 |
 | 줄바꿈 혼재 | 전체 | `.cs` 기준 CRLF 43 / LF 57. `.editorconfig`에서 일부러 규정하지 않음(강제 시 diff 오염). 정리하려면 `.gitattributes`와 함께 별도 작업 | 낮음 |
 
-### ⏸ 안드로이드 실기 대응 — 보류 중 (2026-08-17 결정)
+### [2026-09-03] 중앙 팝업이 가려지던 문제 + 덱 리스트·선택창 카드 클릭 확대
 
-**지금은 손대지 않는다.** 나중에 몰아서 처리할 것. 착수할 때 아래부터 보면 된다.
+#### ① 튀어나온 손패 카드가 중앙 팝업을 덮었다
+
+손패 카드를 클릭하면 `CardInteraction.SelectCard()`가 그 카드에
+**`overrideSorting` + `sortingOrder = 10`** 을 건다. 그 상태로 다른 카드를 세트존으로 끌어
+중앙 팝업을 열면, 팝업보다 그 카드가 앞에 그려져 팝업을 가렸다.
+
+`ShowZoomPanel()`이 이미 서브 팝업은 닫고 있었지만 **튀어나온 카드는 그대로 뒀다.**
+`ClearHandSelection()`을 더해 함께 집어넣는다.
+
+> `DeselectCard()`는 크기·정렬만 되돌린다(부모를 옮기지 않는다). 드래그하지 않은 카드에 불러도 안전하다.
+
+#### ② 덱 리스트·카드 선택 창에서 카드를 눌러 좌측 확대
+
+| 대상 | 왜 안 됐나 | 처리 |
+| ---- | ---- | ---- |
+| 카드 선택 창 | 칸의 Button은 **고르기만** 하고 있었다 | `ToggleSelection`에 이어 `ShowSub`도 부른다 |
+| 덱 리스트 | 칸에 **Button도 Image도 없어** 클릭 자체를 못 받았다. 안쪽 카드 그래픽은 `DeckInfoPanelUI`가 일부러 `raycastTarget`을 꺼 둔다 | `DeckCellItem` 프리팹에 **투명 Image(알파 0, raycastTarget 켬) + Button**(Transition None)을 붙이고, `DeckCellItemView.button`으로 잇는다 |
+
+**알파 0인 Image도 uGUI는 레이캐스트를 받는다** — 보이지 않는 클릭 자리를 만드는 표준 수법이다.
+
+띄우는 것은 폐기존 목록이 쓰는 것과 같은 `CardZoomPopupUI.ShowSub()`다.
+`ShowSub`는 `_subFromHand = false`로 두므로 커서가 손패를 벗어나도 닫히지 않는다 —
+대신 **덱 패널을 닫을 때 함께 거두도록** `ClosePanel()`에 한 줄을 넣었다
+(목록은 닫혔는데 확대만 남는 어색함을 막는다).
+
+> 정렬은 이미 맞다 — 서브 팝업 780 > 덱 리스트 700 > 카드 선택 500.
+
+### [2026-09-03 후속] 덱 리스트 카드 · 선택창 정렬 · [회수] 위치 · Awake 경고
+
+#### ① "셀만 커지고 카드는 그대로"였다
+
+격자 셀을 `150×210`으로 키웠는데 카드가 안 커진 이유 —
+`DeckCellItem` 안의 `CardHost`가 **고정 크기 `120×168` + 고정 배율 `0.56`** 이라
+셀 크기를 따라가지 않았다. 카드는 계속 `67.2×94.1`로 그려지고 있었다.
+
+배율을 **1.25**로 고쳤다(`150 ÷ 120 = 210 ÷ 168 = 1.25` — 셀과 카드의 비율이 0.714로 같다).
+
+> **격자 칸을 바꿀 때는 이 배율도 함께 고쳐야 한다.** `배율 = 칸 가로 ÷ 120`.
+> `DeckCellItemView` 머리말에 이 식을 적어 두었다 — 이번에 놓친 것이 정확히 이 연결이다.
+
+#### ② 카드 선택 창 — 80% 높이 + 가운데 정렬
+
+뷰포트 높이는 **280** 고정이다(`CardChoicePanel` 392 − `CardScroll` 여백 112).
+접기/펴기는 패널을 **옮기기만** 하고 크기를 바꾸지 않는다.
+
+| 대상 | 전 | 후 |
+| ---- | ---- | ---- |
+| `ChoiceCardItem` | `120×168` | **`160×224`** (280의 80%, 비율 유지) |
+| `OrderBadge` · `Number` 폰트 | `20.4` · `12.24` | `27.2` · `16.32` (비례) |
+| `Content` 앵커·피벗 | `(0, 0.5)` | **`(0.5, 0.5)`** |
+| `HorizontalLayoutGroup` | `MiddleLeft(3)` | **`MiddleCenter(4)`** |
+
+> **가운데 정렬을 실제로 만드는 것은 앵커·피벗이다.** `Content`에 `ContentSizeFitter`가 붙어
+> 폭이 내용에 딱 맞으므로 `childAlignment`만 바꾸면 남는 여백이 없어 아무 변화가 없다.
+
+#### ③ [회수]를 세트존 잔상 위로
+
+버튼은 카드 프리팹(`CardSlotInGame`) 안에 있어 **손패의 흐린 카드** 위에 떴다.
+되돌릴 대상은 세트존에 올라간 그 카드이므로 잔상 위로 옮겼다.
+
+**새로 만들지 않고 그 버튼을 잠시 옮겼다가 돌려놓는다** —
+onClick이 카드의 `CardInteraction`을 직접 가리켜 부모가 바뀌어도 동작하고,
+버튼의 모양은 프리팹이 계속 쥔다.
+
+두 가지가 함정이다:
+
+1. **잔상을 지우기 전에 되돌려야 한다.** `DestroySetGhost()`가 `Destroy(_setGhost)`를 하는데
+   버튼이 아직 그 밑에 있으면 **함께 파괴되어** 다음 세트부터 [회수]가 영영 안 뜬다.
+   그래서 `DestroySetGhost()` 첫 줄이 `RestoreRecallButton()`이다
+2. **잔상의 `CanvasGroup`은 흐리고 `blocksRaycasts`가 꺼져 있다.**
+   버튼에 자체 `CanvasGroup`(`ignoreParentGroups`)을 붙여 흐려지지도 막히지도 않게 했다
+
+#### ④ `SendMessage cannot be called during Awake` 경고
+
+`UiSortingLayer.Apply()`가 **Awake에서** `AddComponent<Canvas>()` + `overrideSorting = true`를 했다.
+그 순간 자식들에게 `OnCanvasHierarchyChanged`가 SendMessage로 날아가는데 Awake 안에서는 금지다.
+`MatchSetupRoot`에 Canvas가 저장돼 있지 않아 매번 런타임에 붙은 것이 방아쇠였고,
+경고에 찍힌 `Char1Dropdown`이 그 안의 TMP_Dropdown이다.
+
+```
+Awake()    → 아무것도 하지 않는다
+Start()    → Apply()          ★ 첫 적용
+OnEnable() → _ready 일 때만    (Start 전의 OnEnable은 Awake와 같은 호출 스택이다)
+```
+
+`Apply()`의 대입도 **값이 다를 때만** 한다 — 같은 값을 다시 넣어도 유니티는 알림을 돌린다.
+
+> 더 확실히 하려면 `MatchSetupRoot`·`ZoneCountTooltipRoot` 프리팹에 **Canvas와 GraphicRaycaster를
+> 미리 붙여 저장**하면 런타임 `AddComponent`가 아예 없어진다. (`GameStatusPanelRoot`는 이미 그렇다)
+
+### [2026-09-03] UI 크기 다듬기 + `DeckInfoPanelRoot` 오버라이드 정리
+
+#### 크기·글꼴 4건
+
+| 대상 | 전 | 후 |
+| ---- | ---- | ---- |
+| 덱 리스트 셀 (`DeckInfoPanelRoot`) | `112×157` | **`150×210`**, 5열 4행 → **7열 3행** |
+| [회수] 버튼 (`CardSlotInGame`) | `58.8×24.6`, 폰트 14.4 | **`100×44`, 폰트 30** |
+| MainMenu 폰트 | LiberationSans SDF | **CookieRun Black SDF** (fontAsset 32 + sharedMaterial 34 + GlobalFontAsset 1) |
+| 컬렉션 셀 (`BuildDeck`) | `300×407`, 왼쪽 여백 70 | **`330×407`, 여백 0** |
+
+> **폰트를 바꿀 때는 머티리얼도 함께 바꿔야 한다.** 에셋만 갈면 글자가 옛 아틀라스를 가리켜 깨진다.
+> 34곳이 전부 기본 머티리얼이라 커스텀 설정을 잃은 곳은 없었다(전수 확인).
+
+**격자는 남는 자리부터 재고 손대야 한다.** 이번에 둘 다 이미 꽉 차 있었다 —
+덱 리스트는 `112×5 + 10×4 = 600`으로 그리드 폭에 **정확히** 맞아 있었고,
+컬렉션은 `70 + 300×4 + 60 = 1330`으로 뷰포트 1393에 63만 남기고 있었다.
+
+7열 3행을 고른 이유: 5열이면 4행이 되어 패널이 `111 + 840 + 105 = 1056`,
+화면 세로의 98%를 차지한다. 7열이면 3행이라 `866`으로 지금과 비슷하게 유지된다.
+
+#### ★ `DeckInfoPanelRoot`의 씬 오버라이드를 프리팹으로 올렸다
+
+크기를 고치려다 발견한 것 — **프리팹 값이 낡아서 씬이 통째로 덮어쓰고 있었다.**
+
+| 대상 | 씬(실제 화면) | 프리팹(낡은 값) |
+| ---- | ---- | ---- |
+| `DeckInfoPanel` 자리 | `(0, -41)` | `(353, -402)` |
+| `DeckInfoPanel` 높이 | `800` | `901.428` |
+| `GearButton` | `66.2×54.1` @`(16,-19)` | `52×52` @`(12,-12)` |
+| `Title` / `Label` 폰트 | `30` / `25` | `18` / `15`·`12` |
+
+그래서 **"높이는 씬에서, 가로는 프리팹에서"** 고쳐야 하는 이상한 상태였다.
+`m_SizeDelta.x`만 오버라이드가 없었기 때문이다.
+
+더 나쁜 것은 **프리팹 혼자서는 망가져 있었다**는 점이다 —
+`(353, -402)`에 `901` 높이면 패널이 캔버스 아래로 **313 벗어난다.**
+`DeckInfoPanelUI`는 씬에 인스턴스가 없으면 프리팹을 실행 중에 찍으므로(`BuildFromPrefab`),
+그 경로에서는 패널이 화면 밖에 나왔을 것이다.
+
+**처리**: 유니티의 *Apply All* 과 같은 일을 YAML로 했다 — 씬 값을 프리팹에 반영하고
+두 씬(`TestGameScene`·`GameScene`)의 오버라이드를 걷어냈다(각 36개·22개 제거, `m_Name`만 유지).
+겉모습은 그대로이고, 이제 **프리팹 한 곳만 고치면 된다.**
+
+> 걷어낸 36개 중 실제로 프리팹과 다른 값은 **여섯 군데뿐**이었다.
+> 나머지는 `m_Pivot 0.5`·`m_AnchorMin 0,0`·회전처럼 **프리팹과 값이 같은데 기록만 남은 것**이다 —
+> 오브젝트를 옮기거나 다시 붙일 때 유니티가 남기는 흔적이다. 오버라이드 목록이 길다고
+> 실제로 다른 것이 많다는 뜻은 아니다.
+
+### [2026-09-03] 게스트 화면이 뻣뻣하고 덱·폐기존이 점등하던 문제
+
+#### 원인 — 게스트는 카드 이동을 **두 곳에서** 받고 있었다
+
+| 경로 | 넘기는 Player |
+| ---- | ---- |
+| `session_game_manage.HandleVisualEventNotification` (events 노드) | **`BuildVisualPlayer`가 매번 새로 만드는 빈 Player** |
+| `OnlineGuestBoardAdapter.DrainMoveQueue` (board_state diff) | 어댑터가 들고 있는 진짜 `_mine`/`_foe` |
+
+앞쪽이 문제였다. `new Player { Name = role, Type = type }` — **Deck·Graveyard가 비어 있다.**
+그런데 `LocalPlayerContext.IsMine`은 `player.Name == GameData.MyRole`로 판정하므로
+이 빈 Player가 **판정을 통과해** 보드 UI로 그대로 흘러갔다.
+
+```
+OnCardMove(빈 Player) → ApplyZoneMove → OnPhysicalStackSync
+                     → DeckGraveyardStackUI.Sync(EngineList = 빈 리스트)
+                     → HideExtras가 그 존의 카드를 전부 숨김 풀로 보내고 SetActive(false)
+```
+
+**덱·폐기존이 통째로 꺼졌다가, 다음 board_state 스냅샷이 오면 다시 켜졌다.** 그것이 "점등"이었다.
+호스트에는 이 경로가 없다 — `if (myRole == "HOST") return;`으로 빠진다.
+
+#### 뻣뻣함 — 숫자가 딱 맞아떨어진다
+
+```
+BattleManager.ActionDelay = 0.5초    (호스트: 행동 사이 간격)
+CardMoveTween.Duration    = 0.36초   (카드 이동 시간)
+```
+
+**0.5 > 0.36** — 호스트는 다음 행동 전에 트윈이 늘 완주한다.
+게스트는 스냅샷 하나에 한 페이즈치 이동이 통째로 들어와 프레임당 1~8건씩 몰아 적용했고,
+`PrepareStackedCard`가 `Sync`마다 그 존의 **모든** 카드에 `CardMoveTween.Complete()`를 걸어
+0.36초짜리 트윈이 몇 프레임 만에 잘렸다 → 카드가 미끄러지지 않고 **순간이동**했다.
+
+#### 처리 — 넷
+
+| | 대상 | 내용 |
+| --- | ---- | ---- |
+| ① | `OnlineGuestBoardAdapter` · `session_game_manage` | `IsDrivingBoard` 깃발. 어댑터가 보드를 그리는 동안 events 경로의 재생을 쉬게 한다. 어댑터가 못 붙으면 예전처럼 그쪽이 그린다 |
+| ② | `DeckGraveyardStackUI.Sync` | **존에 카드가 있는데 목록이 비어 있으면 거절하고 알린다.** 거의 언제나 잘못된 Player가 넘어온 것이다 |
+| ③ | `CardMoveTween.IsPlaying` (신규) | 날아가는 중인 카드는 `PrepareStackedCard`·`LayoutStack` 둘 다 건드리지 않는다 |
+| ④ | `OnlineGuestBoardAdapter.DrainMoveQueue` | 한가할 때는 **시간**으로 벌린다(`moveIntervalSeconds` 0.4초 > 트윈 0.36초). 밀리면(`catchUpThreshold` 4건) 간격을 접고 프레임당 여러 건으로 따라잡는다 |
+
+⚠️ ①은 **서버 스크립트(`session_game_manage.cs`)를 건드린다.** 담당자와 공유할 것.
+
+#### 안 한 것 — `Sync`의 낭비 (모바일 빌드 전에 볼 것)
+
+증상과 별개로, 카드 한 장이 움직일 때마다 `Sync`가 그 존의 **모든** 카드에
+`BindEngineCard`(스프라이트 2회 재대입) + `SetFaceDown` + `SetSiblingIndex`를 다시 건다.
+덱 20장이면 한 번 움직일 때마다 20장을 다시 그리는 셈이다.
+
+**호스트·봇전도 똑같이 겪지만** 0.5초에 한 번이라 데스크톱에서는 티가 안 난다.
+캔버스 재빌드가 비싼 **모바일에서는 다르다.** 고치려면 카드 GO에 마지막으로 적용한
+(존·앞뒷면·층)을 기억해 두고 같으면 건너뛰면 된다.
+공용 코드라 봇전까지 회귀 확인이 필요해 이번 범위에서 뺐다.
+
+### [2026-09-03 후속] 되살아나는 덱 · 이름 바꾸기 · 진짜 빈 새 덱
+
+네 가지가 보고됐는데 **셋의 원인이 하나**였다.
+
+#### 뿌리 — `MigrateLegacyDecksOnce`는 한 번만 돌지 않았다
+
+이름과 달리 **앱을 켤 때마다** 돌았다. 판정에 쓰던 `_migrationChecked`가 static이라
+실행마다 초기화되고, `EnsureFolder()`는 매번 불리기 때문이다.
+그래서 저장 폴더에 없는 덱이 있으면 `Assets/MyDeck`에서 **다시 복사해 왔다.**
+
+그 폴더의 여섯 개(`MyDeck`·`MyDeck_1`·`MyDeck_2`·`TestDeck`·`new`·`새 덱`)가 이런 증상을 냈다.
+
+| 증상 | 실제 |
+| ---- | ---- |
+| 삭제한 덱이 재실행하면 되살아난다 | 구 폴더에 있으면 다시 복사됐다 |
+| "기본으로 주어지는 덱"이 있는 것 같다 | 코드에 기본 덱 생성기는 **없다**. 저 여섯 개가 씨앗처럼 보였을 뿐 |
+| `[새 덱]`에 베로니카가 들어 있다 | `새 덱.json`이 이름과 달리 **VERO 카드 20장짜리 실제 덱**이었다. `characterIdList`가 없는 구형식이라 카드에서 용병을 역산해 베로니카가 떴다 |
+
+**처리**: 이관 코드(`MigrateLegacyDecksOnce`·`LegacyFolderPath`·`_migrationChecked`)를 걷어내고
+저장소의 `Assets/MyDeck/` 폴더도 지웠다(json 6 + meta 7). 어떤 씬·프리팹도 이 GUID를 참조하지 않았다.
+`DeckStorage` 머리말에 **왜 없앴는지**를 적어 두었다 — 안 그러면 누군가 친절하게 다시 넣는다.
+
+> 이관 자체는 2026-08-17에 제 몫을 다했다. 남아서 하는 일은 해로움뿐이었다.
+
+#### 이름을 바꿔 저장하면 이제 **이름이 바뀐다**
+
+지난 수정에서 "이름이 같으면 덮어쓴다"까지는 했는데 **이름을 바꾼 경우를 안 다뤘다.**
+그래서 새 이름으로 하나 더 만들고 예전 덱이 그대로 남아 사본이 생겼다.
+
+```
+previousName = _editingDeckName     // 저장 전에 붙잡는다
+File.WriteAllText(새 이름)           // 먼저 쓰고
+if (renamed) DeckStorage.DeleteDeck(previousName);   // 나중에 지운다
+```
+
+**순서가 중요하다.** 먼저 지우면 쓰기가 실패했을 때 덱이 통째로 사라진다.
+
+무슨 일이 일어났는지는 메시지로 갈라 알린다 — 이름만 바꿈 / 바꾸면서 남의 덱을 덮어씀 /
+새 덱인데 이름이 겹쳐 덮어씀. 그냥 저장이면 지금대로 `okPopup`이다.
+
+#### `[새로운 덱 만들기]`가 용병도 비운다
+
+`OnConfirmNewDeck`이 `myDeck.Clear()`만 하고 **`_selectedCharacters`는 두고 있었다.**
+그래서 "새 덱"인데 직전 덱의 용병이 남았다. 한 줄 추가했다.
+
+> 용병이 없으면 `IsCardUnlocked`가 전부 false라 **카드 목록이 비어 보인다. 그것이 맞는 모습이다** —
+> 카드를 넣으려 하면 "먼저 상단에서 용병을 고르세요" 안내가 이미 뜬다.
+
+#### 덤
+
+- `OnClickDeleteDeckButton`의 리터럴 `"덱이 없습니다."` → `EMPTY_DECK_LABEL`
+- 덱 삭제를 `DeckStorage.DeleteDeck()`로 모았다 (`File.Delete` 직접 호출 0곳)
+
+### [2026-09-03] 덱 저장이 기존 덱을 덮지 않고 사본을 만들던 문제 + 메시지 팝업 정리
+
+#### ① 저장할 때마다 `_1`, `_2`가 쌓이던 문제 — 규칙을 바꿨다
+
+**증거부터.** 저장 폴더에 `MyDeck.json`과 함께 `MyDeck_1`(8/22) `_2`(8/23) `_4`~`_7`(8/17)이 있었다.
+`_4`~`_7`은 **7분 사이에 넷**이다. 덮어쓰기 가드(`isOverwritingEditedDeck`)는 `d4c07d0`(8/18)에 들어갔는데
+`_1`·`_2`는 **그 뒤에 생겼다** — 가드가 여전히 새고 있었다는 뜻이다.
+
+옛 규칙은 이랬다:
+
+> 이름칸의 이름 == `_editingDeckName` 일 때만 덮어쓴다. 아니면 뒤에 `_1`, `_2`를 붙여 새 파일을 만든다.
+
+문제는 이 판정이 **문자열 완전 일치**에 걸려 있었다는 것이다.
+눈에는 같은 이름인데 끝에 공백이나 **제로폭 공백(U+200B)** 이 하나 붙어 있으면 어긋난다 —
+그러면 고치던 덱은 그대로 두고 사본이 생긴다.
+**이 씬의 덱 이름 칸에는 실제로 제로폭 공백이 박혀 있었다**(같은 날 앞선 작업에서 발견해 제거).
+
+새 규칙:
+
+> **이름칸의 이름으로 저장하고, 그 이름의 덱이 이미 있으면 덮어쓴다.**
+
+- 자동 번호 붙이기는 **없앴다**. 새 덱은 [새로운 덱 만들기]가 겹치지 않는 이름을 붙여 주므로 필요 없다
+- `NormalizeDeckName()`을 두어 **앞뒤 공백과 보이지 않는 글자**(U+200B·U+200C·U+200D·U+FEFF)를 뺀다.
+  다듬은 이름을 이름칸에도 되돌려 놓아, 다음 비교부터는 어긋날 일이 없다
+- 미저장 판정(`MarkSaved`·`HasUnsavedChanges`)의 이름 비교에도 같은 정규화를 건다
+
+> ⚠️ **바뀐 점**: 이름칸을 다른 덱 이름으로 고쳐 저장하면 이제 **그 덱을 덮어쓴다**(예전에는 번호가 붙었다).
+> 조용히 지나가지 않도록 그때는 "이미 있던 'OO' 덱을 덮어썼습니다."를 띄운다.
+> 확인을 받고 싶으면 팝업을 한 단계 더 넣으면 된다.
+
+#### ② `SaveNewDeckPanel` → `MessagePanel`
+
+이 패널은 **모든 안내 문구가 지나가는 범용 메시지 팝업**인데, 이름은 "새 덱 저장"이었고
+씬에 적힌 문구는 `WarningPanel`과 똑같은 "덱이 20장이 되지 않았습니다!"였다.
+실행 중에는 코드가 덮어써서 문제가 없었지만, 에디터에서 두 팝업이 같은 말을 해 헷갈렸다.
+
+| 대상 | 전 | 후 |
+| ---- | ---- | ---- |
+| 씬 오브젝트 | `SaveNewDeckPanel` | `MessagePanel` |
+| 씬 문구 | "덱이 20장이 되지 않았습니다!" | `알림` |
+| 인스펙터 필드 | `savePopup` / `saveText` | `messagePopup` / `messageText` |
+
+> 필드 이름을 바꾸면 씬의 직렬화 키(`savePopup: {fileID: …}`)도 함께 바꿔야 참조가 끊기지 않는다.
+> 코드와 씬을 한 번에 고쳤다.
+
+여기를 지나가는 문구는 아홉 가지다 — 덱 불러옴 / 새 덱 생성 / 덱 삭제 / 저장된 덱 없음 /
+덱 이름 입력 / 용병 최대 2종 / 먼저 용병 선택 / 용병 교체로 카드 뺌 / 다른 덱 덮어씀.
+
+### [2026-09-02] 덱 빌더 — 카드 세로 +10% · 용병 창 바깥 클릭 닫기 · 버튼 전수 점검
+
+| 대상 | 처리 |
+| ---- | ---- |
+| 컬렉션 셀 | `m_CellSize` `300×370 → 300×407`. 카드 크기는 그리드 셀이 정한다(프리팹의 120×168은 덮인다). 덤으로 비율이 `0.81 → 0.74`가 되어 **카드 원본 5:7(0.714)에 가까워졌다** |
+| 용병 선택 창 | 바깥을 누르면 닫힌다. `DeckBuilderManager.Update()`가 좌표만 보고 판단한다 |
+| `Assets/Scripts/Utils/PointerInput.cs` | **신규.** `ZoneCountHoverUI`에 있던 "이번 프레임에 눌린 좌표" 판정을 꺼냈다. 원래 자리는 한 줄 위임만 남겼다 |
+
+#### 바깥 클릭 — 두 가지가 핵심이다
+
+**① 클릭을 가로채지 않는다.** 화면을 덮는 투명 버튼을 깔면 그 클릭이 삼켜져,
+[덱 저장하기]를 누르면 창만 닫히고 저장은 안 된다. 좌표만 보고 판단해 **창이 닫히면서 누른 것도 동작**한다.
+
+**② 프레임 가드가 없으면 창이 열리자마자 닫힌다.**
+용병 슬롯 버튼은 창 **바깥**에 있다. 그래서 창을 여는 그 클릭이 같은 프레임에 "바깥 클릭"으로도 읽힌다.
+`EventSystem`과 `Update`의 실행 순서는 보장되지 않으므로, `OpenCharacterPicker`가 연 프레임을
+`_pickerOpenedFrame`에 적어 두고 그 프레임은 건너뛴다.
+
+#### 버튼 전수 점검 — 배선은 전부 정상이었다
+
+**BuildDeck의 Button 17개, 배선·문구 모두 맞다.** 대신 다른 것들이 나왔다.
+
+| 항목 | 처리 |
+| ---- | ---- |
+| `CardSlot`의 [전부 빼기]와 [1장 빼기] **문구가 둘 다 `-`** | 전부 빼기를 **`X`**로. `×`(U+00D7) 대신 ASCII를 쓴 것은 이 프로젝트가 기호 폰트로 이미 한 번 데었기 때문이다(`✓` 폴백) |
+| `PopupRandomMatching`·`PopupRandomMatched` 루트의 **빈 Button** | 제거. `Image(raycast=1)`가 이미 클릭을 막으므로 기능 손실 없이 "눌리는 척하는" 색 변화만 사라진다 |
+| `PopupFindRoom/BtnEnterRoom`("Enter") **onClick 비어 있음** | **지우지 않았다.** 저장소 어디에도 방 입장 메서드가 없다 — 배선 실수가 아니라 **기능 미구현**이다. `interactable: 0`으로 꺼 두었다 |
+| `Cancle` 오타(오브젝트 이름 · 라벨) | `Cancel`로 |
+| 덱 이름 placeholder의 제로폭 공백(U+200B) | 제거(2곳) |
+
+> **MainMenu의 `Text`에 남은 제로폭 공백 하나는 일부러 두었다.** TMP_InputField가 빈 칸일 때
+> 캐럿 높이를 재려고 스스로 넣는 표시다 — 잔재가 아니다.
+>
+> **`QuitGame`에 남은 `m_StringArgument: BuildDeck`도 무해하다.** `m_Mode: 1`(Void)이라
+> 인자를 넘기지 않는다. 옛 배선의 흔적일 뿐이다.
+
+#### ⚠️ 남겨 둔 것 — `Canvas/Buttons`가 UI 오브젝트가 아니다
+
+덱 목록·버튼 5개·용병 슬롯 바가 전부 이 아래 있는데, 이 오브젝트는 **일반 `Transform`**이고
+`localPosition (-114.5, 83.8)`만큼 자식을 통째로 밀고 있다.
+**RectTransform 부모가 아니면 자식의 앵커가 화면 크기를 따라가지 못한다** —
+`ScaleWithScreenSize`로 바꾼 지금, 16:9가 아닌 화면에서 어긋날 수 있다.
+
+고치려면 UI 빈 오브젝트로 갈아 끼우고 자식을 옮겨야 해 배치가 한 번 틀어진다.
+**실기에서 어긋나는 것이 보이면 그때 하는 편이 낫다**고 보아 남겼다.
+
+### [2026-09-02] 덱 빌더 — 4열 배치 · 덱 즉시 전환 · 미저장 보호
+
+세 가지를 함께 손봤다. ②③은 손보다 보니 **배선이 아예 비어 있거나 망가져 있었다.**
+
+| 대상 | 처리 |
+| ---- | ---- |
+| 컬렉션 그리드 | `m_ConstraintCount` 3 → **4열**. 셀은 그대로 — `70 + 300×4 + 20×3 = 1330`으로 실폭 1438에 들어간다 |
+| `CardSlot`의 `+`/`−` | `m_AnchorMax.y` `0.08 → 0.12` (높이 +50%). 피벗 y=0이라 아래에서 위로 자란다 |
+| 드롭다운 덱 전환 | `onValueChanged`에 **연결된 것이 하나도 없었다.** `Start()`에서 코드로 잇고 `OnDeckSelected`를 살렸다 |
+| 미저장 보호 | 확인 팝업 **[저장]/[저장안함]/[취소]** 신설. 두 입구(`RequestLoadDeck`·`TryLeaveToScene`)가 "대기 중인 동작" 하나로 모인다 |
+
+#### 걷어낸 것 — 미저장 상태를 스스로 지우던 임시방편
+
+`ShowUnsavedWarning()`은 경고를 띄운 뒤 **`_savedSnapshot`을 현재 덱으로 덮어썼다.**
+"한 번 더 누르면 진행"을 위한 장치였는데, 그 순간 미저장 상태가 사라져
+**이후에는 아무 경고 없이 편집이 날아갔다.** `ContinuePendingLoad()`는 호출처가 0곳인 죽은 코드였다.
+
+#### 되먹임 — 이 기능의 핵심 함정
+
+`SaveDeckToJson()`이 끝에서 `RefreshDeckList()`를 부르고, 그 안에서 `dropdown.value`를 바꾼다.
+드롭다운에 리스너를 달면 **저장 → 목록 갱신 → 값 변경 → 불러오기 → …** 로 돈다.
+
+방어를 두 겹으로 두었다.
+1. `_suppressDropdownEvent` — 코드가 값을 바꾸는 동안 `OnDeckSelected`를 재운다.
+   `RefreshDeckList`는 본문을 `RefreshDeckListInternal`로 옮기고 `try/finally`로 감쌌다
+2. 이미 열려 있는 덱(`_editingDeckName`)과 같으면 무시 — ①을 빠뜨려도 무한히 돌지는 않는다
+
+#### 기준점(`MarkSaved`)을 찍는 자리가 중요하다
+
+`HasUnsavedChanges()`가 이제 **카드 · 용병 슬롯 · 덱 이름** 셋을 본다.
+그래서 기준점은 **이름칸까지 다 맞춘 뒤에** 찍어야 한다 — 먼저 찍으면 바로 아래에서
+이름이 바뀌는 바람에 저장·불러오기 직후인데도 곧장 "미저장"으로 잡힌다.
+`LoadDeckFromJson`·`SaveDeckToJson` 둘 다 이 순서로 고쳤다.
+
+`OnConfirmNewDeck`과 "덱이 하나도 없음" 갈래에서도 `MarkSaved()`를 부른다.
+전자는 방금 만든 빈 덱이, 후자는 지운 덱의 내용이 기준으로 남아 헛경고를 내던 자리다.
+
+#### 잡은 구멍 — [저장] 뒤 드롭다운이 엇갈리던 것
+
+[저장]을 거쳐 다른 덱을 열면, 저장 과정의 `RefreshDeckList(방금 저장한 덱)`가 드롭다운을
+그쪽으로 옮겨 놓아 **화면은 목표 덱인데 드롭다운은 저장한 덱**을 가리켰다.
+`LoadDeckSelected`가 실제로 연 덱에 드롭다운을 맞추도록(`SyncDropdownTo`) 바로잡았다.
+
+#### 씬에서 해야 하는 것
+
+- `PopupPanel` 아래 `SaveConfirmPanel`(꺼진 채) — 세 버튼을
+  `OnClickSaveAndContinue` / `OnClickDiscardAndContinue` / `OnClickCancelPendingAction`에 잇고,
+  `saveConfirmPopup`·`saveConfirmText`에 연결
+- 메인 메뉴 버튼 onClick: `SceneChanger.ChageScene("MainMenu")` → **`DeckBuilderManager.TryLeaveToScene("MainMenu")`**
+
+> 팝업을 연결하지 않으면 이동을 **막는다**(편집을 잃게 두지 않는다). 그때 `LogError`가 남는다.
+
+### [2026-09-02] 덱 빌더 — 좌측 하단 카드·용병 미리보기
+
+덱을 짜면서 **카드 효과를 읽을 방법이 없었다.** 길게 눌러야 뜨는 전체화면 확대가 하나 있었지만
+그림만 보여 준다. 좌측 하단에 고른 카드를 크게 띄우고 그 아래 효과를 적는 자리를 만들었다.
+
+| 대상 | 처리 |
+| ---- | ---- |
+| `Assets/Scripts/BuildDeck/CardPreviewPanelView.cs` | **신규.** `CharacterSlotView`와 같은 참조 모음 — 화면은 사람이 씬에 만들고 코드는 내용만 채운다 |
+| `DeckBuilderManager` | `cardPreview` 필드 + `ShowCardPreview`/`ShowCharacterPreview`/`ClearPreview`. `cardPreview`가 비면 조용히 꺼진다 |
+| `LongPressTrigger` | `IPointerClickHandler` 추가 — **짧게 클릭 = 미리보기, 길게 누르기 = 기존 전체화면 확대** |
+| `CardData.description` | **주석 해제.** `RulebookCards.json` 40장 전부에 원래부터 들어 있던 값인데 Unity 쪽 모델만 막혀 있었다 |
+
+**용병 훅은 `OpenCharacterPicker` 한 곳이면 된다.** 용병 슬롯 클릭은 다섯 군데에서 배선되지만
+(씬 배치 3 · 프리팹 1 · 코드 생성 1) 전부 이 메서드로 모인다.
+
+#### 알아 둘 것
+
+- **비율 계산 코드가 없다.** `CardImageLoader.ApplyToImage`가 이미 `preserveAspect`를 켠다.
+  그림을 상자에 꽉 차게 늘려 두면 **상자 안에서 원본 비율을 지킨 채 최대로** 커진다.
+  상자를 키우면 그림도 따라 커진다 — 용병 슬롯 초상과 같은 방식이다
+- **드래그 스크롤과 부딪히지 않는다.** 카드를 잡고 리스트를 끌면 uGUI가 드래그 대상(ScrollRect)이
+  누른 대상(카드)과 다른 것을 보고 `eligibleForClick`을 꺼서 `OnPointerClick`이 오지 않는다.
+  막는 코드를 따로 넣지 않은 이유다
+- `+`/`−`/[전부 빼기]는 카드의 **자식**이라 그쪽이 먼저 클릭을 먹는다. 몸통 클릭만 미리보기가 된다
+- `CardUI` 안에 같은 이유로 주석 처리된 `descText` 줄이 세 군데 남아 있다. 그건 **카드 슬롯 자체**의
+  설명이라 일부러 두었다 — 작은 카드에 효과를 다 넣으면 읽히지 않는다
+
+#### 스크롤 휠 민감도 (코드 아님, 인스펙터 값)
+
+`Scroll View`(전체 리스트, 세로)와 `MyDeckPanel/DeckScrollView`(덱 리스트, 가로) 둘 다
+**Scroll Rect → Scroll Sensitivity**로 조절한다. 기본값 `1`은 휠 한 칸에 1픽셀이라 거의 안 움직인다.
+
+> 가로 스크롤도 휠이 먹는다 — uGUI의 `ScrollRect.OnScroll`은 `horizontal && !vertical`이면
+> 세로 휠 델타를 가로축으로 옮긴다. 그래서 같은 필드 하나로 둘 다 조절된다.
+
+### [2026-09-01] 세로 → 가로 전환 — 모든 UI를 0.6배로
+
+CanvasScaler를 1920×1080으로 바꾸고 나서야 드러난 사실이 있다.
+
+> **이 프로젝트의 UI는 전부 1080×1920 세로 화면 기준으로 그려져 있었다.**
+
+근거는 씬 안에 그대로 남아 있다 — `SettingPanel 1080×1920`, `middle 1080×3`,
+`PopupPanel 980×1820`, `CardSlot 800×1400`, `MiddlePanel 높이 −1870`.
+`BuildDeck`도 마찬가지다. 스케일러만 `1920×1080`으로 적혀 있었는데,
+**세로 화면 + match 0.5에서는 배율이 정확히 1이 되어** 어긋난 설정인 채로 맞아 보였다.
+(`(1080/1920)^0.5 × (1920/1080)^0.5 = 1`)
+
+세로 1920 → 가로 1080이므로 **세로 여유가 0.5625배**로 줄었다.
+처음에 0.5배로 옮겼다가, 실제 화면을 보고 **0.6배로 올렸다**(2026-09-01 조정).
+아래 숫자는 모두 **원본 대비 0.6배**다.
+
+| 대상 | 처리 |
+| ---- | ---- |
+| 폰트 | 씬 4개 + 프리팹 14종의 `m_fontSize`/`Base`/`Min`/`Max` 전부 ×0.6 (558곳). 코드가 찍는 6곳도 함께 |
+| 카드 프리팹 | `CardSlot`·`CardSlotInGame`·`CardBackground`·`ChoiceCardItem`·`DeckCellItem`·`GraveyardEntryItem`을 **통째로** ×0.6 — 모든 자식의 `m_SizeDelta`·`m_AnchoredPosition`을 함께 줄여 **비율이 정확히 보존된다** |
+| 카드 기준 치수 | **200×280 → 120×168.** 코드 상수(`DefaultCardWidth`, `280f`)·인스펙터 기본값·씬 직렬화값(`cardWidth`·`myStackCardWidth`·`enemyCardWidth`·`setGhostSize`) 전부 |
+| 확대 카드 | 씬의 `800×1400` → `480×840` (4개 씬, 6곳) |
+| 덱 빌더 슬롯 | `MinSlotHeight 140→84`, `MaxSlotHeight 320→192` |
+
+> 배율을 또 바꾸려면 **지금 값에 (원하는 배율 ÷ 0.6)을 곱하면 된다.**
+> 손댈 곳은 위 표 그대로다 — 씬 4개, 프리팹 14종, 코드 8개 파일.
+
+**일부러 건드리지 않은 것** — 보드 배치(존·손패·패널의 위치와 크기)는 사람이 다시 잡는다.
+그래서 아래는 지금 어긋난 채로 있고, 그것이 의도다.
+
+| 남은 것 | 지금 상태 |
+| ---- | ---- |
+| 씬의 존·패널 위치·크기 | 세로 기준 그대로 (`MyHand 800×140`, `set 300×195`, `SettingPanel 1080×1920` …) |
+| 패널 프리팹의 상자 크기 | 그대로. **글자만 반이 되어 상자에 비해 작아 보인다** — 상자도 줄일지는 배치를 잡으면서 결정 |
+| `DeckBuilderManager`의 생성 패널 `420×520`, 행 높이 `76f`, 간격 `12f`·`14f` | 카드가 아니라 패널·여백이라 제외 |
+| `DeckGraveyardStackUI.DefaultOffset = 3f` | 쌓인 카드 사이 어긋남. 3px는 어느 배율에서도 무해해 그대로 |
+
+> ⚠️ 다음에 카드 크기를 또 바꾼다면: **200×280이 6개 파일에 흩어져 있다.**
+> `CardBoardRegistry` · `DeckGraveyardStackUI` · `StackZoneRowUI` · `PlayerUIManager`
+> · `EnemyVisualTester` · `MyHandManager`. 한곳으로 모을 가치가 있다.
+
+### 안드로이드 실기 대응 — 1차 처리 완료 (2026-09-01)
+
+2026-08-17에 적어 둔 항목을 실제 코드와 다시 대조했다. **기록의 절반은 이미 낡아 있었고,
+대신 기록에 없던 더 큰 문제(CanvasScaler)가 있었다.** 아래가 지금의 사실이다.
+
+**✅ 이번에 처리한 것**
+
+| 항목 | 처리 |
+| ---- | ---- |
+| **CanvasScaler가 `ConstantPixelSize`** | `MainMenu`·`TestGameScene`을 `ScaleWithScreenSize 1920×1080`(match 0.5)로. `BuildDeck`은 원래부터 이 설정이었다. **이것이 해상도 문제의 진짜 원인**이었다 — 고정 픽셀은 화면 크기가 바뀌면 배치가 통째로 어긋난다 |
+| 세이프에어리어 대응 없음 | `Assets/Scripts/UI/SafeAreaFitter.cs` 신규. `Screen.safeArea`에 맞춰 앵커를 다시 잡는다. 가장자리에 붙는 프리팹 3종(`DeckInfoPanelRoot`·`GameStatusPanelRoot`·`CardZoomPopupRoot`) 루트에 부착 |
+| 화면 방향이 세로까지 허용 | `allowedAutorotateToPortrait(UpsideDown)`을 0으로. 좌우 가로 회전만 남겼다. 보드가 가로 기준이라 세로로 돌아가면 손패·존·패널이 모두 무너진다 |
+| 존 장수가 터치에서 안 뜸 | `ZoneCountHoverUI`에 **탭 경로** 추가. 존을 누르면 뜨고 `tapHoldSeconds`(기본 2초) 뒤 스스로 닫힌다. 마우스가 있는 기기(`Input.mousePresent`)에서는 호버가 계속 우선한다 |
+
+**✅ 이미 해결돼 있던 것 (기록이 낡았다)**
+
+| 항목 | 확인 결과 |
+| ---- | ---- |
+| 패키지명 불일치 | **문제 없음.** `ProjectSettings.applicationIdentifier.Android: com.Ttakji.server`가 `google-services.json`의 `package_name`과 일치한다. 기록이 만들어진 뒤 누군가 채워 넣었다 |
+| 코드 생성 UI의 고정 픽셀값 | **해소.** 프리팹 전환(패널 6종)으로 크기를 실행 중에 계산하는 코드가 사라졌다. 남은 것은 위의 CanvasScaler였다 |
+| 덱 저장 경로 | **해결됨** — `DeckStorage`가 `persistentDataPath`를 쓴다 (2026-08-17) |
+
+**⏸ 실기에서 확인한 뒤 판단할 것**
 
 | 항목 | 내용 |
 | ---- | ---- |
-| 패키지명 불일치 | `google-services.json` = `com.Ttakji.server` ↔ `ProjectSettings`에 Android 항목 없음(`Standalone: com.DefaultCompany.2DProject`). 이대로 빌드하면 **Firebase 초기화 실패** |
-| 기호 폰트 OS 의존 | `UiFontResolver.EnsureSymbolFallback`가 OS 폰트(맑은 고딕 등)를 찾아 폴백한다. 후보에 없는 기기에서는 `★ ♬ →` 등이 다시 ㅁ로 깨진다. 확실히 하려면 기호용 폰트 에셋을 프로젝트에 포함 |
-| 입력 방식 | 현재 UI는 마우스 전제(호버 미리보기, 두 번째 클릭 확대). 터치에서는 호버가 없으므로 손패 열람 동선을 다시 정해야 한다 |
-| 해상도·세이프에어리어 | 코드 생성 UI(패널·다이얼로그)가 고정 픽셀값을 쓴다. 노치/다양한 종횡비 검증 필요 |
-| ✅ 덱 저장 경로 | **해결됨** — `DeckStorage`가 `persistentDataPath`를 쓴다 (2026-08-17) |
+| 기호 폰트 OS 의존 | 프리팹 전환으로 대부분 사라졌고, 코드가 찍는 기호는 덱 빌더의 `✓` 하나만 남았다. `UiFontResolver.CanRender` 폴백이 이미 있어 못 그리면 `—`로 물러난다. **실기에서 `—`로 보이면** 그때 기호용 폰트 에셋을 프로젝트에 넣는다 |
+| 보드 자체의 세이프에어리어 | 손패·존은 프리팹이 아니라 **씬에 직접 놓여 있어** `SafeAreaFitter` 범위 밖이다. 노치가 먹는 것은 주로 가장자리라 이번에는 패널 3종으로 그쳤다. 실기에서 손패 끝이 잘리면 보드 루트에도 붙인다 |
+| 터치 타깃 크기 | `TouchTargetNormalizer`가 있으나 실기 검증 전이다. 손가락으로 카드가 집히는지 확인 필요 |
+
+> 손패 미리보기는 손댈 것이 없다 — `CardInteraction`이 **클릭 경로로도** 서브 팝업을 띄우고,
+> 터치는 클릭으로 들어오므로 이미 동작한다. (호버는 마우스에서의 추가 편의일 뿐이다)
 
 **✅ 2026-08-16 해결됨**
 
@@ -3990,13 +4873,12 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
    특수문자 표시(`내 선물이야♬`, 로그의 `→ ★ ─`), 확대 팝업 각 존, 폐기존 패널(우측).
    특히 **입력 대기 중 항복**(세트 페이즈에서 톱니바퀴 → 항복)이 교착 없이 끝나는지 확인할 것
 2. **예/아니오 UI 사양 확정** — 지금은 카드 선택 패널 재사용 스톱갭 (용병 이미지는 표시됨)
-3. **미커밋 파일 정리** — 보드 UI 신규 스크립트와 `tools/`가 미추적이다. 커밋하지 않으면 다음 사람이
-   "문서에는 완료인데 파일이 없다"를 겪는다
 4. **죽은 계약 2개 정리** — ⏸ **회의 중.** `OnRequireStackResponse` / `OnRequireCardChoice`를
    되살릴지 폐기할지 결정된 뒤 `EVENTMANAGER_CONTRACT.md`를 코드와 맞춘다 (섹션 11-A)
-5. **덱 빌딩 → 대전 연결** — ⏸ **보류.** `DataManager.selectedDeckList`를 덱빌더가 쓰지만 **읽는 곳이 없다**.
-   `LocalMatchStarter`가 이를 읽어 `PlayerSetupData`를 만들면 "내 덱으로 봇과 대전"이 된다.
-   용병 2종 선택 UI도 필요. QA 편의(하드코딩 덱)를 해치므로 **사람 vs 봇 검증이 끝난 뒤에** 착수할 것
+5. ~~**덱 빌딩 → 대전 연결**~~ — ✅ **완료.** `DeckLoader`가 덱 이름 하나로 카드 20장 + 용병을 꺼내고,
+   `LocalMatchStarter`의 대전 설정 화면이 그것을 고르게 한다. 하드코딩 덱은 `(기본 테스트 덱)` 항목으로 보존했다.
+   온라인은 `session_manage`가 `PlayerPrefs["SelectedDeckName"]`을 읽어 `GameData.MyDeck`·`MyCharacters`를 채우고
+   `session_game_manage`가 업로드한다
 6. **사람 vs 사람 씬 통합** — 섹션 11 참조. `ServerGameManager` + `EventService` + 보드 UI를 한 씬에 배치하고
    MainMenu의 `nextSceneName`을 GameScene으로. `LocalMatchStarter`는 그 씬에 두지 말 것
 7. **콘솔 실행 환경 정리 (RL 확장 선행 조건)** — `.csproj`에 `<RollForward>LatestMajor</RollForward>` 추가 또는
@@ -4126,7 +5008,7 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | 문제 | 내용 | 심각도 |
 | ---- | ---- | ---- |
 | **인증이 아예 없다** | `Firebase.Auth.dll`은 있는데 **코드에서 사용처 0건**. 익명 로그인조차 없다. 그래서 DB 규칙이 전면 개방 상태이고, **URL만 알면 누구나 전체 세션을 읽고 쓰고 지울 수 있다**(읽기는 실제로 확인함). 테스트 모드 규칙이라면 **만료일이 지나는 순간 전부 차단**되어 접속이 통째로 끊긴다 | **높음** |
-| **Android 패키지명 불일치** | `google-services.json`은 `com.Ttakji.server`인데 `ProjectSettings`에는 Android 항목이 없고 `Standalone: com.DefaultCompany.2DProject`뿐이다. **실기 빌드에서 Firebase 초기화가 실패한다** | ⏸ **보류**(2026-08-17 결정 — 안드로이드 작업은 나중에 몰아서) |
+| ~~**Android 패키지명 불일치**~~ | ✅ **해결(확인 2026-09-01).** `ProjectSettings.applicationIdentifier.Android: com.Ttakji.server`가 `google-services.json`과 일치한다. 기록이 낡아 있었다 | — |
 | ~~**덱 저장 경로가 `Application.dataPath`**~~ | ✅ **해결(2026-08-17).** `DeckStorage`로 일원화하고 `persistentDataPath`로 이전 + 기존 덱 자동 이관. 섹션 5 참조 | — |
 | 세션 청소 없음 | 끝나거나 끊긴 방이 `PLAYING`인 채 영구히 남는다. 로비 목록은 `WAITING`만 보여 줘 눈에 안 띌 뿐 계속 쌓인다 | 중 |
 | `dbRef` null 가드 부재 | `GetPublicSession`만 확인한다. `Initialize()` 실패 후 다른 메서드를 부르면 `NullReferenceException` | 중 |
@@ -4187,10 +5069,10 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | 공개 카드 확대 (용병·스택·세트앞면·전장) | ✅ `CardZoomPopupUI` |
 | 손패 카드 확대 | ✅ 두 번째 클릭 (첫 클릭은 선택) |
 | 폐기존 열람 | ✅ 우측 세로 패널 + 스크롤 |
-| 특수문자·이모지 표시 | ✅ OS 폰트 폴백 (안드로이드 실기 확인 필요) |
+| 특수문자·이모지 표시 | ✅ OS 폰트 폴백 + `CanRender` 대체 기호. 남은 기호는 덱 빌더의 `✓` 하나 (실기 확인 필요) |
 | 게임 종료 후 [다시 하기] / [메인 메뉴로] | ✅ 결과 오버레이 |
 | 항복 (톱니바퀴 패널 + 씬의 기존 버튼) | ✅ 2단계 확인 |
-| 덱 빌딩 → 대전 연결 | ❌ `DataManager.selectedDeckList`를 읽는 곳이 없다. 용병 선택 UI도 없다 |
+| 덱 빌딩 → 대전 연결 | ✅ `DeckLoader` + 대전 설정 화면. 용병 선택 UI도 있다(`CharacterSlotView`·`CharacterPicker`) |
 | 죽은 계약 2개 정리 | ⏸ 회의 중 (`OnRequireStackResponse` / `OnRequireCardChoice`) |
 | 자원존 가시화 | ❌ 의도적 미구현 |
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections; 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -117,6 +117,11 @@ public class session_manage : MonoBehaviour
             myID = GetOrGenerateID();
         }
 
+        StopReadyWatchdog();
+
+        // ★ 예약을 먼저 취소한다. 남겨 두면 나중에 재접속했을 때 엉뚱하게 발동한다.
+        networkService.CancelDisconnectCleanup(currentSessionCode);
+
         bool success = await networkService.ExitSession(currentSessionCode, myID); 
 
         if (success)
@@ -137,6 +142,68 @@ public class session_manage : MonoBehaviour
         {
             NotifyStatus("session exit failed");
         }
+    }
+
+    // ─── 매칭 후 시작 감시 ──────────────────────────────────────────────
+    //
+    // 매칭이 성사되면(READY) 곧바로 PLAYING으로 넘어가야 한다. 그 사이에 한쪽이 멈추거나
+    // 연결이 끊기면 방이 READY인 채로 영영 남는다 — 사람이 없는데 목록에도 안 잡히는 방이다.
+    // 서버에 남아야 할 방은 **사람을 찾는 방(WAITING)과 진행 중인 방(PLAYING)뿐**이다.
+
+    /// <summary>매칭 후 이 시간 안에 게임이 시작되지 않으면 연결이 끊긴 것으로 본다.</summary>
+    private const float ReadyStartTimeoutSeconds = 20f;
+
+    private Coroutine readyWatchdog;
+
+    private void StartReadyWatchdog()
+    {
+        StopReadyWatchdog();
+        readyWatchdog = StartCoroutine(WatchReadyStart(currentSessionCode));
+    }
+
+    private void StopReadyWatchdog()
+    {
+        if (readyWatchdog == null) return;
+
+        StopCoroutine(readyWatchdog);
+        readyWatchdog = null;
+    }
+
+    private IEnumerator WatchReadyStart(string roomCode)
+    {
+        float remain = ReadyStartTimeoutSeconds;
+        while (remain > 0f)
+        {
+            remain -= Time.deltaTime;
+            yield return null;
+        }
+
+        readyWatchdog = null;
+
+        // 그새 방을 떠났거나 다른 방에 들어갔으면 남의 방을 건드리면 안 된다.
+        if (currentSessionCode != roomCode) yield break;
+
+        // 서버에 한 번 더 물어본다 — 알림을 놓쳤을 뿐 이미 시작됐을 수도 있다.
+        var probe = networkService.GetSessionStatus(roomCode);
+        yield return new WaitUntil(() => probe.IsCompleted);
+
+        string state = probe.Status == TaskStatus.RanToCompletion ? probe.Result : null;
+        if (state == SessionStatus.STATE_PLAYING) yield break;
+
+        Debug.Log($"[세션] {roomCode} 매칭 후 {ReadyStartTimeoutSeconds}초 동안 시작되지 않았다 " +
+                  $"(상태 {state ?? "확인 실패"}) — 연결이 끊긴 것으로 보고 정리한다.");
+
+        networkService.CancelDisconnectCleanup(roomCode);
+
+        var exit = networkService.ExitSession(roomCode, myID);
+        yield return new WaitUntil(() => exit.IsCompleted);
+
+        NotifyStatus("상대의 응답이 없어 매칭을 취소했습니다");
+        uiManager?.ToggleHost(true);
+        uiManager?.ToggleUI(true);
+
+        currentSessionCode = null;
+        amIHost = false;
     }
 
     private IEnumerator AutoDestroySession(string roomCode)
@@ -205,6 +272,7 @@ public class session_manage : MonoBehaviour
             NotifyStatus($"Room Created: {sessionCode}");
             uiManager?.ToggleHost(true);
             networkService.ListenForGuest(currentSessionCode);
+            networkService.ArmDisconnectCleanup(currentSessionCode, asHost: true);
             DestroySessionTimer = StartCoroutine(AutoDestroySession(sessionCode));
         }
         else
@@ -235,6 +303,8 @@ public class session_manage : MonoBehaviour
             NotifyStatus($"Joined: {sessionCode}");
             uiManager?.ToggleHost(false);
             onMatchedAndReady?.Invoke();
+            networkService.ArmDisconnectCleanup(currentSessionCode, asHost: false);
+            StartReadyWatchdog();   // 매칭은 됐는데 시작이 안 되는 경우를 잡는다
             networkService.ListenForGameStart(currentSessionCode);
             networkService.ListenForSessionExit(currentSessionCode, () =>
             {
@@ -262,11 +332,18 @@ public class session_manage : MonoBehaviour
         NotifyStatus($"{guestID} Joined!");
         onMatchedAndReady?.Invoke();
         await networkService.SetGameReady(currentSessionCode);
+        StartReadyWatchdog();   // 여기서부터 20초 안에 PLAYING이 돼야 한다
         networkService.ListenForGameStart(currentSessionCode);
     }
 
-    private void HandleGameReady() 
+    private void HandleGameReady()
     {
+        // state가 PLAYING이 됐다는 뜻이다(ListenForGameStart). 시작 감시는 여기서 끝난다.
+        StopReadyWatchdog();
+
+        // 대전 중에는 양쪽 다 "끊기면 방 삭제"로 바꾼다.
+        // 게스트가 빠진 채 WAITING으로 남으면 진행 중인 방에 제3자가 들어올 수 있다.
+        networkService.ArmDisconnectRemoveRoom(currentSessionCode);
         StartCoroutine(HandleGameStarted());
     }
 

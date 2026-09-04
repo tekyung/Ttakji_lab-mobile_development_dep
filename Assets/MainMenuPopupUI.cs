@@ -1,26 +1,15 @@
-﻿using UnityEngine;
-using UnityEngine.SceneManagement;
+﻿// MainMenuPopupUI.cs — 메인 메뉴의 매칭 팝업 열고 닫기.
+//
+// ⚠️ 클래스 이름(LobbyUI)이 파일 이름과 다르다. 동작에는 문제가 없지만 찾을 때 헷갈린다.
+//
+// ★ 예전에는 여기에 씬을 여는 메서드가 셋 있었다(OnClickMatch / OnClickDeckEdit / OnClickQuit).
+//   어느 버튼에도 연결돼 있지 않은 죽은 코드였고, 그중 OnClickDeckEdit이 여는 "SampleScene"은
+//   **빌드 설정에 없는 씬**이라 누가 연결하는 순간 빌드에서 멈췄을 것이다.
+//   씬 이동은 SceneChanger 한 곳으로 모았다.
+using UnityEngine;
 
 public class LobbyUI : MonoBehaviour
 {
-    public string deckEditSceneName = "SampleScene";
-
-    public void OnClickMatch()
-    {
-        Debug.Log("Match Start (TODO)");
-        // TODO: ��? ��/��? ���� ����
-    }
-
-    public void OnClickDeckEdit()
-    {
-        SceneManager.LoadScene(deckEditSceneName);
-    }
-
-    public void OnClickQuit()
-    {
-        Debug.Log("Quit");
-        Application.Quit();
-    }
     [Header("매칭 팝업")]
     [Tooltip("화면 전체를 덮는 반투명 막. 클릭을 막는 역할도 한다.")]
     public GameObject popupDim;

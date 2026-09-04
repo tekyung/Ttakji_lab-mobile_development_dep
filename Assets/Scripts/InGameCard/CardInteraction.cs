@@ -275,6 +275,15 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         ShowSubPopup();
     }
 
+    /// <summary>
+    /// 손패에서 튀어나와 있는 카드를 집어넣는다.
+    /// 중앙 팝업처럼 화면을 덮는 것을 열기 전에 부른다 — 안 그러면 그 카드가 위를 덮는다.
+    /// </summary>
+    public static void ClearHandSelection()
+    {
+        if (currentlySelectedCard != null) currentlySelectedCard.DeselectCard();
+    }
+
     private void SelectCard()
     {
         // 1. 만약 내 패의 "다른 카드"가 이미 튀어나와 있다면, 그 녀석을 먼저 집어넣습니다.
@@ -327,7 +336,6 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     /// </summary>
     public void OnClickReturn()
     {
-        Debug.Log("[CardInteraction] 회수 — 세트 선택을 되돌립니다.");
 
         SetRecallAvailable(false);
         DeselectCard();
@@ -383,7 +391,6 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     {
         if (isPlayed || isInSetZone) return;
 
-        Debug.Log("드래그 이동중");
         RectTransformUtility.ScreenPointToWorldPointInRectangle(
             (RectTransform)transform.parent,
             eventData.position,
@@ -415,12 +422,16 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
 
     private void ShowZoomPanel()
     {
-        Debug.Log("🌟 위로 드래그 성공! 전용 줌 패널 띄우기");
 
         // ⭐ InGameUIManager에게 '나 자신(this)'을 넘겨주며 줌 패널을 띄워달라고 요청합니다.
         // 세트 선택용 중앙 팝업(공개/폐기 버튼 포함)을 연다.
         // 읽기용 서브 팝업과 겹치지 않도록 먼저 닫는다.
         if (CardZoomPopupUI.Instance != null) CardZoomPopupUI.Instance.CloseSub();
+
+        // ★ 손패에서 튀어나와 있는 카드도 집어넣는다.
+        //   SelectCard가 그 카드에 overrideSorting(order 10)을 걸어 두기 때문에,
+        //   그대로 두면 <b>중앙 팝업보다 앞에 그려져 팝업을 가린다.</b>
+        ClearHandSelection();
 
         if (InGameUIManager.Instance != null)
         {
@@ -450,7 +461,6 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     // 카드를 사용(필드에 냄)하는 함수
     private void PlayThisCard(Transform fieldTransform)
     {
-        Debug.Log("⚔️ 카드 사용! 필드로 쏙 들어갑니다!");
 
         // 카드 인덱스 기억하기
         originalSiblingIndex = transform.GetSiblingIndex();
@@ -489,14 +499,12 @@ public class CardInteraction : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     // '공개' 버튼을 눌렀을 때 실행됩니다.
     public void OnClickReveal()
     {
-        Debug.Log("👁️ 공개 버튼 클릭! 세트 필드로 이동합니다.");
         SendToSetField(true);
     }
 
     // '폐기' 버튼을 눌렀을 때 실행됩니다.
     public void OnClickDiscard()
     {
-        Debug.Log("🗑️ 폐기 버튼 클릭! 세트 필드로 이동합니다.");
         SendToSetField(false);
     }
 

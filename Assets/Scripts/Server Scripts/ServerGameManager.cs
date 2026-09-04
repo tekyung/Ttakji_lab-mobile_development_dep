@@ -92,6 +92,10 @@ public class ServerGameManager : MonoBehaviour
     private void HandleIndirectStackResponse(
         Player stackOwner, Player cardPlayer, Card playedCard, System.Action<bool> done)
     {
+        // ★ 이 매니저가 돌리는 매치가 아니면 답하지 않는다 (BattleManager 쪽과 같은 이유).
+        //   진행 주체가 아닌 쪽이 답하면 상대의 스택 응답을 기다리지 않고 넘어간다.
+        if (context == null) return;
+
         StartCoroutine(RunIndirectStackResponse(stackOwner, cardPlayer, playedCard, done));
     }
 

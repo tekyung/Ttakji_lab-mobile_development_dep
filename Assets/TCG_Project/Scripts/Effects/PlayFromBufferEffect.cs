@@ -89,6 +89,7 @@ namespace TCG_Project.Scripts.Effects
                 owner.InsertCard(ZoneType.Graveyard, bufferedCard);
                 EventManager.OnCardMove?.Invoke(bufferedCard, owner, ZoneType.PlayBuffer, owner, ZoneType.Graveyard);
 
+                RestoreCost(bufferedCard);
                 owner.PlayingCard = originalPlayingCard;
                 onComplete?.Invoke();
                 return;
@@ -137,11 +138,30 @@ namespace TCG_Project.Scripts.Effects
                     EventManager.OnLogMessage?.Invoke($"  [버퍼발동] '{bufferedCard.Name}' 발동 완료 → 폐기존");
                 }
 
-                // 4. 자아(Identity) 복구: 다시 원래대로 돌아옴("기뢰" 등)
+                // 4. 깎아 둔 코스트를 되돌린다.
+                //    ★ TemporaryCostEffect가 card.Cost를 직접 깎는데 되돌리는 곳이 없었다.
+                //      같은 카드를 [기뢰]로 두 번 쓰면 코스트가 계속 줄어들었다(4 → 3 → 2 …).
+                //      두 클래스의 주석에는 "복원한다"고 적혀 있었지만 구현된 적이 없다.
+                RestoreCost(bufferedCard);
+
+                // 5. 자아(Identity) 복구: 다시 원래대로 돌아옴("기뢰" 등)
                 owner.PlayingCard = originalPlayingCard;
 
                 onComplete?.Invoke();
             }, isStackTrigger: false);
+        }
+
+        /// <summary>
+        /// 임시로 깎았던 코스트를 원래대로 돌린다.
+        /// 카드 인스턴스는 폐기존에 남아 다시 쓰이므로, 되돌리지 않으면 값이 계속 줄어든다.
+        /// </summary>
+        private static void RestoreCost(Card card)
+        {
+            if (card == null || card.Cost == card.OriginalCost) return;
+
+            EventManager.OnLogMessage?.Invoke(
+                $"  [임시코스트] '{card.Name}' 코스트 복원 {card.Cost} → {card.OriginalCost}");
+            card.Cost = card.OriginalCost;
         }
 
         /// <summary>
@@ -165,10 +185,21 @@ namespace TCG_Project.Scripts.Effects
             if (stackOwner == null) return;
             if (stackOwner.StackZone == null || stackOwner.StackZone.Count == 0) return;
 
+            // ★ 이 대기는 반드시 유한해야 한다.
+            //   구독자는 있는데 아무도 답하지 않는 경우가 있다 — 매치를 돌리지 않는 매니저는
+            //   일부러 답하지 않기 때문이다(BattleManager가 온라인에서 그렇다).
+            //   GetChooseTimeoutMs는 사람에게 NoTimeout(-1)을 돌려줄 수 있고,
+            //   그대로 쓰면 Task.Delay(-1) = 영원히 기다림 → 게임이 통째로 멈춘다.
+            //
+            //   사람이 실제로 고르는 시간은 이 안쪽(HandleStackActivation)에서 따로 기다린다.
+            //   여기 제한은 "아무도 안 받았을 때 빠져나오는" 안전망이다.
+            int timeoutMs = GameLogicHelpers.GetChooseTimeoutMs(stackOwner);
+            if (timeoutMs <= 0) timeoutMs = GameRules.ChooseWaitTime;
+
             await AsyncTimeoutHelper.WaitForChoiceWithTimeout<bool>(
                 done => hook.Invoke(stackOwner, owner, played, done),
                 () => false,
-                GameLogicHelpers.GetChooseTimeoutMs(stackOwner));
+                timeoutMs);
         }
 
         public ICardEffect Clone()

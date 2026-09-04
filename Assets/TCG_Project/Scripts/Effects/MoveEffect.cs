@@ -189,14 +189,28 @@ namespace TCG_Project.Scripts.Effects
                 int budget = self.GetResourceCount();
                 int before = candidates.Count;
 
-                candidates = candidates
-                    .Where(c => Math.Max(0, GameLogicHelpers.GetEffectiveCost(c, self) - _costReduction) <= budget)
-                    .ToList();
+                var affordable = new List<Card>();
+                foreach (Card c in candidates)
+                {
+                    int listed = GameLogicHelpers.GetEffectiveCost(c, self);   // 전장 할인까지 반영된 값
+                    int payable = Math.Max(0, listed - _costReduction);
+
+                    if (payable <= budget) { affordable.Add(c); continue; }
+
+                    // ★ 왜 빠졌는지 카드마다 남긴다.
+                    //   "낼 수 있는데 안 보인다"는 신고가 들어왔을 때 숫자를 바로 대조할 수 있어야 한다.
+                    EventManager.OnLogMessage?.Invoke(
+                        $"    [후보 제외] '{c.Name}' 코스트 {listed}" +
+                        (_costReduction > 0 ? $" (감소 {_costReduction} → {payable})" : "") +
+                        $" > 자원 {budget}");
+                }
+
+                candidates = affordable;
 
                 if (before != candidates.Count)
                 {
                     EventManager.OnLogMessage?.Invoke(
-                        $"    [후보 제외] 코스트를 낼 수 없는 카드 {before - candidates.Count}장을 뺐습니다. (자원 {budget})");
+                        $"    [후보 제외] 낼 수 없는 카드 {before - candidates.Count}장을 뺐습니다. (자원 {budget})");
                 }
             }
 

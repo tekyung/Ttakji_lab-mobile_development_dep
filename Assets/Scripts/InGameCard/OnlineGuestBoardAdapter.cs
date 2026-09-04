@@ -34,6 +34,20 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
 {
     private static OnlineGuestBoardAdapter _instance;
 
+    /// <summary>
+    /// 이 어댑터가 지금 게스트 보드를 그리고 있는가.
+    ///
+    /// ★ session_game_manage도 events 노드의 연출 알림으로 같은 카드 이동을 재생한다.
+    ///   둘이 함께 돌면 <b>같은 이동이 두 번</b> 적용되고, 더 나쁜 것은 그쪽이 넘기는
+    ///   Player가 <b>Deck·Graveyard가 빈 임시 객체</b>라는 점이다 —
+    ///   그게 DeckGraveyardStackUI.Sync로 흘러가면 덱·폐기존 카드가 통째로 꺼졌다 켜진다.
+    ///   (게스트 화면이 뻣뻣하고 카드가 점등하던 원인)
+    ///
+    ///   그래서 어댑터가 살아 있는 동안에는 그쪽 재생을 쉬게 한다.
+    ///   어댑터가 못 붙은 상황에서는 예전처럼 그쪽이 그린다.
+    /// </summary>
+    public static bool IsDrivingBoard { get; private set; }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
@@ -139,6 +153,10 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     {
         UnsubscribeFromChoiceRequests();
         DetachBoardListener();
+
+        // 깃발을 내려 놓아야, 어댑터가 없는 상황에서 예전 경로가 다시 화면을 그린다.
+        IsDrivingBoard = false;
+        _nextMoveTime = 0f;
 
         _mine = null;
         _foe = null;
@@ -329,6 +347,7 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         AssignAllCardsToDeck(_foe, foeState, state, "HOST");
 
         _started = true;
+        IsDrivingBoard = true;
 
         // 내가 p1이어야 하단 보드 주인이 된다 (CharacterFieldUI·CardZoomPopupUI의 owner == p1 규칙)
         EventManager.OnGameStart?.Invoke(_mine, _foe);
@@ -529,6 +548,15 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     [Tooltip("이동이 크게 밀렸을 때 한 프레임에 처리할 수 있는 최대 건수")]
     public int maxMovesPerFrame = 8;
 
+    [Tooltip("한가할 때 이동 사이에 두는 간격(초). 카드 이동 트윈(0.36초)보다 짧으면 카드가 미끄러지다 잘린다.")]
+    public float moveIntervalSeconds = 0.4f;
+
+    [Tooltip("이만큼 밀리면 간격을 접고 프레임당 여러 건으로 따라잡는다.")]
+    public int catchUpThreshold = 4;
+
+    /// <summary>다음 이동을 적용해도 되는 시각.</summary>
+    private float _nextMoveTime;
+
     /// <summary>
     /// 큐에 쌓인 카드 이동을 프레임당 몇 건씩 화면에 반영한다.
     ///
@@ -539,27 +567,51 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     /// </summary>
     private void DrainMoveQueue()
     {
+        if (_moveQueue.Count == 0) return;
+
+        // ★ 한가할 때는 <b>시간</b>으로 벌린다.
+        //   호스트는 엔진이 행동 사이에 ActionDelay(0.5초)를 두어 카드 이동 트윈(0.36초)이
+        //   늘 완주한다. 게스트는 스냅샷 하나에 한 페이즈치 이동이 통째로 들어와,
+        //   프레임당 몇 건씩 몰아 적용하면 트윈이 시작하자마자 다음 이동에 잘려
+        //   카드가 미끄러지지 않고 순간이동한다. 같은 리듬을 여기서 만든다.
+        //
+        //   단, 밀렸을 때는 간격을 접는다. 초기 드로우처럼 20장이 한꺼번에 오면
+        //   0.4초씩 기다리다 8초가 걸린다.
+        if (_moveQueue.Count <= catchUpThreshold && moveIntervalSeconds > 0f)
+        {
+            if (Time.unscaledTime < _nextMoveTime) return;
+
+            ApplyMove(_moveQueue.Dequeue());
+            _nextMoveTime = Time.unscaledTime + moveIntervalSeconds;
+            return;
+        }
+
         int baseline = Mathf.Max(1, movesPerFrame);
         int budget = Mathf.Clamp(baseline + _moveQueue.Count / 4, baseline, Mathf.Max(baseline, maxMovesPerFrame));
 
         while (budget-- > 0 && _moveQueue.Count > 0)
-        {
-            PendingMove move = _moveQueue.Dequeue();
+            ApplyMove(_moveQueue.Dequeue());
 
-            // ★ 앞면/뒷면은 '도착한 존'이 정한다.
-            //   엔진 규칙(Player.cs)은 "세트존에 뒷면으로 올라간 카드만 뒷면, 나머지는 앞면"이고,
-            //   AbandonSetCard는 폐기 직전에 앞면으로 되돌린다(L297).
-            ApplyFaceForZone(move.Card, move.To, move.InstanceId);
+        // 따라잡기가 끝나면 다시 간격을 두고 진행한다.
+        _nextMoveTime = Time.unscaledTime + moveIntervalSeconds;
+    }
 
-            EventManager.OnCardMove?.Invoke(move.Card, move.Owner, move.From, move.Owner, move.To);
+    /// <summary>이동 한 건을 화면에 반영한다.</summary>
+    private void ApplyMove(PendingMove move)
+    {
+        // ★ 앞면/뒷면은 '도착한 존'이 정한다.
+        //   엔진 규칙(Player.cs)은 "세트존에 뒷면으로 올라간 카드만 뒷면, 나머지는 앞면"이고,
+        //   AbandonSetCard는 폐기 직전에 앞면으로 되돌린다(L297).
+        ApplyFaceForZone(move.Card, move.To, move.InstanceId);
 
-            // ApplyZoneMove는 존마다 앞뒷면 처리가 다르고 스택존은 아예 건드리지 않는다.
-            // 그래서 이동 뒤에 카드 GO의 면을 한 번 더 맞춘다.
-            RefreshCardFace(move.InstanceId, move.Card, move.Owner, move.To);
+        EventManager.OnCardMove?.Invoke(move.Card, move.Owner, move.From, move.Owner, move.To);
 
-            EmitZoneArrivalEvents(move.Card, move.Owner, move.From, move.To);
-            LogCardMove(move.Card, move.Owner, move.From, move.To);
-        }
+        // ApplyZoneMove는 존마다 앞뒷면 처리가 다르고 스택존은 아예 건드리지 않는다.
+        // 그래서 이동 뒤에 카드 GO의 면을 한 번 더 맞춘다.
+        RefreshCardFace(move.InstanceId, move.Card, move.Owner, move.To);
+
+        EmitZoneArrivalEvents(move.Card, move.Owner, move.From, move.To);
+        LogCardMove(move.Card, move.Owner, move.From, move.To);
     }
 
     /// <summary>

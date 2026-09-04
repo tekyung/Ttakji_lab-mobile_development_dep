@@ -1,4 +1,4 @@
-using Firebase;
+﻿using Firebase;
 using Firebase.Database;
 using Firebase.Extensions;
 using System;
@@ -125,6 +125,64 @@ public class firebase_network : MonoBehaviour
     public async Task ChangeTurn(string sessioncode, string nextTurn)
     {
         await dbRef.Child("sessions").Child(sessioncode).Child("turn").SetValueAsync(nextTurn);
+    }
+
+    // ─── 연결이 끊겼을 때의 뒷정리 예약 ─────────────────────────────────
+    //
+    // 앱이 강제 종료되거나 네트워크가 끊기면 "나갑니다"를 보낼 기회가 없다.
+    // 그래서 **들어갈 때 미리** 서버에 부탁해 둔다 — 내 연결이 끊기면 이걸 대신 해 달라고.
+    // 이게 없어서 사람이 없는 방이 서버에 쌓였다(한때 15개가 방치돼 있었다).
+
+    /// <summary>
+    /// 연결이 끊기면 자동으로 방을 정리하도록 예약한다.
+    /// 호스트면 방 전체를 지우고, 게스트면 자기 자리만 비우고 다시 사람을 찾는 상태로 되돌린다.
+    /// </summary>
+    public void ArmDisconnectCleanup(string sessioncode, bool asHost)
+    {
+        if (dbRef == null || string.IsNullOrEmpty(sessioncode)) return;
+
+        DatabaseReference session = dbRef.Child("sessions").Child(sessioncode);
+
+        if (asHost)
+        {
+            session.OnDisconnect().RemoveValue();
+        }
+        else
+        {
+            var updates = new Dictionary<string, object>
+            {
+                ["guest"] = "",
+                ["state"] = SessionStatus.STATE_WAITING
+            };
+            session.OnDisconnect().UpdateChildren(updates);
+        }
+
+        Debug.Log($"[firebase] 연결 끊김 대비 정리 예약 — {sessioncode} ({(asHost ? "HOST" : "GUEST")})");
+    }
+
+    /// <summary>
+    /// 대전이 시작된 뒤의 예약. <b>역할과 무관하게 방을 지운다.</b>
+    ///
+    /// 진행 중인 방은 두 사람이 다 있어야 의미가 있다. 게스트가 끊겼다고 방을 WAITING으로
+    /// 되돌리면, 이미 판이 돌고 있는 방에 제3자가 매칭될 수 있다.
+    /// </summary>
+    public void ArmDisconnectRemoveRoom(string sessioncode)
+    {
+        if (dbRef == null || string.IsNullOrEmpty(sessioncode)) return;
+
+        dbRef.Child("sessions").Child(sessioncode).OnDisconnect().RemoveValue();
+        Debug.Log($"[firebase] 대전 중 연결 끊김 대비 — {sessioncode} 방 삭제로 예약 변경");
+    }
+
+    /// <summary>
+    /// 예약을 취소한다. <b>정상적으로 나갈 때는 반드시 먼저 부른다.</b>
+    /// 취소하지 않으면 나중에 재접속했을 때 남아 있던 예약이 엉뚱하게 발동할 수 있다.
+    /// </summary>
+    public void CancelDisconnectCleanup(string sessioncode)
+    {
+        if (dbRef == null || string.IsNullOrEmpty(sessioncode)) return;
+
+        dbRef.Child("sessions").Child(sessioncode).OnDisconnect().Cancel();
     }
 
     public async Task SetGameReady(string sessioncode)  //게임상태를 READY로 변환

@@ -1,4 +1,4 @@
-# Sync shared TCG logic from Assets/TCG_Project (SSOT) to:
+﻿# Sync shared TCG logic from Assets/TCG_Project (SSOT) to:
 #   - TCG_Project/          (console mirror)
 #   - Assets/Resources/GameData/ (Unity runtime JSON)
 #
@@ -16,11 +16,13 @@ $sourceRoot = Join-Path $repoRoot "Assets\TCG_Project"
 $mirrorRoot = Join-Path $repoRoot "TCG_Project"
 $resourcesRoot = Join-Path $repoRoot "Assets\Resources\GameData"
 
-$excludeRel = @(
-    "Scripts\UI",
-    "Scripts\Managers\BattleManager.cs",
-    "Scripts\Managers\UnityResourceLoader.cs"
-)
+# ★ 예전에는 유니티 전용 파일들을 여기서 빼 두었다. 그런데 미러에는 옛 사본이 그대로 남아
+#   시간이 지나며 낡았다 — BattleManager는 7주 동안 멈춰 있었고,
+#   미러를 읽은 사람이 이미 없어진 코드를 보고 헷갈렸다.
+#
+#   무엇이 컴파일되는지는 TCG_Project.csproj의 <Compile Remove>가 이미 정한다.
+#   그러니 동기화는 폴더를 그대로 비추기만 하면 된다 — 판단을 두 곳에 두지 않는다.
+$excludeRel = @()
 
 $sharedDirs = @(
     "Scripts\Abilities",
@@ -30,6 +32,7 @@ $sharedDirs = @(
     "Scripts\Interfaces",
     "Scripts\Managers",
     "Scripts\Systems",
+    "Scripts\UI",
     "Scripts\Utils"
 )
 

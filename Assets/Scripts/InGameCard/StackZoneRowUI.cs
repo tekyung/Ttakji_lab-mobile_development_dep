@@ -16,7 +16,7 @@ public struct StackZoneSyncContext
 
 public static class StackZoneRowUI
 {
-    private const float DefaultCardWidth = 200f;
+    private const float DefaultCardWidth = 120f;
 
     public static void LayoutRow(RectTransform bar, IList<RectTransform> cards, float cardWidth)
     {
@@ -137,7 +137,7 @@ public static class StackZoneRowUI
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(cardWidth, 280f);
+        rect.sizeDelta = new Vector2(cardWidth, 168f);
         rect.localScale = Vector3.one;
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ServerScripts.EventScripts;
 using System.Collections;
 using System.Threading.Tasks;
@@ -111,13 +111,11 @@ public class session_game_manage : MonoBehaviour
         if (shouldLogAction)
             pendingStatus = ($"[{sender}] {actionType} 수신");
         if (shouldLogAction)
-            Debug.Log($"[클라:{myRole}] 이벤트 수신 action={actionType}, sender={sender}, hasJson={!string.IsNullOrEmpty(jsonData)}");
 
         // 내가 방장이라면 클라이언트의 요청만 중앙 처리소로 넘깁니다.
         if (myRole == "HOST" && sender != "ALL" && !isServerNotification)
         {
             if (shouldLogAction)
-                Debug.Log($"[클라:{myRole}] HOST 라우터가 이벤트를 서버 처리기로 전달합니다. action={actionType}, sender={sender}");
             await EventService.Instance.ProcessEvent(sessionRoom, actionType, sender, jsonData);
         }
 
@@ -226,7 +224,6 @@ public class session_game_manage : MonoBehaviour
                 ? myState.HandCardDataIds[handIndex]
                 : "UNKNOWN";
 
-        Debug.Log($"[테스트] SetPhase 카드 제출: role={myRole}, index={handIndex}, dataId={selectedDataId}, instanceId={selectedInstanceId}");
         SendSetPhaseChoice(selectedInstanceId, true);
     }
 
@@ -508,6 +505,15 @@ public class session_game_manage : MonoBehaviour
 
         // HOST는 같은 프로세스의 서버 EventManager 이벤트를 직접 받으므로 중복 재생을 막습니다.
         if (myRole == "HOST")
+            return;
+
+        // ★ 게스트 보드를 OnlineGuestBoardAdapter가 그리고 있으면 여기서는 재생하지 않습니다.
+        //   둘이 함께 돌면 같은 이동이 두 번 적용될 뿐 아니라,
+        //   아래 BuildVisualPlayer가 만드는 Player는 Deck·Graveyard가 비어 있어
+        //   그것이 덱·폐기존 정리(DeckGraveyardStackUI.Sync)로 흘러가면
+        //   그 존의 카드가 통째로 꺼졌다 켜집니다 — 게스트 화면이 점등하던 원인입니다.
+        //   어댑터가 붙지 못한 상황에서는 예전처럼 이 경로가 화면을 그립니다.
+        if (OnlineGuestBoardAdapter.IsDrivingBoard)
             return;
 
         Player owner = BuildVisualPlayer(visualNoti.OwnerRole);

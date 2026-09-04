@@ -14,7 +14,7 @@ public class MyHandManager : MonoBehaviour
 
     [Header("Settings")]
     public int maxHandSize = 10;   // 패의 최대 개수
-    public float cardWidth = 200f;
+    public float cardWidth = 120f;
 
     private List<string> currentDrawPile = new List<string>();
 

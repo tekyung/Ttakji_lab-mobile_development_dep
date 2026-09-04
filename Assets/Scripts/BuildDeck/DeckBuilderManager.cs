@@ -4,6 +4,7 @@ using UnityEngine;
 using TMPro; // 텍스트 사용
 using UnityEngine.UI; // 용병 슬롯·선택 목록을 코드로 만든다
 using System.IO; //파일 관리
+using UnityEngine.SceneManagement; // 미저장 확인 후 씬 이동
 
 [System.Serializable]
 public class DeckSaveData
@@ -34,13 +35,23 @@ public class DeckBuilderManager : MonoBehaviour
     public GameObject warningPopup; // 20장 안될 때 팝업
     public GameObject okPopup; //덱 저장 완료시 팝업
 
-    public GameObject savePopup; // 덱 불러오기
-    public TextMeshProUGUI saveText; // 불러온 덱 이름
+    [Tooltip("모든 안내 문구가 지나가는 범용 메시지 팝업. 씬의 MessagePanel.")]
+    public GameObject messagePopup;
+
+    [Tooltip("범용 메시지 팝업의 문구. ShowMessagePopup이 매번 덮어쓴다.")]
+    public TextMeshProUGUI messageText;
 
     public GameObject deleteConfirmPopup; // 삭제 확인 팝업
     public TextMeshProUGUI deleteConfirmText; // 삭제 덱 이름
 
     public GameObject newDeckPopup; // 새 덱 만들기 팝업
+
+    [Header("저장 확인 팝업 — [저장]/[저장안함]/[취소] 세 버튼")]
+    [Tooltip("저장하지 않은 채 다른 덱·씬으로 넘어가려 할 때 뜬다. 꺼진 채로 씬에 만들어 둔다.")]
+    public GameObject saveConfirmPopup;
+
+    [Tooltip("확인 팝업의 안내 문구. 없어도 동작한다.")]
+    public TextMeshProUGUI saveConfirmText;
 
     private string deckToDelete = "";
 
@@ -100,6 +111,10 @@ public class DeckBuilderManager : MonoBehaviour
     [Tooltip("다른 슬롯이 이미 쓰는 용병")]
     public Color pickerDisabledColor = new Color(0.18f, 0.18f, 0.2f, 1f);
 
+    [Header("카드·용병 미리보기 — 씬 좌측 하단에 만들어 두고 연결한다")]
+    [Tooltip("카드를 짧게 클릭하거나 용병 슬롯을 누르면 여기에 그림과 효과가 뜬다. 비워 두면 미리보기 기능만 조용히 꺼진다(다른 동작에는 영향 없다).")]
+    public CardPreviewPanelView cardPreview;
+
     // 실제 데이터 (덱에 들어있는 카드 ID 목록)
     private List<string> myDeck = new List<string>();
     private const int MAX_DECK_COUNT = 20;
@@ -123,9 +138,143 @@ public class DeckBuilderManager : MonoBehaviour
         //   화면 진입자마자 보이고, 안에 남은 예시 줄의 [닫기]는 아무 동작도 하지 않는다.
         EnsurePickerPanel();
 
+        // 2-2. 미리보기 패널을 점검하고 비워 둔다. 없으면 조용히 넘어간다.
+        SetupCardPreview();
+
+        // 2-3. ★ 드롭다운에서 덱을 고르면 바로 불러오도록 잇는다.
+        //   씬의 onValueChanged는 비어 있었다 — 그래서 덱을 골라도 아무 일이 없었다.
+        //   코드로 다는 이유: 배선을 씬에 흩뿌리지 않고 억제 플래그와 한자리에 두기 위해서다.
+        if (deckListDropdown != null)
+        {
+            deckListDropdown.onValueChanged.RemoveListener(OnDeckSelected);
+            deckListDropdown.onValueChanged.AddListener(OnDeckSelected);
+        }
+
+        // 확인 팝업은 꺼진 채로 시작한다 (씬에 켜 둔 채 저장했을 수 있다)
+        if (saveConfirmPopup != null) saveConfirmPopup.SetActive(false);
+
         // 3. ★ 메인 화면에서 고른 덱을 그대로 연다.
         //   focusDeckName 인자는 원래 있었는데 아무도 넘기지 않아, 늘 목록 맨 위 덱이 열렸다.
         RefreshDeckList(PlayerPrefs.GetString(SELECTED_DECK_PREF, ""));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 카드·용병 미리보기 (좌측 하단)
+    //
+    // 화면은 사람이 씬에 만든다. 여기서는 "무엇을 그릴지"만 넣는다.
+    // 그림은 CardImageLoader가 preserveAspect를 켜므로 상자 안에서 비율을 지킨 채 커진다.
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>미리보기가 쓸 만한 상태인가. Start에서 한 번만 판정하고 결과를 들고 있는다.</summary>
+    private bool _previewReady;
+
+    private void SetupCardPreview()
+    {
+        // ★ 인스펙터 연결을 깜빡해도 씬에 있으면 찾아 쓴다.
+        //   용병 슬롯 바(TryBindSlotBarInScene)와 같은 방식이다 —
+        //   씬에 만들어 두고 연결을 잊는 일이 실제로 있었다.
+        if (cardPreview == null)
+        {
+            cardPreview = FindFirstObjectByType<CardPreviewPanelView>(FindObjectsInactive.Include);
+
+            if (cardPreview != null)
+                Debug.Log($"[DeckBuilder] 인스펙터가 비어 있어 씬에서 '{cardPreview.name}'을 찾아 쓴다. "
+                          + "인스펙터에 직접 연결해 두는 편이 확실하다.");
+        }
+
+        if (cardPreview == null)
+        {
+            // 안 만든 것도 정상이다. 미리보기 기능만 조용히 꺼진다.
+            Debug.Log("[DeckBuilder] 미리보기 패널이 없어 카드 효과 미리보기를 쓰지 않는다.");
+            _previewReady = false;
+            return;
+        }
+
+        if (!cardPreview.Validate(out string reason))
+        {
+            // 여기까지 왔다는 것은 패널은 만들었는데 알맹이가 빠졌다는 뜻이다. 크게 알린다.
+            Debug.LogError(
+                $"[DeckBuilder] '{cardPreview.name}'의 참조가 온전하지 않아 미리보기를 쓸 수 없다 — {reason}. "
+                + "그림 오브젝트에 Image 컴포넌트가, 설명 오브젝트에 TextMeshPro 컴포넌트가 붙어 있는지 확인할 것.");
+            _previewReady = false;
+            return;
+        }
+
+        _previewReady = true;
+        ClearPreview();
+    }
+
+    /// <summary>카드 한 장을 미리보기에 올린다. 카드 슬롯을 짧게 클릭하면 불린다.</summary>
+    public void ShowCardPreview(string cardId)
+    {
+        if (!_previewReady) return;
+
+        CardData data = CardDataManager.Instance != null ? CardDataManager.Instance.GetCard(cardId) : null;
+        if (data == null)
+        {
+            ClearPreview();
+            return;
+        }
+
+        ApplyPreview(data.imagePath, data.name, data.description);
+    }
+
+    /// <summary>용병 한 명을 미리보기에 올린다. 빈 슬롯이면 비운다.</summary>
+    public void ShowCharacterPreview(string characterId)
+    {
+        if (!_previewReady) return;
+
+        CharacterData character = CardDataManager.Instance != null
+            ? CardDataManager.Instance.GetCharacter(characterId)
+            : null;
+
+        if (character == null)
+        {
+            ClearPreview();
+            return;
+        }
+
+        ApplyPreview(character.imagePath, character.name, character.description);
+    }
+
+    /// <summary>미리보기를 비운다. 아직 아무것도 고르지 않았을 때의 모습이다.</summary>
+    public void ClearPreview()
+    {
+        if (!_previewReady) return;
+
+        cardPreview.image.sprite = null;
+        cardPreview.image.enabled = false;
+
+        cardPreview.descText.text = string.Empty;
+        if (cardPreview.nameText != null) cardPreview.nameText.text = string.Empty;
+
+        if (cardPreview.imageRoot != null) cardPreview.imageRoot.SetActive(false);
+        if (cardPreview.descRoot != null) cardPreview.descRoot.SetActive(false);
+        if (cardPreview.emptyHint != null) cardPreview.emptyHint.SetActive(true);
+    }
+
+    private void ApplyPreview(string imagePath, string displayName, string description)
+    {
+        if (cardPreview.emptyHint != null) cardPreview.emptyHint.SetActive(false);
+        if (cardPreview.imageRoot != null) cardPreview.imageRoot.SetActive(true);
+        if (cardPreview.descRoot != null) cardPreview.descRoot.SetActive(true);
+
+        // ★ 여기서 preserveAspect가 켜진다 — 상자를 키우면 그림이 비율을 지킨 채 따라 커진다.
+        bool loaded = CardImageLoader.ApplyToImage(cardPreview.image, imagePath);
+        if (!loaded)
+        {
+            cardPreview.image.sprite = null;
+            Debug.LogWarning($"[DeckBuilder] 미리보기 그림을 불러오지 못했다: {imagePath}");
+        }
+
+        cardPreview.image.enabled = loaded;
+
+        if (cardPreview.nameText != null)
+            cardPreview.nameText.text = displayName ?? string.Empty;
+
+        cardPreview.descText.text = string.IsNullOrWhiteSpace(description)
+            ? "(효과 설명이 없다)"
+            : description;
     }
 
     /// <summary>메인 화면과 선택을 맞춘다. 편집 화면에서 덱을 바꾸거나 저장할 때 부른다.</summary>
@@ -469,7 +618,7 @@ public class DeckBuilderManager : MonoBehaviour
         }
         else
         {
-            _editingNameLabel = CreateLabel(barRect, "편집 중: -", 260f, SlotHeight, 26f);
+            _editingNameLabel = CreateLabel(barRect, "편집 중: -", 156f, SlotHeight, 15.6f);
             _editingNameLabel.alignment = TextAlignmentOptions.MidlineLeft;
         }
 
@@ -479,8 +628,8 @@ public class DeckBuilderManager : MonoBehaviour
     private const float BandPadding = 14f;
 
     /// <summary>슬롯이 너무 작거나 화면을 잡아먹지 않도록 하는 범위.</summary>
-    private const float MinSlotHeight = 140f;
-    private const float MaxSlotHeight = 320f;
+    private const float MinSlotHeight = 84f;
+    private const float MaxSlotHeight = 192f;
 
     /// <summary>
     /// 덱 리스트 아래끝과 카드 리스트 위끝 사이의 빈 높이를 잰다.
@@ -624,7 +773,7 @@ public class DeckBuilderManager : MonoBehaviour
         portraitGo.SetActive(false);
 
         // 이름은 아래쪽 띄에 둔다 (초상과 겹치지 않게)
-        var label = CreateLabel(rect, "용병 선택 +", 0f, 0f, 22f);
+        var label = CreateLabel(rect, "용병 선택 +", 0f, 0f, 13.2f);
         var labelRect = (RectTransform)label.transform;
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = new Vector2(1f, 0.2f);
@@ -671,6 +820,9 @@ public class DeckBuilderManager : MonoBehaviour
 
         CloseCharacterPicker();
 
+        // ★ 창을 여는 이 클릭은 "바깥 클릭"으로 세면 안 된다 — 아래 Update 주석 참조.
+        _pickerOpenedFrame = Time.frameCount;
+
         // 팝업을 확보한다: 인스펙터 연결 → 씬 배치 → 프리팹 → 코드 생성
         EnsurePickerPanel();
 
@@ -685,11 +837,14 @@ public class DeckBuilderManager : MonoBehaviour
         //   유저가 그 흐린 항목을 "선택된 것"으로 읽어 1·2번이 바뀐 듯 보였다.
         string currentId = slotIndex < _selectedCharacters.Count ? _selectedCharacters[slotIndex] : null;
         CharacterData current = CardDataManager.Instance.GetCharacter(currentId);
+
+        // 슬롯을 누르면 미리보기도 그 용병으로 바꾼다. 빈 슬롯이면 비워진다.
+        ShowCharacterPreview(currentId);
         string currentName = current != null ? current.name : "비어 있음";
         string title = $"{slotIndex + 1}번 슬롯  —  현재: {currentName}";
 
         if (characterPickerTitle != null) characterPickerTitle.text = title;
-        else CreateLabel(rowParent, title, 0f, 48f, 26f);
+        else CreateLabel(rowParent, title, 0f, 28.8f, 15.6f);
 
         foreach (CharacterData character in CardDataManager.Instance.allCharacterList)
         {
@@ -927,7 +1082,7 @@ public class DeckBuilderManager : MonoBehaviour
 
         go.AddComponent<LayoutElement>().minHeight = 76f;
 
-        var label = CreateLabel(rect, string.Empty, 0f, 0f, 24f);
+        var label = CreateLabel(rect, string.Empty, 0f, 0f, 14.4f);
         var labelRect = (RectTransform)label.transform;
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
@@ -935,6 +1090,49 @@ public class DeckBuilderManager : MonoBehaviour
         labelRect.offsetMax = Vector2.zero;
 
         return go;
+    }
+
+    /// <summary>용병 창을 연 프레임. 그 프레임의 바깥 클릭 판정은 건너뛴다.</summary>
+    private int _pickerOpenedFrame = -1;
+
+    /// <summary>
+    /// 용병 선택 창 <b>바깥</b>을 누르면 닫는다.
+    ///
+    /// ★ 클릭을 가로채지 않는다. 좌표만 보고 판단하므로 누른 버튼·카드는 제 할 일을 그대로 한다
+    ///   (화면을 덮는 투명 버튼을 깔면 그 클릭이 삼켜진다 — 그 방식을 쓰지 않은 이유다).
+    ///
+    /// ★ 프레임 가드가 반드시 필요하다. 용병 슬롯 버튼은 창 <b>바깥</b>에 있어서,
+    ///   창을 여는 그 클릭이 같은 프레임에 "바깥 클릭"으로도 읽힌다.
+    ///   EventSystem과 이 Update의 실행 순서는 보장되지 않으므로,
+    ///   연 프레임을 적어 두고 그 프레임은 건너뛴다. 이게 없으면 창이 열리자마자 닫힌다.
+    /// </summary>
+    private void Update()
+    {
+        if (_openPickerPanel == null) return;
+        if (Time.frameCount == _pickerOpenedFrame) return;
+
+        if (!PointerInput.TryGetPressPoint(out Vector2 point)) return;
+
+        var panelRect = _openPickerPanel.transform as RectTransform;
+        if (panelRect == null) return;
+
+        // 창 안을 눌렀다면 그 줄이 알아서 처리한다.
+        if (RectTransformUtility.RectangleContainsScreenPoint(panelRect, point, ResolvePickerCamera()))
+            return;
+
+        CloseCharacterPicker();
+    }
+
+    /// <summary>창이 올라탄 캔버스의 이벤트 카메라. 오버레이면 null이어야 좌표가 맞는다.</summary>
+    private Camera ResolvePickerCamera()
+    {
+        if (_openPickerPanel == null) return null;
+
+        Canvas canvas = _openPickerPanel.GetComponentInParent<Canvas>();
+        if (canvas == null) return null;
+
+        Canvas root = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+        return root.renderMode == RenderMode.ScreenSpaceOverlay ? null : root.worldCamera;
     }
 
     private void CloseCharacterPicker()
@@ -1057,6 +1255,19 @@ public class DeckBuilderManager : MonoBehaviour
     // 덱 리스트 정리
     public void RefreshDeckList(string focusDeckName = null)
     {
+        // ★ 목록을 다시 채우면 dropdown.value가 바뀌고, 그러면 OnDeckSelected가 불린다.
+        //   저장 → RefreshDeckList → 값 변경 → 불러오기 → … 로 되도는 것을 여기서 끊는다.
+        bool previous = _suppressDropdownEvent;
+        _suppressDropdownEvent = true;
+
+        try { RefreshDeckListInternal(focusDeckName); }
+        finally { _suppressDropdownEvent = previous; }
+
+        _lastAppliedDropdownIndex = deckListDropdown != null ? deckListDropdown.value : 0;
+    }
+
+    private void RefreshDeckListInternal(string focusDeckName)
+    {
         // 1. 드롭다운 초기화 (기존 목록 지우기)
         deckListDropdown.ClearOptions();
 
@@ -1064,8 +1275,6 @@ public class DeckBuilderManager : MonoBehaviour
         string folderPath = DeckStorage.EnsureFolder();
         string[] filePaths = DeckStorage.GetDeckFiles();
 
-        Debug.Log("검색 중인 폴더 위치: " + folderPath);
-        Debug.Log("발견된 JSON 파일 개수: " + filePaths.Length + "개");
 
         List<string> options = new List<string>();
 
@@ -1090,6 +1299,10 @@ public class DeckBuilderManager : MonoBehaviour
             _selectedCharacters.Clear();
             _editingDeckName = "";
             if (deckNameInput != null) deckNameInput.text = "";
+
+            // 남은 덱이 없으니 기준점도 빈 상태로 옮긴다.
+            // 안 그러면 지운 덱의 내용이 기준으로 남아 곧바로 "미저장"으로 잡힌다.
+            MarkSaved();
 
             RefreshAllUI();
             ShowMessagePopup("저장된 덱이 없습니다.\n[새 덱 만들기]로 시작하세요.");
@@ -1126,14 +1339,24 @@ public class DeckBuilderManager : MonoBehaviour
         }
     }
 
-    //드롭다운에서 덱 선택 시
+    /// <summary>
+    /// 드롭다운에서 덱을 고르면 곧바로 불러온다.
+    ///
+    /// ★ 되먹임 방어가 두 겹이다.
+    ///   ① <c>_suppressDropdownEvent</c> — 코드가 값을 바꿀 때(RefreshDeckList 등)는 무시한다
+    ///   ② 이미 열려 있는 덱과 같으면 무시 — ①을 빠뜨려도 무한히 돌지는 않는다
+    /// </summary>
     public void OnDeckSelected(int index)
     {
-        //// 선택된 덱의 이름 가져오기
-        //string selectedName = deckListDropdown.options[index].text;
+        if (_suppressDropdownEvent) return;
+        if (deckListDropdown == null) return;
+        if (index < 0 || index >= deckListDropdown.options.Count) return;
 
-        //// 그 이름으로 파일 로딩
-        //LoadDeckFromJson(selectedName + ".json");
+        string selectedName = deckListDropdown.options[index].text;
+        if (selectedName == EMPTY_DECK_LABEL) return;
+        if (selectedName == _editingDeckName) return;
+
+        RequestLoadDeck(selectedName);
     }
 
     public void OnClickLoadDeckButton()
@@ -1151,15 +1374,7 @@ public class DeckBuilderManager : MonoBehaviour
             return;
         }
 
-        // 저장하지 않은 편집 내용이 있으면 먼저 확인을 받는다
-        if (HasUnsavedChanges())
-        {
-            _pendingDeckToLoad = selectedName;
-            ShowUnsavedWarning();
-            return;
-        }
-
-        LoadDeckSelected(selectedName);
+        RequestLoadDeck(selectedName);
     }
 
     /// <summary>실제 불러오기 + 선택 동기화. 미저장 경고 이후에도 이 경로로 모인다.</summary>
@@ -1172,6 +1387,13 @@ public class DeckBuilderManager : MonoBehaviour
         if (isSuccess)
         {
             RememberSelectedDeck(selectedName);
+
+            // ★ 실제로 연 덱에 드롭다운을 맞춘다.
+            //   [저장]을 거쳐 온 경우 SaveDeckToJson이 RefreshDeckList로 드롭다운을
+            //   '방금 저장한 덱'에 옮겨 놓기 때문에, 여기서 바로잡지 않으면
+            //   화면은 목표 덱인데 드롭다운은 다른 덱을 가리킨다.
+            SyncDropdownTo(selectedName);
+
             ShowMessagePopup($"{selectedName}을(를) 불러왔습니다.");
         }
 
@@ -1363,8 +1585,11 @@ public class DeckBuilderManager : MonoBehaviour
     /// <summary>메인덱에 들어갈 수 있는 용병 테마 수. 룰북상 용병 2종을 골라 그 테마로만 덱을 짠다.</summary>
     private const int MAX_DECK_CHARACTERS = 2;
 
-    //저장 버튼 클릭
-    public void OnClickSaveDeck()
+    /// <summary>씬의 [덱 저장하기] 버튼. 결과는 쓰지 않는다.</summary>
+    public void OnClickSaveDeck() => TrySaveDeck();
+
+    /// <summary>검증까지 마치고 실제로 저장했으면 true. 확인 팝업의 [저장]이 이 결과를 본다.</summary>
+    private bool TrySaveDeck()
     {
         // 1. 장수 체크 (20장인지 확인)
         if (myDeck.Count != MAX_DECK_COUNT)
@@ -1374,7 +1599,7 @@ public class DeckBuilderManager : MonoBehaviour
             if (warningPopup != null) warningPopup.SetActive(true);
 
             Debug.Log("저장 실패: 덱이 완성되지 않았습니다.");
-            return;
+            return false;
         }
 
         // 2. 용병 테마 체크 (2종까지)
@@ -1386,11 +1611,11 @@ public class DeckBuilderManager : MonoBehaviour
                 $"용병은 최대 {MAX_DECK_CHARACTERS}종까지만 섞을 수 있습니다.\n" +
                 $"현재 {characters.Count}종: {string.Join(", ", characters)}");
             Debug.Log($"저장 실패: 용병 {characters.Count}종 ({string.Join(", ", characters)})");
-            return;
+            return false;
         }
 
         // 3. 저장 진행
-        SaveDeckToJson();
+        return SaveDeckToJson();
     }
 
     /// <summary>
@@ -1405,43 +1630,236 @@ public class DeckBuilderManager : MonoBehaviour
         return ids.OrderBy(id => CardDataManager.Instance.GetSortOrder(id)).ToList();
     }
 
-    /// <summary>마지막으로 저장·불러오기 한 시점의 덱. 미저장 여부 판단에 쓴다.</summary>
-    private List<string> _savedSnapshot = new List<string>();
-    private string _pendingDeckToLoad;
+    // ─────────────────────────────────────────────────────────────
+    // 미저장 보호
+    //
+    // 저장하지 않은 편집을 안고 다른 덱이나 씬으로 넘어가려 하면 먼저 물어본다.
+    // 두 입구(RequestLoadDeck · TryLeaveToScene)가 "대기 중인 동작" 하나로 모이고,
+    // 확인 팝업의 세 버튼이 그 대기 동작을 실행하거나 취소한다.
+    //
+    // ★ 예전에는 경고만 띄우고 _savedSnapshot을 현재 덱으로 덮어썼다.
+    //   "한 번 더 누르면 진행"을 위한 임시방편이었는데, 그 순간 미저장 상태가 지워져
+    //   이후에는 아무 경고 없이 편집이 날아갔다. 그래서 걷어냈다.
+    // ─────────────────────────────────────────────────────────────
 
-    /// <summary>저장하지 않은 편집이 있는가.</summary>
+    private enum PendingAction { None, LoadDeck, LeaveScene }
+
+    private PendingAction _pendingAction = PendingAction.None;
+    private string _pendingArg;
+
+    /// <summary>코드가 드롭다운 값을 바꾸는 동안 OnDeckSelected를 재우는 표시.</summary>
+    private bool _suppressDropdownEvent;
+
+    /// <summary>지금 실제로 열려 있는 덱의 드롭다운 자리. [취소]는 이 자리로 되돌린다.</summary>
+    private int _lastAppliedDropdownIndex;
+
+    // ── 저장 기준점 ────────────────────────────────────────────────
+    // 카드·용병·이름 셋을 함께 찍는다. 하나만 봐서는 용병만 바꾸거나
+    // 이름만 고친 변경을 놓친다.
+
+    private List<string> _savedSnapshot = new List<string>();
+    private List<string> _savedCharacters = new List<string>();
+    private string _savedDeckName = "";
+
+    /// <summary>지금 상태를 "저장된 것"으로 삼는다. 저장·불러오기·새 덱 직후에 부른다.</summary>
+    private void MarkSaved()
+    {
+        _savedSnapshot = new List<string>(myDeck);
+        _savedCharacters = new List<string>(_selectedCharacters);
+        _savedDeckName = NormalizeDeckName(deckNameInput != null ? deckNameInput.text : _editingDeckName);
+    }
+
+    /// <summary>저장하지 않은 편집이 있는가. 카드·용병·덱 이름 셋을 본다.</summary>
     private bool HasUnsavedChanges()
     {
+        // 카드 — 순서는 상관없다. 구성만 비교한다
         if (myDeck.Count != _savedSnapshot.Count) return true;
 
-        // 순서는 상관없다 — 구성만 비교한다
         var a = SortByRulebookOrder(new List<string>(myDeck));
         var b = SortByRulebookOrder(new List<string>(_savedSnapshot));
 
         for (int i = 0; i < a.Count; i++)
             if (a[i] != b[i]) return true;
 
-        return false;
+        // 용병 — 슬롯 순서가 곧 1번·2번이므로 순서까지 본다
+        if (_selectedCharacters.Count != _savedCharacters.Count) return true;
+
+        for (int i = 0; i < _selectedCharacters.Count; i++)
+            if (_selectedCharacters[i] != _savedCharacters[i]) return true;
+
+        // 덱 이름
+        // ★ 다듬어서 비교한다. 보이지 않는 글자 하나 때문에 "미저장"으로 잡히면 안 된다.
+        string currentName = NormalizeDeckName(deckNameInput != null ? deckNameInput.text : _editingDeckName);
+        return currentName != _savedDeckName;
     }
 
-    private void ShowUnsavedWarning()
-    {
-        ShowMessagePopup(
-            "저장하지 않은 변경이 있습니다.\n" +
-            "[덱 저장하기]로 먼저 저장하거나, 한 번 더 [덱 불러오기]를 누르면 변경을 버리고 불러옵니다.");
+    // ── 입구 두 곳 ────────────────────────────────────────────────
 
-        // 다음 클릭은 경고 없이 진행시킨다 (확인 팝업 버튼을 새로 배선하지 않아도 되도록)
-        _savedSnapshot = new List<string>(myDeck);
+    /// <summary>덱을 연다. 저장하지 않은 편집이 있으면 먼저 물어본다.</summary>
+    private void RequestLoadDeck(string deckName)
+    {
+        if (string.IsNullOrEmpty(deckName) || deckName == EMPTY_DECK_LABEL) return;
+
+        if (HasUnsavedChanges())
+        {
+            ShowSaveConfirm(PendingAction.LoadDeck, deckName,
+                $"저장하지 않은 변경이 있습니다.\n'{deckName}'을(를) 열기 전에 저장할까요?");
+            return;
+        }
+
+        LoadDeckSelected(deckName);
     }
 
-    /// <summary>미저장 경고 뒤 대기 중이던 덱이 있으면 이어서 불러온다.</summary>
-    public void ContinuePendingLoad()
+    /// <summary>
+    /// 씬을 나간다. 저장하지 않은 편집이 있으면 먼저 물어본다.
+    /// 씬의 [메인 메뉴] 버튼 onClick을 <c>SceneChanger.ChageScene</c> 대신 이것으로 잇는다.
+    /// </summary>
+    public void TryLeaveToScene(string sceneName)
     {
-        if (string.IsNullOrEmpty(_pendingDeckToLoad)) return;
+        if (string.IsNullOrEmpty(sceneName))
+        {
+            Debug.LogError("[DeckBuilder] 나갈 씬 이름이 비어 있다. 버튼의 인자를 확인할 것.");
+            return;
+        }
 
-        string target = _pendingDeckToLoad;
-        _pendingDeckToLoad = null;
-        LoadDeckSelected(target);
+        if (HasUnsavedChanges())
+        {
+            ShowSaveConfirm(PendingAction.LeaveScene, sceneName,
+                "저장하지 않은 변경이 있습니다.\n나가기 전에 저장할까요?");
+            return;
+        }
+
+        SceneManager.LoadScene(sceneName);
+    }
+
+    // ── 확인 팝업 ─────────────────────────────────────────────────
+
+    private void ShowSaveConfirm(PendingAction action, string arg, string message)
+    {
+        _pendingAction = action;
+        _pendingArg = arg;
+
+        if (saveConfirmPopup == null)
+        {
+            // 팝업을 안 만들었다면 편집을 잃게 두느니 이동을 막는다.
+            Debug.LogError("[DeckBuilder] 저장 확인 팝업(saveConfirmPopup)이 연결되지 않았다. "
+                           + "저장하지 않은 변경이 있어 이동을 취소한다.");
+            ShowMessagePopup(message);
+            CancelPendingAction();
+            return;
+        }
+
+        if (saveConfirmText != null) saveConfirmText.text = message;
+
+        if (PopupPanel != null) PopupPanel.SetActive(true);
+        saveConfirmPopup.SetActive(true);
+    }
+
+    /// <summary>[저장] — 저장에 성공했을 때만 넘어간다.</summary>
+    public void OnClickSaveAndContinue()
+    {
+        PendingAction action = _pendingAction;
+        string arg = _pendingArg;
+
+        HideSaveConfirm();
+
+        if (!TrySaveDeck())
+        {
+            // 20장이 아니거나 용병이 3종이면 저장이 거절된다. 그 경고는 TrySaveDeck이 띄웠다.
+            // 넘어가지 않고 그 자리에 머문다 — 드롭다운도 되돌린다.
+            CancelPendingAction();
+            return;
+        }
+
+        RunPendingAction(action, arg);
+    }
+
+    /// <summary>[저장안함] — 변경을 버리고 넘어간다.</summary>
+    public void OnClickDiscardAndContinue()
+    {
+        PendingAction action = _pendingAction;
+        string arg = _pendingArg;
+
+        HideSaveConfirm();
+        ClosePopup();
+
+        RunPendingAction(action, arg);
+    }
+
+    /// <summary>[취소] — 편집을 이어간다. 드롭다운을 원래 자리로 되돌린다.</summary>
+    public void OnClickCancelPendingAction()
+    {
+        HideSaveConfirm();
+        CancelPendingAction();
+        ClosePopup();
+    }
+
+    private void RunPendingAction(PendingAction action, string arg)
+    {
+        _pendingAction = PendingAction.None;
+        _pendingArg = null;
+
+        switch (action)
+        {
+            case PendingAction.LoadDeck:
+                ClosePopup();
+                LoadDeckSelected(arg);
+                break;
+
+            case PendingAction.LeaveScene:
+                SceneManager.LoadScene(arg);
+                break;
+        }
+    }
+
+    /// <summary>대기 중인 동작을 지우고 드롭다운을 지금 열려 있는 덱으로 되돌린다.</summary>
+    private void CancelPendingAction()
+    {
+        bool hadPending = _pendingAction != PendingAction.None;
+
+        _pendingAction = PendingAction.None;
+        _pendingArg = null;
+
+        // 드롭다운 때문에 뜬 확인이었다면, 안 고른 것으로 되돌려야 화면이 어긋나지 않는다.
+        if (hadPending) SetDropdownValueSilently(_lastAppliedDropdownIndex);
+    }
+
+    private void HideSaveConfirm()
+    {
+        if (saveConfirmPopup != null) saveConfirmPopup.SetActive(false);
+    }
+
+    /// <summary>드롭다운을 그 이름의 덱으로 맞춘다. 목록에 없으면 그대로 둔다.</summary>
+    private void SyncDropdownTo(string deckName)
+    {
+        if (deckListDropdown == null || string.IsNullOrEmpty(deckName)) return;
+
+        for (int i = 0; i < deckListDropdown.options.Count; i++)
+        {
+            if (deckListDropdown.options[i].text != deckName) continue;
+
+            SetDropdownValueSilently(i);
+            return;
+        }
+    }
+
+    /// <summary>OnDeckSelected를 깨우지 않고 드롭다운 값을 바꾼다.</summary>
+    private void SetDropdownValueSilently(int index)
+    {
+        if (deckListDropdown == null) return;
+        if (index < 0 || index >= deckListDropdown.options.Count) return;
+
+        bool previous = _suppressDropdownEvent;
+        _suppressDropdownEvent = true;
+
+        try
+        {
+            deckListDropdown.value = index;
+            deckListDropdown.RefreshShownValue();
+        }
+        finally { _suppressDropdownEvent = previous; }
+
+        _lastAppliedDropdownIndex = index;
     }
 
     /// <summary>현재 덱에 들어 있는 용병 테마 목록 (카드의 characterId 기준).</summary>
@@ -1462,14 +1880,49 @@ public class DeckBuilderManager : MonoBehaviour
         return characters;
     }
 
-    // JSON 저장
-    void SaveDeckToJson()
+    /// <summary>
+    /// 덱 이름을 다듬는다. 앞뒤 공백과 <b>보이지 않는 글자</b>를 뺀다.
+    ///
+    /// ★ 이게 없으면 "저장했는데 새 덱이 하나 더 생기는" 일이 난다.
+    ///   눈에는 같은 이름인데 끝에 공백이나 제로폭 공백(U+200B)이 하나 붙어 있으면
+    ///   "지금 편집 중인 그 덱"과 문자열 비교가 어긋나기 때문이다.
+    ///   실제로 이 씬의 덱 이름 칸에는 제로폭 공백이 박혀 있었다.
+    /// </summary>
+    private static string NormalizeDeckName(string raw)
     {
-        if (deckNameInput.text == "")
+        if (string.IsNullOrEmpty(raw)) return string.Empty;
+
+        var sb = new System.Text.StringBuilder(raw.Length);
+        foreach (char c in raw)
         {
-            Debug.Log("덱 이름 입력하시오");
-            return;
+            // 제로폭 공백·비결합자·BOM — 화면에는 없고 비교에만 남는 글자들
+            if (c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF') continue;
+
+            sb.Append(c);
         }
+
+        return sb.ToString().Trim();
+    }
+
+    // JSON 저장
+    //
+    // ★ 규칙: <b>이름칸의 이름으로 저장하고, 그 이름의 덱이 이미 있으면 덮어쓴다.</b>
+    //   예전에는 "지금 편집 중인 덱과 이름이 같을 때만" 덮어쓰고, 아니면 뒤에 _1, _2를 붙여
+    //   새 파일을 만들었다. 그런데 그 판정이 어긋나는 순간(공백 한 칸이면 충분하다)
+    //   <b>고치던 덱은 그대로 두고 사본이 쌓였다</b> — 실제로 MyDeck_1 … _7이 그렇게 생겼다.
+    //   새 덱은 [새로운 덱 만들기]가 겹치지 않는 이름을 붙여 주므로 자동 번호는 필요 없다.
+    bool SaveDeckToJson()
+    {
+        string deckName = NormalizeDeckName(deckNameInput != null ? deckNameInput.text : null);
+        if (string.IsNullOrEmpty(deckName))
+        {
+            ShowMessagePopup("덱 이름을 입력해 주세요.");
+            Debug.Log("덱 이름 입력하시오");
+            return false;
+        }
+
+        // 다듬은 이름을 화면에도 되돌려 놓는다 — 다음 비교부터는 어긋날 일이 없다
+        if (deckNameInput != null && deckNameInput.text != deckName) deckNameInput.text = deckName;
 
         // 저장할 데이터 객체 만들기
         DeckSaveData data = new DeckSaveData();
@@ -1487,87 +1940,71 @@ public class DeckBuilderManager : MonoBehaviour
         // 저장할 경로, 이름 설정 (PC, 모바일 모두 작동하는 경로)
         string folderPath = DeckStorage.EnsureFolder();
 
-        string originalName = deckNameInput.text;
-        string finalName = originalName;
-        string fileName = finalName + ".json";
-        string path = Path.Combine(folderPath, fileName);
+        string path = Path.Combine(folderPath, deckName + ".json");
 
-        // ★ 지금 편집 중인 그 덱이면 덮어쓴다.
-        //   이 분기가 없으면 [덱 저장하기]를 누를 때마다 my_deck_1, _2, _3 … 이 새로 생긴다.
-        //   이름을 바꿔서 저장했는데 그게 '다른' 덱과 겹칠 때만 아래 자동 번호가 붙는다.
-        bool isOverwritingEditedDeck = File.Exists(path) && originalName == _editingDeckName;
+        bool existed = File.Exists(path);
 
-        if (File.Exists(path) && !isOverwritingEditedDeck)
-        {
-            string baseName = originalName;
-            // 3-1. 이름 뒤에 이미 "_숫자"가 붙어있는지 분석 (예: "Deck_1")
-            int lastUnderscore = originalName.LastIndexOf('_');
+        // ★ 저장하기 전의 편집 대상. 아래에서 _editingDeckName을 덮어쓰기 때문에 지금 붙잡아 둔다.
+        string previousName = _editingDeckName;
 
-            // '_'가 있고, 그 뒤에 숫자가 있다면?
-            if (lastUnderscore > 0 && lastUnderscore < originalName.Length - 1)
-            {
-                string numberPart = originalName.Substring(lastUnderscore + 1);
+        // 이름칸을 고쳐서 저장했는가 = 이름 바꾸기다.
+        bool renamed = !string.IsNullOrEmpty(previousName) && previousName != deckName;
 
-                // 진짜 숫자가 맞는지 확인 (TryParse)
-                if (int.TryParse(numberPart, out int currentNumber))
-                {
-                    // "Deck_1" 이라면 -> baseName은 "Deck", 다음 번호는 2부터 시작
-                    baseName = originalName.Substring(0, lastUnderscore);
-                }
-            }
+        // 편집하던 덱이 아닌 다른 덱을 덮어쓰는 경우다. 조용히 지나가면 안 된다.
+        bool replacedAnotherDeck = existed && deckName != previousName;
 
-            int maxNumber = 0;
-
-            string[] files = Directory.GetFiles(folderPath, baseName + "*.json");
-
-            foreach (string filePath in files)
-            {
-                string fName = Path.GetFileNameWithoutExtension(filePath); // 파일명만 가져옴
-
-                // 정확히 포맷이 맞는지 확인 ("Slime_숫자")
-                string prefix = baseName + "_";
-                if (fName.StartsWith(prefix))
-                {
-                    string numStr = fName.Substring(prefix.Length);
-                    if (int.TryParse(numStr, out int num))
-                    {
-                        if (num > maxNumber)
-                        {
-                            maxNumber = num; // 더 큰 숫자를 발견하면 갱신
-                        }
-                    }
-                }
-            }
-
-            int nextNumber = maxNumber + 1;
-
-            finalName = $"{baseName}_{nextNumber}";
-            path = Path.Combine(folderPath, finalName + ".json");
-        }
-
-        // 파일 쓰기
+        // 파일 쓰기 — 같은 이름이 있으면 그 자리에 덮어쓴다
         File.WriteAllText(path, json);
 
+        // ★ 이름을 바꿨다면 예전 파일을 지운다 — 사본을 만드는 게 아니라 <b>이름 바꾸기</b>다.
+        //   순서가 중요하다: 먼저 쓰고 나중에 지운다.
+        //   반대로 하면 쓰기가 실패했을 때 덱이 통째로 사라진다.
+        if (renamed) DeckStorage.DeleteDeck(previousName);
+
         // 방금 저장한 덱이 이제 편집 대상이다. 이어서 또 저장하면 이 파일을 덮어쓴다
-        _editingDeckName = finalName;
+        _editingDeckName = deckName;
 
-        // 저장했으니 미저장 기준점도 여기로 옮기고, 메인 화면과 선택을 맞춘다
-        _savedSnapshot = new List<string>(myDeck);
-        RememberSelectedDeck(finalName);
+        // 메인 화면과 선택을 맞춘다
+        RememberSelectedDeck(deckName);
 
-        Debug.Log(isOverwritingEditedDeck
-            ? $"저장 완료(덮어쓰기): {finalName}"
-            : $"저장 완료(새 덱): {finalName}");
+        if (deckNameInput != null) deckNameInput.text = deckName;
 
-        if (deckNameInput != null)
+        Debug.Log(renamed
+            ? $"저장 완료(이름 변경): {previousName} → {deckName}"
+            : existed
+                ? $"저장 완료(덮어쓰기): {deckName}"
+                : $"저장 완료(새 덱): {deckName}");
+
+        RefreshDeckList(deckName);
+
+        // ★ 기준점은 목록·이름칸을 모두 정리한 뒤에 찍는다.
+        //   위에서 찍으면 RefreshDeckList가 이름칸을 바꾸는 바람에 곧바로 "미저장"으로 잡혔다.
+        MarkSaved();
+
+        // ★ 덱이 사라지거나 덮어써졌다면 그 사실을 분명히 알린다.
+        //   이름칸을 고쳐 저장하면 예전 이름의 덱이 없어지므로 조용히 지나가면 안 된다.
+        string notice = null;
+
+        if (renamed && replacedAnotherDeck)
+            notice = $"'{previousName}'을(를) '{deckName}'(으)로 바꿔 저장했습니다." + "\n" +
+                     $"이미 있던 '{deckName}'은(는) 덮어썼습니다.";
+        else if (renamed)
+            notice = $"'{previousName}'을(를) '{deckName}'(으)로 이름을 바꿨습니다.";
+        else if (replacedAnotherDeck)
+            notice = $"이미 있던 '{deckName}' 덱을 덮어썼습니다.";
+
+        if (notice != null)
         {
-            deckNameInput.text = finalName;
+            if (okPopup != null) okPopup.SetActive(false);
+            ShowMessagePopup(notice);
+        }
+        else
+        {
+            if (PopupPanel != null) PopupPanel.SetActive(true);
+            if (okPopup != null) okPopup.SetActive(true);
         }
 
-        if (PopupPanel != null) PopupPanel.SetActive(true);
-        if (okPopup != null) okPopup.SetActive(true);
-
-        RefreshDeckList(finalName);
+        return true;
     }
 
     //JSON 파일 이름 받기
@@ -1576,7 +2013,6 @@ public class DeckBuilderManager : MonoBehaviour
         // 1. 경로 설정 (Assets 폴더 기준)
         string path = DeckStorage.GetDeckPath(fileName);
 
-        Debug.Log("파일 찾는 중: " + path);
 
         // 2. 파일이 진짜 있는지 검사
         if (File.Exists(path) == false)
@@ -1597,9 +2033,6 @@ public class DeckBuilderManager : MonoBehaviour
         // 용병 슬롯 복원 — 명시값이 있으면 그대로, 구버전 덱이면 카드에서 역산
         SyncCharactersFromDeck(data.characterIdList);
 
-        // 미저장 판정 기준점
-        _savedSnapshot = new List<string>(myDeck);
-
         // 6. 덱 이름 입력칸도 파일 이름으로 맞춰주기 (확장자 .json 제거)
         string loadedName = fileName.Replace(".json", "");
         if (deckNameInput != null)
@@ -1610,10 +2043,13 @@ public class DeckBuilderManager : MonoBehaviour
         // 이제부터 [덱 저장하기]는 이 덱을 덮어쓴다
         _editingDeckName = loadedName;
 
+        // ★ 미저장 판정 기준점은 이름칸까지 맞춘 뒤에 찍는다.
+        //   먼저 찍으면 바로 아래에서 이름을 바꾸는 바람에 곧장 "미저장"으로 잡힌다.
+        MarkSaved();
+
         // 7. 화면 갱신 (중요!)
         RefreshAllUI();
 
-        Debug.Log("불러오기 성공: " + fileName);
         return true; // 성공(true) 반환
     }
 
@@ -1625,7 +2061,7 @@ public class DeckBuilderManager : MonoBehaviour
         string selectedName = deckListDropdown.options[index].text;
 
         // 2. 예외처리
-        if (selectedName == "덱이 없습니다.")
+        if (selectedName == EMPTY_DECK_LABEL)
         {
             Debug.Log("삭제할 덱이 없습니다.");
             return;
@@ -1647,14 +2083,9 @@ public class DeckBuilderManager : MonoBehaviour
     // 팝업에서 확인 눌렀을 때 덱 삭제
     public void OnConfirmDelete()
     {
-        // 아까 기억해둔 이름으로 파일 경로 찾기
-        string path = DeckStorage.GetDeckPath(deckToDelete);
-
-        // 파일 삭제
-        if (File.Exists(path))
-        {
-            File.Delete(path);
-        }
+        // 파일 삭제. 이제 지운 덱은 다시 돌아오지 않는다
+        //   (구 폴더에서 되살려 오던 DeckStorage의 이관 코드를 걷어냈다)
+        DeckStorage.DeleteDeck(deckToDelete);
 
         // 편집 중이던 덱을 지웠다면 더 이상 덮어쓸 대상이 없다
         if (_editingDeckName == deckToDelete) _editingDeckName = "";
@@ -1677,7 +2108,6 @@ public class DeckBuilderManager : MonoBehaviour
         // 2. 화면 갱신
         RefreshAllUI();
 
-        Debug.Log($"카드 ID {id}번을 덱에서 모두 제거했습니다.");
     }
 
     // 새로운 덱 만들기
@@ -1694,6 +2124,12 @@ public class DeckBuilderManager : MonoBehaviour
     {
         // 1. 덱 초기화 로직 (아까 만들었던 코드)
         myDeck.Clear();
+
+        // ★ 용병도 함께 비운다. 이게 없으면 "새 덱"인데 직전 덱의 용병이 그대로 남아,
+        //   이름과 달리 빈 덱이 아니게 된다.
+        //   용병이 없으면 카드 목록도 비어 보이는데(IsCardUnlocked), 그것이 맞는 모습이다 —
+        //   카드를 넣으려 하면 "먼저 상단에서 용병을 고르세요" 안내가 뜬다.
+        _selectedCharacters.Clear();
 
         //if (deckNameInput != null) deckNameInput.text = "새 덱";  // 기존꺼
 
@@ -1737,6 +2173,10 @@ public class DeckBuilderManager : MonoBehaviour
         // 아직 파일로 존재하지 않는 덱이다. 첫 저장은 새로 만드는 것이 맞다
         _editingDeckName = "";
 
+        // ★ 기준점을 여기로 옮긴다. 안 그러면 방금 만든 빈 덱이 곧바로 "미저장"으로 잡혀,
+        //   아무것도 안 했는데 덱을 바꾸려 할 때마다 저장을 묻는다.
+        MarkSaved();
+
         RefreshAllUI();
 
         // 2. 열려있는 확인 팝업 닫기
@@ -1753,9 +2193,9 @@ public class DeckBuilderManager : MonoBehaviour
     // 팝업 열기
     void ShowMessagePopup(string msg)
     {
-        if (saveText != null) saveText.text = msg;
+        if (messageText != null) messageText.text = msg;
         if (PopupPanel != null) PopupPanel.SetActive(true);
-        if (savePopup != null) savePopup.SetActive(true);
+        if (messagePopup != null) messagePopup.SetActive(true);
     }
 
     // 팝업 닫기
@@ -1765,13 +2205,21 @@ public class DeckBuilderManager : MonoBehaviour
 
         if (okPopup != null) okPopup.SetActive(false);
 
-        if (savePopup != null) savePopup.SetActive(false);
+        if (messagePopup != null) messagePopup.SetActive(false);
 
         if (deleteConfirmPopup != null) deleteConfirmPopup.SetActive(false);
 
         if (cardZoomPopup != null) cardZoomPopup.SetActive(false);
 
         if (newDeckPopup != null) newDeckPopup.SetActive(false);
+
+        // 확인 팝업이 다른 경로로 닫히면 대기 동작도 함께 거둔다.
+        // 안 그러면 드롭다운은 새 덱을 가리키는데 화면은 옛 덱인 채로 어긋난다.
+        if (saveConfirmPopup != null && saveConfirmPopup.activeSelf)
+        {
+            saveConfirmPopup.SetActive(false);
+            CancelPendingAction();
+        }
 
         if (PopupPanel != null) PopupPanel.SetActive(false);
     }

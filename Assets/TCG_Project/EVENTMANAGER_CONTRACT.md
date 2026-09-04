@@ -128,6 +128,19 @@
 > 스택 발동 여부는 `OnRequireCardPick`(B-4)으로 묻는다 (`ServerGameManager` L958, `BattleManager` 동일).
 > 되살릴지 폐기할지 아직 결정되지 않았다. 새로 구독하지 말 것.
 
+### B-3-1. 간접 발동에 대한 스택 응답
+
+`OnRequireIndirectStackResponse : Action<Player stackOwner, Player cardPlayer, Card playedCard, Action<bool> callback>`
+
+[기뢰]처럼 **다른 카드가 대신 내주는** 경로로 카드가 나갈 때, 상대에게 스택으로 막을지 묻는다.
+
+> 왜 따로 있는가 — 효과(`PlayFromBufferEffect`)는 진행 코드를 직접 부를 수 없다.
+> 그래서 이 훅으로 위임하고, 구독자가 자기 방식(코루틴/동기)으로 응답을 받은 뒤 콜백을 부른다.
+>
+> ⚠️ 구독자는 **`context == null` 가드를 반드시 넣을 것.** 온라인에서 컨텍스트 없이 불려
+> 매 프레임 `NullReferenceException`이 난 적이 있다(`BattleManager.HandleIndirectStackResponse`).
+> 무한 대기도 막아야 한다 — 제한 시간이 0 이하이면 `GameRules.ChooseWaitTime`으로 되돌린다.
+
 ### B-4. 목록에서 선택
 
 `OnRequireCardPick : Action<Player me, List<Card> candidates, int count, Action<List<Card>> callback>`

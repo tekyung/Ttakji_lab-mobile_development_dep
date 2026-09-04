@@ -41,14 +41,39 @@ public class UiSortingLayer : MonoBehaviour
     [Tooltip("클릭을 받아야 하는 패널이면 켠다. Canvas를 붙이면 레이캐스터도 있어야 버튼이 눌린다.")]
     public bool needsClicks = true;
 
-    private void Awake() => Apply();
+    /// <summary>Start를 지났는가. 그 전의 OnEnable은 Awake와 같은 호출 스택 안이다.</summary>
+    private bool _ready;
 
-    private void OnEnable() => Apply();
+    /// <summary>
+    /// ★ Awake에서는 아무것도 하지 않는다.
+    ///
+    ///   Canvas를 붙이거나 <c>overrideSorting</c>을 바꾸면 유니티가 자식들에게
+    ///   <c>OnCanvasHierarchyChanged</c>를 <b>SendMessage로</b> 보내는데,
+    ///   Awake 안에서의 SendMessage는 금지되어 있다:
+    ///     "SendMessage cannot be called during Awake, CheckConsistency, or OnValidate"
+    ///   실제로 MatchSetupRoot 안의 TMP_Dropdown이 이 경고를 계속 냈다.
+    ///
+    ///   그래서 Start로 미룬다. 이 패널들은 모두 꺼진 채 시작하므로
+    ///   한 프레임 늦게 적용돼도 눈에 띄지 않는다.
+    /// </summary>
+    private void Start()
+    {
+        _ready = true;
+        Apply();
+    }
+
+    private void OnEnable()
+    {
+        // Start 전의 OnEnable은 Awake와 같은 호출 스택이라 건드리면 같은 경고가 난다.
+        // 첫 적용은 바로 뒤따라올 Start가 맡는다.
+        if (_ready) Apply();
+    }
 
 #if UNITY_EDITOR
     private void OnValidate()
     {
         if (!Application.isPlaying) return;
+        if (!_ready) return;
         Apply();
     }
 #endif
@@ -58,8 +83,10 @@ public class UiSortingLayer : MonoBehaviour
         Canvas canvas = GetComponent<Canvas>();
         if (canvas == null) canvas = gameObject.AddComponent<Canvas>();
 
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = sortingOrder;
+        // ★ 값이 이미 맞으면 대입하지 않는다.
+        //   같은 값을 다시 넣어도 유니티는 하이어라키가 바뀐 것으로 보고 알림을 돌린다.
+        if (!canvas.overrideSorting) canvas.overrideSorting = true;
+        if (canvas.sortingOrder != sortingOrder) canvas.sortingOrder = sortingOrder;
 
         // Canvas를 붙이면 이 아래는 별도의 레이캐스트 대상이 된다.
         // 레이캐스터가 없으면 버튼이 통째로 먹통이 되므로 짝으로 붙인다.

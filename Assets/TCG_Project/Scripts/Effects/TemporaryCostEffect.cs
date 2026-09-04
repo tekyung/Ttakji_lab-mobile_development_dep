@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TCG_Project.Scripts.Core;
 using TCG_Project.Scripts.Interfaces;
@@ -52,12 +52,16 @@ namespace TCG_Project.Scripts.Effects
             }
 
             Card card = owner.PlayBuffer[0];
-            int OriginalCost = card.Cost;
-            int CurrentCost = GameLogicHelpers.GetEffectiveCost(card, owner);
-            card.Cost = Math.Max(0, CurrentCost - _reduction);
+            int before = card.Cost;
+
+            // ★ 전장 할인(GetEffectiveCost)을 여기서 반영하면 안 된다.
+            //   지불 시점(PlayFromBufferEffect)에서 GetEffectiveCost를 다시 부르므로
+            //   전장 할인이 **두 번** 적용된다. 여기서는 이 효과의 몫만 깎는다.
+            card.Cost = Math.Max(0, card.Cost - _reduction);
 
             EventManager.OnLogMessage?.Invoke(
-                $"  [임시코스트] '{card.Name}' 코스트 {CurrentCost}({OriginalCost}) -{_reduction} → {card.Cost}");
+                $"  [임시코스트] '{card.Name}' 코스트 {before} -{_reduction} → {card.Cost} " +
+                $"(전장 할인은 지불할 때 따로 적용된다)");
 
             onComplete?.Invoke();
         }

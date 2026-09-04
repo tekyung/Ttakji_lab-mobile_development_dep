@@ -1,8 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO; // 파일 읽기용
 using TMPro; // 드롭다운용
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class DeckSelector : MonoBehaviour
 {
@@ -91,10 +90,5 @@ public class DeckSelector : MonoBehaviour
         // "SelectedDeckName"이라는 이름으로 컴퓨터에 기억시킴!
         PlayerPrefs.SetString(PREF_KEY, selectedName);
         PlayerPrefs.Save();
-    }
-   
-    public void OnClickStartButton()
-    {
-        SceneManager.LoadScene("server ui");
     }
 }

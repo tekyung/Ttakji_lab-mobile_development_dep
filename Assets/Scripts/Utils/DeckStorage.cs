@@ -1,18 +1,25 @@
 // DeckStorage.cs — 저장된 덱 파일의 위치를 관리하는 단일 창구
 //
-// ★ 왜 옮겼나
+// ★ 왜 persistentDataPath인가
 //   종전에는 덱을 `Application.dataPath/MyDeck`에 저장했다. 에디터에서는 그게 프로젝트의
 //   `Assets/MyDeck`이라 잘 동작했지만, **안드로이드에서 `Application.dataPath`는 APK 내부를 가리킨다.**
 //   읽기 전용인 데다 일반 디렉터리도 아니라서 덱 저장·불러오기가 통째로 실패한다.
 //   `Application.persistentDataPath`는 플랫폼마다 앱 전용 쓰기 가능 폴더를 돌려준다.
 //
-// ★ 기존 덱은 자동으로 옮겨 온다
-//   `Assets/MyDeck`에 이미 만들어 둔 덱들이 있어서, 경로만 갈아치우면 화면에서 사라진 것처럼 보인다.
-//   그래서 새 폴더가 비어 있을 때 한 번만 옛 폴더의 `*.json`을 복사해 온다.
-//   (안드로이드에서는 옛 폴더를 읽을 수 없으므로 조용히 건너뛴다)
+// ★ 구 폴더 이관 기능은 <b>일부러 없앴다</b> (2026-09-03). 다시 넣지 말 것.
+//   경로를 옮기면서 `Assets/MyDeck`의 덱을 새 폴더로 복사해 오는 코드를 두었는데,
+//   이름은 `MigrateLegacyDecksOnce`였지만 **한 번만 돌지 않았다.**
+//   판정에 쓰던 static 플래그가 앱을 다시 켤 때마다 초기화되기 때문이다.
+//
+//   그래서 이런 일이 났다:
+//     · 덱을 지워도 <b>다음 실행에 되살아났다</b> (구 폴더에 있으면 다시 복사)
+//     · 구 폴더의 여섯 개가 "기본으로 주어지는 덱"처럼 보였다
+//     · 그중 `새 덱.json`은 이름과 달리 <b>베로니카 카드 20장짜리 실제 덱</b>이었다
+//
+//   이관은 제 몫을 이미 다 했고(2026-08-17), 남아서 하는 일은 해로움뿐이었다.
+//   구 폴더 `Assets/MyDeck`도 저장소에서 지웠다.
 //
 // 경로를 쓰는 곳은 전부 이 클래스를 거친다. 새로 `Application.dataPath`를 직접 부르지 말 것.
-using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -21,15 +28,10 @@ public static class DeckStorage
     private const string FolderName = "MyDeck";
     private const string DeckExtension = ".json";
 
-    private static bool _migrationChecked;
-
     /// <summary>덱이 저장되는 폴더. 플랫폼마다 앱 전용 쓰기 가능 위치다.</summary>
     public static string FolderPath => Path.Combine(Application.persistentDataPath, FolderName);
 
-    /// <summary>구 저장 위치. 에디터/PC에서만 의미가 있다 (안드로이드에서는 APK 내부).</summary>
-    public static string LegacyFolderPath => Path.Combine(Application.dataPath, FolderName);
-
-    /// <summary>덱 폴더를 보장하고 경로를 돌려준다. 최초 1회 구 폴더에서 덱을 옮겨 온다.</summary>
+    /// <summary>덱 폴더를 보장하고 경로를 돌려준다.</summary>
     public static string EnsureFolder()
     {
         string path = FolderPath;
@@ -37,7 +39,6 @@ public static class DeckStorage
         if (!Directory.Exists(path))
             Directory.CreateDirectory(path);
 
-        MigrateLegacyDecksOnce(path);
         return path;
     }
 
@@ -60,39 +61,13 @@ public static class DeckStorage
         return !string.IsNullOrEmpty(path) && File.Exists(path);
     }
 
-    /// <summary>
-    /// 구 폴더(`Assets/MyDeck`)의 덱을 새 폴더로 한 번만 복사한다.
-    /// 새 폴더에 이미 같은 이름이 있으면 건드리지 않는다 — 사용자가 새로 만든 덱이 우선이다.
-    /// </summary>
-    private static void MigrateLegacyDecksOnce(string targetFolder)
+    /// <summary>덱 파일을 지운다. 없으면 아무 일도 하지 않는다.</summary>
+    public static bool DeleteDeck(string deckName)
     {
-        if (_migrationChecked) return;
-        _migrationChecked = true;
+        string path = GetDeckPath(deckName);
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
 
-        string legacy = LegacyFolderPath;
-        if (legacy == targetFolder) return;
-
-        try
-        {
-            if (!Directory.Exists(legacy)) return;
-
-            var copied = new List<string>();
-            foreach (string src in Directory.GetFiles(legacy, "*" + DeckExtension))
-            {
-                string dest = Path.Combine(targetFolder, Path.GetFileName(src));
-                if (File.Exists(dest)) continue;
-
-                File.Copy(src, dest);
-                copied.Add(Path.GetFileNameWithoutExtension(src));
-            }
-
-            if (copied.Count > 0)
-                Debug.Log($"[DeckStorage] 기존 덱 {copied.Count}개를 새 저장 위치로 옮겼다: {string.Join(", ", copied)}");
-        }
-        catch (System.Exception e)
-        {
-            // 안드로이드에서 APK 내부를 읽으려다 실패하는 경우가 여기로 온다. 치명적이지 않다.
-            Debug.Log($"[DeckStorage] 기존 덱 이전 생략: {e.Message}");
-        }
+        File.Delete(path);
+        return true;
     }
 }

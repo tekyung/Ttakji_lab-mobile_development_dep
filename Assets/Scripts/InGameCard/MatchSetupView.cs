@@ -1,4 +1,4 @@
-// MatchSetupView.cs — 대전 시작 전 설정 화면의 참조 모음.
+﻿// MatchSetupView.cs — 대전 시작 전 설정 화면의 참조 모음.
 //
 // 구조 (프리팹: Resources/Build/MatchSetupRoot):
 //   MatchSetupRoot        이 컴포넌트 + UiSortingLayer(950)
@@ -93,6 +93,23 @@ public class MatchSetupView : MonoBehaviour
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// ★ 스스로 닫고 시작한다.
+    ///
+    /// 씬에 놓인 UI는 편집하기 좋도록 <b>켜진 채 저장된다.</b> 보통은 주인(LocalMatchStarter)이
+    /// 시작할 때 닫아 주는데, <b>온라인 대전에서는 그 주인이 통째로 물러난다</b>
+    /// (`Awake`에서 `enabled = false`). 그러면 닫아 줄 사람이 없어 대인전 화면에
+    /// 설정 창이 그대로 떠 있고, 버튼 배선도 없어 눌리지도 않는다.
+    ///
+    /// 그래서 "닫아 두기"를 주인이 아니라 <b>자기 자신</b>이 한다 — 누가 오든 안 오든 지켜진다.
+    /// 여는 것은 여전히 주인의 몫이다.
+    /// </summary>
+    private void Awake()
+    {
+        ResolveMissingReferences();
+        if (panel != null) panel.SetActive(false);
     }
 
     private void Reset() => ResolveMissingReferences();

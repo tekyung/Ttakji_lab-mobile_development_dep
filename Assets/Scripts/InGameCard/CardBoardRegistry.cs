@@ -246,7 +246,7 @@ public static class CardBoardRegistry
         else
         {
             if (cardWidth <= 0f)
-                cardWidth = 200f;
+                cardWidth = 120f;
 
             float panelWidth = handRect.rect.width;
             float totalCardWidth = cardWidth * cardCount;
@@ -477,7 +477,7 @@ public static class CardBoardRegistry
         ResetVisualState(cardObj);
 
         RectTransform rect = cardObj.GetComponent<RectTransform>();
-        float cardWidth = ctx.CardWidth > 0f ? ctx.CardWidth : 200f;
+        float cardWidth = ctx.CardWidth > 0f ? ctx.CardWidth : 120f;
 
         CanvasGroup group = cardObj.GetComponent<CanvasGroup>();
         GraphicRaycaster raycaster = cardObj.GetComponent<GraphicRaycaster>();
@@ -584,7 +584,7 @@ public static class CardBoardRegistry
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(cardWidth, 280f);
+        rect.sizeDelta = new Vector2(cardWidth, 168f);
         rect.localScale = Vector3.one;
     }
 }

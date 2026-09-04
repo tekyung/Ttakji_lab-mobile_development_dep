@@ -208,6 +208,11 @@ public class DeckInfoPanelUI : MonoBehaviour
     private void ClosePanel()
     {
         DisarmSurrender();
+
+        // 칸을 눌러 띄운 좌측 확대는 손패 호버가 닫아 주지 않는다(_subFromHand가 아니다).
+        // 목록을 닫는데 확대만 남아 있으면 어색하므로 여기서 함께 거둔다.
+        if (CardZoomPopupUI.Instance != null) CardZoomPopupUI.Instance.CloseSub();
+
         if (_view != null && _view.panel != null) _view.panel.SetActive(false);
     }
 
@@ -307,8 +312,20 @@ public class DeckInfoPanelUI : MonoBehaviour
             cardRect.localScale = Vector3.one;
         }
 
+        // 카드 안쪽 그래픽은 클릭을 가로채지 않는다 — 칸의 Button이 받아야 한다.
         foreach (var g in cardGo.GetComponentsInChildren<Graphic>(true))
             g.raycastTarget = false;
+
+        // 칸을 누르면 좌측에 크게 보여 준다. 폐기존 목록이 쓰는 것과 같은 서브 팝업이다.
+        if (cellView.button != null)
+        {
+            Card captured = card;
+            cellView.button.onClick.RemoveAllListeners();
+            cellView.button.onClick.AddListener(() =>
+            {
+                if (CardZoomPopupUI.Instance != null) CardZoomPopupUI.Instance.ShowSub(captured);
+            });
+        }
 
         return cellGo;
     }

@@ -12,7 +12,13 @@ public class CardData
     public int cost;
     public int max_deck_count;
     public string imagePath;
-    //public string description;
+
+    /// <summary>
+    /// 카드 효과 설명. RulebookCards.json에 원래부터 들어 있었는데
+    /// 여기서 주석 처리돼 있어 화면에서 읽을 방법이 없었다(2026-09-02 되살림).
+    /// 덱 편집 화면의 미리보기 패널이 이 값을 그대로 보여 준다.
+    /// </summary>
+    public string description;
 
     [System.Serializable]
     public class CardDataWrapper
