@@ -7,7 +7,13 @@ namespace TCG_Project.Scripts.Utils
 {
     /// <summary>
     /// 용병(캐릭터) 필드 슬롯 스냅샷 생성 및 EventManager 방송.
-    /// 회전 규칙: 하단(P1)=0° 시작, 상단(P2)=180° 시작, 능력 사용 시 +180°.
+    ///
+    /// RotationZ 규칙: 하단(P1)=0° 시작, 상단(P2)=180° 시작, 능력 사용 시 +180°.
+    ///
+    /// ★ 단, 유니티 화면은 더 이상 그 +180°를 회전으로 그리지 않는다 —
+    ///   능력을 썼다는 표시는 <b>흑백 처리</b>로 바뀌었고(CharacterFieldUI),
+    ///   화면은 AbilityUsed 를 보고 방향은 스스로 계산한다.
+    ///   RotationZ 는 온라인 DTO 호환을 위해 그대로 유지한다.
     /// </summary>
     public static class CharacterFieldBroadcast
     {

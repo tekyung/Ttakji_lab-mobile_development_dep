@@ -15,7 +15,9 @@
 //   씬에 미리 놓여 있으면 그것을 쓰고, 없으면 프리팹을 찍는다.
 //   로직 싱글턴은 씬을 넘어 살아남지만 화면은 씬 캔버스에 붙으므로 수명이 다르다.
 //
-// ★ 가운데 띠와 로그는 UiSortingLayer(100)로 자리를 명시한다.
+// ★ 가운데 띠·로그·상대 대기 안내는 각각 UiSortingLayer(100)로 자리를 명시한다.
+//   — 루트가 아니라 <b>자식 각각에</b> 붙인다. 빼먹으면 그것만 손패에 가려진다
+//     (GameStatusPanelRoot는 형제 index 3, 손패(MyField)는 7이라 그냥 두면 손패가 위다).
 //   예전에는 정렬 순서가 없어, '실행 중에 캔버스 맨 뒤에 붙는다'는 사정만으로 맨 앞에 그려졌다.
 //   그 바람에 씬에 놓인 설정 패널을 덮어 버렸다.
 using System;
@@ -103,6 +105,10 @@ public class GameStatusPanelUI : MonoBehaviour
         EventManager.OnRequireOptionalAction += HandleRequireOptionalTimer;
         EventManager.OnCardSet += HandleCardSetTimer;
 
+        // 상대 대기 안내를 내릴 신호. 선택이 끝나면 게임이 진행되므로 그것을 본다.
+        EventManager.OnCardMove += HandleAnyProgress;
+        EventManager.OnRequireIndirectStackResponse += HandleRequireIndirectStackNotice;
+
         EventManager.OnGameSet += HandleGameSet;
         EventManager.OnGameDraw += HandleGameDraw;
         EventManager.OnMatchSet += HandleMatchSet;
@@ -134,6 +140,9 @@ public class GameStatusPanelUI : MonoBehaviour
         EventManager.OnRequireCardPick -= HandleRequireCardPickTimer;
         EventManager.OnRequireOptionalAction -= HandleRequireOptionalTimer;
         EventManager.OnCardSet -= HandleCardSetTimer;
+
+        EventManager.OnCardMove -= HandleAnyProgress;
+        EventManager.OnRequireIndirectStackResponse -= HandleRequireIndirectStackNotice;
 
         EventManager.OnGameSet -= HandleGameSet;
         EventManager.OnGameDraw -= HandleGameDraw;
@@ -193,6 +202,9 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void SetPhase(string phaseName, int turn)
     {
+        // 페이즈가 넘어갔다는 것은 그 페이즈의 선택이 모두 끝났다는 뜻이다.
+        HideOpponentWait();
+
         EnsureUI();
 
         if (_currentPhase != phaseName) StopInputTimer(); // 페이즈가 넘어가면 대기도 끝난 것이다
@@ -206,7 +218,16 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void StartInputTimer(Player player, string label)
     {
-        if (!LocalPlayerContext.IsMine(player)) return;
+        if (!LocalPlayerContext.IsMine(player))
+        {
+            // ★ 예전에는 그냥 버렸다. 그래서 상대가 고르는 동안 이쪽 화면은
+            //   아무 설명 없이 멈춰 있었다. 이제 왜 멈췄는지 알려 준다.
+            ShowOpponentWait(OpponentWaitMessage(label));
+            return;
+        }
+
+        // 내 차례가 왔다는 것은 상대의 선택이 끝났다는 뜻이다.
+        HideOpponentWait();
 
         float limit = GameRules.ChooseWaitTime / 1000f;
         if (limit <= 0f) return;
@@ -227,15 +248,70 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void HandleRequireSetTimer(Player p, GameContext c, Action<Card> cb) => StartInputTimer(p, "세트");
     private void HandleRequireOpenTimer(Player p, Card card, int cost, GameContext c, Action<OpenPhaseChoice> cb) => StartInputTimer(p, "공개/폐기");
-    private void HandleRequireCardPickTimer(Player p, List<Card> cards, int count, CardPickPrompt prompt, Action<List<Card>> cb) => StartInputTimer(p, "카드 선택");
-    private void HandleRequireOptionalTimer(Player p, string msg, GameContext c, Action<bool> cb) => StartInputTimer(p, "선택");
+    private void HandleRequireCardPickTimer(Player p, List<Card> cards, int count, CardPickPrompt prompt, Action<List<Card>> cb)
+        => StartInputTimer(p, count > 1 ? $"카드 {count}장 선택" : "카드 선택");
+    private void HandleRequireOptionalTimer(Player p, string msg, GameContext c, Action<bool> cb) => StartInputTimer(p, "용병 능력 결정");
     private void HandleCardSetTimer(Card card, Player owner)
     {
         if (LocalPlayerContext.IsMine(owner)) StopInputTimer();
+        HideOpponentWait();
+    }
+
+    private void HandleRequireIndirectStackNotice(Player stackOwner, Player cardPlayer, Card played, Action<bool> cb)
+        => StartInputTimer(stackOwner, "스택 카드 선택");
+
+    /// <summary>게임이 한 걸음 나아갔다 = 기다리던 선택이 끝났다.</summary>
+    private void HandleAnyProgress(Card card, Player owner, ZoneType from, Player target, ZoneType to)
+        => HideOpponentWait();
+
+    // ─── 상대 대기 안내 ────────────────────────────────────────────────
+    //
+    // 상대가 고르는 동안 이쪽 화면은 멈춘다. 왜 멈췄는지 상대 보드 쪽에 적어 둔다.
+    //
+    // ★ "답변이 끝났다"는 알림은 없다. 대신 <b>게임이 진행됐다는 신호</b>로 내린다 —
+    //   카드가 움직였거나, 페이즈가 바뀌었거나, 로그가 한 줄 늘었거나, 내 차례가 왔거나.
+    //   그 신호를 하나도 못 받는 경우를 대비해 제한 시간도 함께 둔다.
+
+    [Tooltip("상대 대기 안내가 스스로 사라지기까지의 시간(초). 0 이하면 제한 시간 규칙을 따른다.")]
+    public float opponentWaitMaxSeconds = 0f;
+
+    private float _opponentWaitDeadline = -1f;
+
+    private static string OpponentWaitMessage(string label)
+        => $"상대가 {label} 중…";
+
+    /// <summary>상대가 무언가 고르는 중임을 알린다. 게스트 어댑터도 이걸 부른다.</summary>
+    public void ShowOpponentWait(string message)
+    {
+        EnsureUI();
+        if (_view == null || _view.opponentWaitText == null) return;
+
+        float limit = opponentWaitMaxSeconds > 0f
+            ? opponentWaitMaxSeconds
+            : GameRules.ChooseWaitTime / 1000f;
+
+        _opponentWaitDeadline = limit > 0f ? Time.unscaledTime + limit : -1f;
+
+        _view.opponentWaitText.text = message;
+        if (!_view.opponentWaitText.gameObject.activeSelf)
+            _view.opponentWaitText.gameObject.SetActive(true);
+    }
+
+    public void HideOpponentWait()
+    {
+        _opponentWaitDeadline = -1f;
+
+        if (_view == null || _view.opponentWaitText == null) return;
+        if (_view.opponentWaitText.gameObject.activeSelf)
+            _view.opponentWaitText.gameObject.SetActive(false);
     }
 
     private void Update()
     {
+        // 진행 신호를 하나도 못 받는 경우를 대비한 안전장치.
+        if (_opponentWaitDeadline >= 0f && Time.unscaledTime >= _opponentWaitDeadline)
+            HideOpponentWait();
+
         if (_inputDeadline < 0f) return;
 
         if (Time.unscaledTime >= _inputDeadline)
@@ -340,6 +416,8 @@ public class GameStatusPanelUI : MonoBehaviour
 
     private void HandleGameSet(Player winner)
     {
+        HideOpponentWait();
+
         Player human = ResolveHuman();
         bool humanWon = human != null && ReferenceEquals(winner, human);
 

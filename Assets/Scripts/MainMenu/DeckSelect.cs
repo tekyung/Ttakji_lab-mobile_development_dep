@@ -7,7 +7,7 @@ public class DeckSelector : MonoBehaviour
 {
     public TMP_Dropdown mainDeckDropdown; // 메인 화면에 있는 그 드롭다운 연결
 
-    private const string PREF_KEY = "SelectedDeckName"; // 저장할 때 쓸 이름표
+    // ★ 키는 PlayerStorage가 정한다 — 한 PC에서 두 클라이언트를 띄울 때 칸이 갈려야 한다.
 
     void Start()
     {
@@ -60,7 +60,7 @@ public class DeckSelector : MonoBehaviour
         mainDeckDropdown.AddOptions(options);
 
         // 5. [중요] 지난번에 골랐던 덱 자동 선택해주기
-        string lastSelectedDeck = PlayerPrefs.GetString(PREF_KEY, ""); // 저장된 거 있니?
+        string lastSelectedDeck = PlayerStorage.GetSelectedDeck(); // 저장된 거 있니?
 
         int targetIndex = 0;
         if (!string.IsNullOrEmpty(lastSelectedDeck))
@@ -88,7 +88,6 @@ public class DeckSelector : MonoBehaviour
         if (selectedName == "덱 없음") return;
 
         // "SelectedDeckName"이라는 이름으로 컴퓨터에 기억시킴!
-        PlayerPrefs.SetString(PREF_KEY, selectedName);
-        PlayerPrefs.Save();
+        PlayerStorage.SetSelectedDeck(selectedName);
     }
 }

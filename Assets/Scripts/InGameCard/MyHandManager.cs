@@ -34,7 +34,7 @@ public class MyHandManager : MonoBehaviour
     private void LoadDeckFromJSON()
     {
         // 1. 메인 화면에서 저장했던 덱 이름 가져오기
-        string deckName = PlayerPrefs.GetString("SelectedDeckName", "");
+        string deckName = PlayerStorage.GetSelectedDeck();
 
         if (string.IsNullOrEmpty(deckName) || deckName == "덱 없음")
         {

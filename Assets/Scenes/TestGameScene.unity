@@ -9846,6 +9846,7 @@ MonoBehaviour:
   p1SubSlot: {fileID: 554395891}
   p2MainSlot: {fileID: 1300650981}
   p2SubSlot: {fileID: 1435478289}
+  usedMaterial: {fileID: 0}
 --- !u!1 &1961398768
 GameObject:
   m_ObjectHideFlags: 0
@@ -11128,6 +11129,22 @@ PrefabInstance:
     - target: {fileID: 3294375935466435639, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
       propertyPath: m_fontSizeBase
       value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 4210077318005512002, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 4210077318005512002, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -104
+      objectReference: {fileID: 0}
+    - target: {fileID: 4210077318005512004, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
+      propertyPath: m_fontSize
+      value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 4210077318005512004, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 4945164988917246727, guid: 40c513fdf3a4a20448a5c70947cd56dc, type: 3}
       propertyPath: m_fontSize

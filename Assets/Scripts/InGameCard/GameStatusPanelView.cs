@@ -37,6 +37,9 @@ public class GameStatusPanelView : MonoBehaviour
     public TextMeshProUGUI logText;
 
     [Header("결과 오버레이")]
+    [Tooltip("상대가 무언가 고르는 동안 띄울 안내. 상대 보드 쪽(화면 위) 가운데에 둔다.")]
+    public TextMeshProUGUI opponentWaitText;
+
     [Tooltip("화면 전체 딤. 평소에는 꺼 둔다.")]
     public GameObject overlay;
 

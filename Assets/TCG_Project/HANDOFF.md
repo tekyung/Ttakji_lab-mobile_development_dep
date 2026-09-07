@@ -1,7 +1,7 @@
 ﻿# TCG_Project 작업 인수인계 문서
 
 최초 작성일: 2026-02-28  
-최종 수정일: 2026-09-03 (덱 빌더 정리 · 모바일 대응 · 게스트 화면 · UI 크기 조정)
+최종 수정일: 2026-09-07 (관전 종료 · 상대 대기 안내 · 용병 흑백화 · **커스텀 매칭 서버 연결** · 닉네임)
 목적: 새 AI가 현재까지의 작업을 이어받아 계속 진행하기 위한 컨텍스트 제공 (로직 레이어 + Unity 보드 UI)
 
 > **2026-08-16 갱신 범위**  
@@ -458,7 +458,8 @@ Assets/Scripts/
 │   ├── CardMoveTween.cs       ← WorldToScreenPoint → ScreenPointToLocalPointInRectangle 후 anchored lerp
 │   ├── CardBoardInvariantChecker.cs ← SetZone/Deck/Graveyard 엔진↔hierarchy 대조
 │   ├── CharacterFieldUI.cs    ← ⭐ 용병 슬롯 4칸 표시. OnCharacterFieldSync / OnCharacterSlotUpdated 구독
-│   │                            능력 사용 시 카드가 180° 회전 (CharacterFieldBroadcast 규칙)
+│   │                            회전은 보드 방향만(아래 0° / 위 180°). 능력 사용은 흑백으로 표시한다
+│   │                            (AbilityUsed → Resources/Materials/UIGrayscale). snapshot.RotationZ 는 쓰지 않는다
 │   ├── GameSceneBoardBinder.cs ← GameScene 서버 흐름 유지, 존 트랜스폼 자동 배선
 │   ├── PlayerUIManager.cs     ← Human: 선택은 InstanceId만. reparent는 OnCardMove
 │   │                            OnGameStart에서 myLifeText를 player.LifeTokens로 동기화
@@ -487,6 +488,12 @@ Assets/Scripts/
 
 **씬 (`Assets/Scenes/`)**: `TestGameScene`(로컬 봇 매치 검증), `GameScene`(서버 매치), `BuildDeck`,
 `MainMenu`, `MainMenuPopupUI`, `TestServerConnect`, `server ui`, `SampleScene`
+
+**셀이더·머티리얼**: `Assets/Shaders/UIGrayscale.shader` + `Assets/Resources/Materials/UIGrayscale.mat` —
+이 프로젝트의 **유일한 커스텀 셀이더**다(렌더 파이프라인은 빌트인).
+`UI/Default`를 그대로 베낀 뒤 프래그먼트 끝에서 채도만 0으로 만든다 —
+스텐실·클리핑(`_ClipRect`)·알파 컷을 빼면 Mask 안에서 잘리지 않거나 정렬이 어긋난다.
+능력을 쓴 용병 카드에만 걸린다(`CharacterFieldUI`).
 
 **매치 진입점 3종 (모두 `PlayerSetupData` 경유)**
 
@@ -4201,6 +4208,7 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 
 | 항목 | 위치 | 내용 | 우선순위 |
 | ---- | ---- | ---- | -------- |
+| **Pipeline 서버가 릴리스에 실린다** | `ProjectSettings/Packages/com.unity.pipeline/RuntimePipelineConfig.json` | `enableInBuilds: true`. `RuntimePipelineDriver.Start()`의 `StartServer()`는 **`#if DEVELOPMENT_BUILD` 안에 없다** — 릴리스 빌드에도 `http://+:7900/`(모든 인터페이스) 서버가 뜨고 `eval`로 임의 코드가 돌아간다. 데스크탑은 Mono+스트리핑 Disabled라 특히 완전히 동작한다. **출시 전 `false`** — 루트 `README.md`의 "공통 · 출시 전" 표 참조 | **최상** |
 | 예/아니오 UI 사양 미정 | `HumanChoiceDialogUI` | 카드 선택 패널을 재사용한 **스톱갭**. 디자인 확정 후 교체 필요 | 중 |
 | .NET 9 런타임 부재 | 개발 PC | 콘솔 빌드는 통과하나 실행 불가. `DOTNET_ROLL_FORWARD=LatestMajor`로 우회 중. **RL 확장 전에 `RollForward` 속성 추가 또는 TFM 변경으로 정리 필요** | 중 |
 | 특수문자 폴백이 OS 폰트 의존 | `UiFontResolver.EnsureSymbolFallback` | 안드로이드 실기에서 후보 목록에 없는 폰트만 있으면 다시 ㅁ로 깨진다. 확실히 하려면 기호용 폰트 에셋을 프로젝트에 포함할 것 | 중 |
@@ -4208,6 +4216,593 @@ Phase 18 이후 HANDOFF.md가 업데이트되지 않은 상태에서 아래 기�
 | `Canvas/Buttons`가 UI가 아님 | `BuildDeck` 씬 | 일반 `Transform`이라 자식 앵커가 화면 크기를 따라가지 못한다. 16:9가 아닌 화면에서 어긋날 수 있다. 고치려면 UI 빈 오브젝트로 갈아 끼우고 자식을 옮겨야 해 배치가 한 번 틀어진다 | 중 |
 | 미러의 유령 BattleManager | `TCG_Project/Scripts/Managers/BattleManager.cs` | 동기화·컴파일 모두 제외된 옛 사본이 남아 혼란을 준다. sync 스크립트 `$deleteFromMirror`에 추가하면 정리됨 | 낮음 |
 | 줄바꿈 혼재 | 전체 | `.cs` 기준 CRLF 43 / LF 57. `.editorconfig`에서 일부러 규정하지 않음(강제 시 diff 오염). 정리하려면 `.gitattributes`와 함께 별도 작업 | 낮음 |
+
+### [2026-09-07 후속 2] 두 사람이 같은 덱으로 시작하던 문제 + 신원과 이름 분리 ✅
+
+커스텀 매칭 실기 중 **서로 다른 덱을 골랐는데 둘 다 같은 덱으로 대전이 시작**됐다.
+
+#### ① 원인은 서버가 아니라 저장 위치였다
+
+서버 쪽은 결백했다. `UploadDeck(sessionRoom, myRole, …)`으로 `decks/HOST`·`decks/GUEST`에 나눠 올리고
+시작할 때 각각 따로 읽는다. **역할 분리는 정상이고, 올라간 내용이 애초에 같았다.**
+
+덱은 이 경로로 정해진다.
+
+```
+session_manage.HandleGameStarted()
+  → PlayerPrefs.GetString("SelectedDeckName")
+  → DeckStorage.GetDeckPath(그 이름)
+  → GameData.MyDeck → UploadDeck(...)
+```
+
+그런데 이 저장소들은 **클라이언트가 아니라 기기에 붙어 있다.**
+
+| 저장소 | 실제 위치 |
+| ---- | ---- |
+| `PlayerPrefs` | `HKCU\Software\{companyName}\{productName}` |
+| 파일 전부 | `{persistentDataPath}` = `…/LocalLow/{companyName}/{productName}` |
+
+**한 PC에서 에디터 + 빌드로 테스트하면 둘이 같은 곳을 본다.**
+`SelectedDeckName` 칸이 하나뿐이라 나중에 고른 쪽이 두 클라이언트 모두의 값이 되고,
+`HandleGameStarted()`는 카운트다운 직후에 그 값을 읽으므로 **양쪽이 같은 시점의 같은 값**을 읽는다.
+`profile.json`도 공유되므로 **닉네임과 태그까지 똑같아진다.**
+
+##### 처리 — `PlayerStorage` (신규)
+
+실행 인자 `-profile <이름>` 으로 클라이언트를 가른다.
+
+```
+빌드를  Game.exe -profile B  로 띄우면 → 에디터 = A, 빌드 = B
+```
+
+에디터는 인자를 줄 수 없으므로 **기본(접미사 없음)**으로 남는다. 그래서 둘이 저절로 갈린다.
+
+가르는 것은 **"무엇을 골랐는가"와 "내가 누구인가"뿐**이다 —
+`SelectedDeckName` 키와 `profile.json` 파일 이름에 꼬리표가 붙는다.
+**덱 파일 자체는 일부러 공유한다.** 덱은 공용 자료실이고,
+갈라 버리면 빌드 쪽에서 덱을 처음부터 다시 만들어야 한다.
+
+흩어져 있던 `"SelectedDeckName"` 문자열 다섯 자리를 `PlayerStorage` 한 곳으로 모았다
+(`DeckSelect`·`DeckBuilderManager`·`MyHandManager`·`CustomRoomUI`·`session_manage`).
+
+#### ② 표시 이름을 신원으로 쓰고 있었다 — 더 위험한 문제
+
+조사하다 찾았다. `firebase_network.ExitSession`이 **이름으로 역할을 가른다.**
+
+```csharp
+if (myID == hostId)        → 방을 통째로 삭제
+else if (myID == guestId)  → guest 칸만 비움
+```
+
+`myID`는 내가 앞 라운드에서 `PlayerProfile.DisplayName`으로 바꿔 둔 값이었다.
+**이름이 겹치면 게스트가 나가려 할 때 서버가 호스트로 오인해 방을 통째로 지운다.**
+[퇴장]도 같은 이유로 어긋난다. 같은 기기 테스트에서는 100% 재현되고,
+다른 기기라도 "같은 닉네임 + 같은 태그"면 똑같이 깨진다.
+
+##### 처리 — 신원과 이름을 가른다
+
+| | 값 | 쓰는 곳 |
+| ---- | ---- | ---- |
+| **신원** | `PlayerProfile.PlayerId` — 설치본마다 만드는 GUID | 세션의 `host`/`guest`, `ExitSession`, `KickGuest` |
+| **이름** | `PlayerProfile.DisplayName` — `이름#1234` | 세션의 `hostName`/`guestName`, 화면 |
+
+`session_data`에 `hostName`·`guestName`을 더하고, `TryJoinSession`이 신원과 이름을 함께 쓴다.
+호스트는 `GetPlayerName(code, "guestName")`으로 사람이 읽을 이름을 받아 띄운다.
+
+> ⚠️ **`playerId`가 없던 옛 프로필**은 `Load()`가 채워 주기만 하고 저장하지 않아
+> **실행할 때마다 새 GUID가 나왔다.** 신원이 될 수 없다. 채운 값을 곧바로 파일에 남기도록 고쳤다.
+
+#### ③ 태그(#숫자 4자리)의 의미 — 확인 결과
+
+| 물음 | 답 |
+| ---- | ---- |
+| 유저끼리 다른가 | **기기가 다르면 다르다.** `Random.Range(1000, 10000)`이고 프로젝트에 `Random.InitState`가 없어 유니티가 실행마다 무작위 시드를 준다 |
+| 지금 테스트에서 같았던 이유 | 한 PC의 두 클라이언트가 **같은 `profile.json`**을 읽었다 |
+| 얼마나 믿을 수 있나 | 9000가지뿐이고 **서버가 유일성을 검사하지 않는다** |
+
+**태그는 표시용 구분자이지 신원이 아니다.** 같은 닉네임을 고른 두 사람을 화면에서 가르는 용도다.
+신원은 ②의 `playerId`가 맡는다. 그래서 태그가 겹쳐도 서버 동작은 깨지지 않는다.
+
+#### 덤 — 방을 만들자마자 "상대가 방을 나갔습니다"
+
+`ValueChanged`는 **리스너를 붙이는 순간에도 한 번 발화한다.**
+갓 만든 방은 `guest`가 빈 값이라 `HandleGuestLeft`가 곧바로 돌았다. 아무도 온 적이 없는데.
+`opponentId`가 비어 있으면 그냥 돌아가도록 가드를 넣었다.
+
+#### 실기 확인
+
+| 확인 | 결과 |
+| ---- | ---- |
+| `PlayerId` ≠ `DisplayName` | ✅ `2eaf8552…` / `Micheal#3278` |
+| `playerId`가 파일에 남는가 | ✅ `profile.json`에 기록됨 (다음 실행에도 같은 신원) |
+| 서버 `host` | ✅ **GUID**가 올라간다 |
+| 서버 `hostName` | ✅ `Micheal#3278` |
+| 다른 이름의 게스트 입장 | ✅ 호스트 화면에 **`상대편#7777`** (GUID가 아니라 이름) |
+| [나가기] | ✅ 서버에서 방이 사라짐 · 남은 대기방 0 |
+| 콘솔 | ✅ 에러 0건 |
+
+#### 후속 — 클라이언트 구분을 설치 폴더에서 자동으로
+
+`-profile` 인자는 동작했지만 **매번 붙여야 했다.** "빌드 폴더마다 종속되게 하자"는 요청을 받았다.
+
+##### 파일을 빌드 폴더에 두는 방식은 채택하지 않았다
+
+빌드 폴더는 곧 `Application.dataPath`인데, **안드로이드에서 그것은 APK 내부**다.
+읽기 전용인 데다 일반 디렉터리도 아니라 저장이 통째로 실패한다 —
+2026-08-17에 이미 겪고 `persistentDataPath`로 옮긴 사고다(`DeckStorage.cs` 상단 주석).
+Windows 테스트에서만 되고 **정작 출시 대상인 모바일에서 죽는다.**
+
+##### 대신 저장 위치는 그대로 두고 이름표만 폴더에서 뽑는다
+
+```
+1. -profile <이름> 인자가 있으면  → 그것을 쓴다 (가장 세다)
+2. 없으면
+   · 스탠드얼론 빌드            → 설치 폴더에서 자동 생성
+   · 에디터 / 모바일 / 그 밖    → 기본 칸(빈 문자열)
+```
+
+결과는 요청과 같다 — `C:\TestA\` 와 `C:\TestB\` 에 풀면 **인자 없이** 다른 사람이 된다.
+
+이름표는 `_<부모폴더이름>_<8자리 해시>` 꼴이다(`profile_TestA_a3f91c2b.json`).
+폴더 이름은 **사람이 읽으려고**, 해시는 **겹침을 막으려고** 넣는다 —
+`C:/a/TestA` 와 `D:/b/TestA` 는 폴더 이름이 같아도 갈려야 한다.
+
+##### 제외한 두 곳
+
+| | 왜 |
+| ---- | ---- |
+| **모바일** | 안드로이드 APK 경로는 `/data/app/<패키지>-<임의문자>/base.apk` 꼴이라 **업데이트하면 임의 부분이 바뀐다.** 경로로 이름표를 만들면 업데이트마다 닉네임과 덱 선택이 리셋된다 |
+| **에디터** | 기본 칸에 남겨야 지금 쓰던 프로필이 보존된다. 빌드들과는 어차피 갈린다 |
+
+##### ⚠️ `string.GetHashCode()`를 쓰지 않았다
+
+런타임/프로세스마다 값이 달라질 수 있어 **실행할 때마다 다른 이름표**가 나온다 —
+그러면 켤 때마다 다른 사람이 된다. 직접 구현한 **FNV-1a**로 고정했다.
+(`playerId`가 매번 새로 생기던 버그를 바로 앞에서 겪은 것과 같은 종류다)
+
+경로는 비교 전에 정규화한다 — `\` → `/`, 끝 구분자 제거, 소문자화.
+
+##### 확인 (에디터에서, 빌드 없이)
+
+`DeriveSuffixFromPath`를 public으로 두어 가짜 경로로 검사할 수 있게 했다.
+
+| 확인 | 결과 |
+| ---- | ---- |
+| 여러 번 불러도 같은 값 | ✅ `_testa_6b7b75e2` |
+| `C:\TestA\Game_Data\` = `c:/testa/game_data` | ✅ 같은 값 |
+| `C:/a/TestA` vs `D:/b/TestA` | ✅ `_testa_33ee9a64` / `_testa_12606e68` — 갈린다 |
+| 파일 이름·레지스트리에 안전한 글자만 | ✅ |
+| 빈 입력 · 한글 폴더 | ✅ 안 죽는다 (영숫자가 없으면 해시만) |
+| **에디터 Suffix** | ✅ `""` — 기존 프로필·덱 선택 보존 |
+
+> 스탠드얼론 분기(`#if !UNITY_EDITOR && UNITY_STANDALONE`)는 **에디터에서 컴파일되지 않으므로
+> 실제 빌드로만 검증된다.** 한 줄짜리 호출이라 위험은 낮지만, 빌드 테스트에서 함께 본다.
+
+`PlayerStorage.cs` 한 파일만 고쳤다 — 공개 모양(`Suffix`·`SelectedDeckKey`·`FileSuffix`·
+`GetSelectedDeck`·`SetSelectedDeck`)이 그대로라 이걸 쓰는 다른 파일은 손대지 않았다.
+
+#### 바뀐 파일
+
+| 파일 | 내용 |
+| ---- | ---- |
+| `Assets/Scripts/Utils/PlayerStorage.cs` | **신규** — 클라이언트 저장 칸 분리. **설치 폴더에서 자동** 생성하고 `-profile` 로 덮어쓴다 |
+| `Assets/Scripts/Utils/PlayerProfile.cs` | `playerId`(GUID) 추가 · 파일 이름에 꼬리표 · 채운 값 즉시 저장 |
+| `Assets/Scripts/Server Scripts/session_data.cs` | `hostName` · `guestName` |
+| `Assets/Scripts/Server Scripts/firebase_network.cs` | `TryJoinSession`이 이름도 기록 · `GetPlayerName` |
+| `Assets/Scripts/Server Scripts/session_manage.cs` | 신원/이름 분리 · `opponentId` · 리스너 첫 발화 가드 |
+| `DeckSelect` · `DeckBuilderManager` · `MyHandManager` · `CustomRoomUI` | `PlayerStorage` 경유로 통일 |
+
+### [2026-09-07 후속] 커스텀 매칭 — UI를 서버에 연결 ✅
+
+메인 메뉴의 [커스텀 매칭]은 **UI만 완성돼 있고 서버와는 한 줄도 이어져 있지 않았다.**
+`CustomRoomUI.cs`에 `session_manage` / `GameData` / `firebase` 참조가 **0개**였다.
+
+| 겉보기 | 실제 |
+| ---- | ---- |
+| 방 번호 `A3F9K2` 표시 | `GenerateRoomCode()`가 만든 **로컬 난수**. 서버에 그 방은 없다 |
+| AI 드롭다운 | `playerCount` 숫자만 바꿨다 — 사실상 [시작] 버튼을 켜는 스위치 |
+| [시작] | `LoadScene("TestGameScene")`. `GameData.SessionCode`를 안 채우니 **로컬 봇전**이 시작됐다 |
+| 방 참가 | `BtnEnterRoom`에 onClick **0개**, `InputRoomCode`를 읽는 코드가 없었다 |
+| `PopupRoomNotFound` / `PopupRoomFull` | 켜는 코드가 **아무 데도 없었다** |
+
+정작 서버에는 필요한 것이 다 있었다 — `OnClickCreatePrivate()`·`OnClickJoin()`·
+`OnClickExitSession()`·`OnClickSessionStart()`. **아무도 부르지 않았을 뿐이다.**
+
+#### 만든 흐름
+
+```
+호스트 [방 만들기] → 서버에 PRIVATE/WAITING 방 → 4자리 번호 표시 → 무기한 대기
+게스트 [방 찾기] → 번호 입력 → 입장 → 같은 방 화면
+호스트가 닉네임을 보고 → [시작] / [퇴장] / [나가기]
+```
+
+`RandomMatchUI`가 이미 검증된 본보기라 **그 패턴을 그대로 따랐다** — `[SerializeField] session_manage`,
+콜백 대입, `LobbyUI.CloseMatchMode()`로 화면 막 걷기.
+
+#### ① 닉네임이 아예 없었다 — 먼저 만들어야 했다
+
+호스트가 "들어온 사람"을 보고 판단하려면 이름이 있어야 하는데,
+서버에 올라가던 값은 `session_manage.GetOrGenerateID()`의 폴백
+`Random.Range(0, 1000000)` — **"482913" 같은 숫자**였다.
+`session_ui`는 `server ui` 디버그 씬에만 있어서 메인 메뉴는 **항상 이 폴백을 탔다.**
+
+| 파일 | 역할 |
+| ---- | ---- |
+| `Assets/Scripts/Utils/PlayerProfile.cs` | `persistentDataPath/profile.json`. `DeckStorage`와 같은 이유로 `Application.dataPath`를 쓰지 않는다 |
+| `Assets/Scripts/NicknameUI.cs` | 첫 실행 자동 열기 · 수정 · **이름을 정하기 전에는 창이 닫히지 않는다** |
+
+이름은 `이름#1234` 꼴이고 **꼬리표는 최초 1회만 뽑아 고정**한다 — 이름을 고쳐도 유지되므로
+상대에게 계속 같은 사람으로 보인다. `GetOrGenerateID()`도 이 이름을 쓰게 고쳐,
+**랜덤 매칭도 함께** 제대로 된 이름을 얻는다.
+
+#### ② 커스텀 방은 수명 규칙이 다르다
+
+랜덤 매칭용으로 만들어진 두 장치가 커스텀 방과 충돌했다. `isCustomRoom` 플래그로 건너뛴다.
+
+| 장치 | 왜 꺼야 하나 |
+| ---- | ---- |
+| `AutoDestroySession` (`session_time_limit` 50초) | 번호를 불러 주고 기다리는 방인데 **50초 뒤 방이 사라진다** |
+| `StartReadyWatchdog` (20초) | "매칭 후 20초 안에 시작 안 되면 끊긴 것"이라는 가정. 커스텀에서는 **호스트가 판단하는 시간**이라 근거가 없다 |
+
+연결이 끊긴 경우는 `ArmDisconnectCleanup`이 이미 맡으므로 유령 방은 남지 않는다.
+
+#### ③ 조사하다 찾은 서버 결함 셋
+
+| 결함 | 증상 | 처리 |
+| ---- | ---- | ---- |
+| **`JoinSession`이 자리를 안 본다** | 방이 **있는지만** 확인하고 `guest`를 덮어썼다 → **제3자가 원래 게스트를 밀어낼 수 있었다** | `TryJoinSession`이 `JoinResult`(Success/NotFound/Full/Failed)를 돌려준다. 그제야 `PopupRoomNotFound`·`PopupRoomFull`이 쓸모를 얻었다 |
+| **게스트 이탈을 아무도 못 본다** | `ListenForGuest`는 값이 **비지 않았을 때만** 발화했다. `ListenForSessionExit`은 **방이 통째로 사라질 때만** 발화한다 → 그 사이가 비어 **퇴장을 양쪽 다 몰랐다** | `OnGuestLeft` 이벤트 추가. 게스트도 `ListenForGuest`를 걸어 자기가 쫓겨난 것을 안다 |
+| **방 번호 충돌** | `CreateSession`은 `SetRawJsonValueAsync`라 **무조건 덮어쓴다.** 네 자리(9000가지)라 같은 번호가 나오면 **남의 방이 조용히 사라졌다** | `SessionExists`로 확인하고 다시 뽑는다(최대 10회) |
+
+#### ④ 퇴장 기능이 만든 새 위험 — 씬 이중 로드
+
+`HandleGuestJoined`가 `ListenForGameStart`를 부르는데, 이것은 ValueChanged 핸들러를 **더하기만 한다.**
+퇴장 → 재입장을 반복하면 같은 세션에 핸들러가 겹쳐 붙어 `OnGameReady`가 여러 번 발화하고,
+결국 `HandleGameStarted` 코루틴이 겹쳐 **씬을 두 번 로드**한다.
+`gameStartListenerArmed` 플래그로 **세션당 한 번만** 걸도록 막았다.
+
+#### ⑤ 씬 작업
+
+| 대상 | 작업 |
+| ---- | ---- |
+| `PopupCreateRoom/Panel/BtnKickGuest` | **신규** — [나가기]를 복제해 [퇴장]으로 |
+| `TmpAIDropdown` | **꺼 뒀다** (2인 대전이 확정돼 의미가 없다. 삭제는 안 했다 — 봇 옵션이 필요해지면 되살린다) |
+| `PopupNickname` + `Canvas/Nickname` | **신규** (`PopupFindRoom` 구조를 본떴다) |
+| `BtnEnterRoom` | onClick **0개 → `JoinRoom`** |
+| `BtnLeaveRoom` | `SetActive` 두 개 → **`LeaveRoom`** (예전에는 창만 닫고 **서버의 방은 그대로 남았다**) |
+
+> `PopupCreateRoom`은 호스트와 게스트가 **함께 쓴다.** `PlayerLeft`/`PlayerRight` 칸이 이미 있었다.
+> [시작]·[퇴장]은 호스트일 때만 보인다. 상대 덱 이름은 비워 둔다 — 덱은 대전 씬에 들어가서야 올라간다.
+
+#### 실기 확인 (Unity CLI로 Play Mode를 몰아 실제 Firebase에 붙였다)
+
+| 확인 | 결과 |
+| ---- | ---- |
+| 첫 실행 닉네임 창 자동 열림 | ✅ |
+| 저장·재사용·이름 변경 시 꼬리표 유지 | ✅ `테스트호스트#3278` |
+| 서버에 방 생성 | ✅ **4자리 `3546`** (로컬 난수 6자리가 아니다) |
+| 게스트 입장 감지 | ✅ 이름 표시 · `2 / 2` · [시작]·[퇴장] 활성화 |
+| **자리 찬 방에 제3자 침입** | ✅ **거부** — 기존 게스트가 밀려나지 않았다 |
+| **[퇴장]** | ✅ 게스트만 빠지고 **방은 남아 다시 대기** |
+| **퇴장 후 재입장** | ✅ 다음 사람이 정상 입장 (지속 리스너가 살아 있다) |
+| **[나가기]** | ✅ 서버에서 방이 사라졌다 (`SessionExists = False`) |
+| **랜덤 매칭 회귀** | ✅ 커스텀이 콜백을 반납한 뒤 랜덤이 정상적으로 가져가고 돌려준다 |
+| 콘솔 | ✅ 에러 0건 |
+
+> ⚠️ **검증 중 에디터를 한 번 멈춰 세웠다.** `SessionExists(...).GetAwaiter().GetResult()`로
+> 메인 스레드에서 파이어베이스 결과를 기다린 것이 원인이다 — 그 작업은 완료되려면 메인 스레드가 필요하다.
+> **`eval`에서 파이어베이스 Task를 블로킹으로 기다리지 말 것.** `ContinueWith`로 로그를 남기고
+> `unity cmd console`로 읽으면 된다.
+
+#### 실기 확인에서 나온 것 — [확인]·[입장]이 눌리지 않았다
+
+두 버튼이 **아무 반응도 하지 않았다.** 눌린 티도 안 났다.
+
+원인은 배선이 아니라 **버튼 자체가 꺼져 있었다.**
+
+```
+BtnEnterRoom       | interactable = False   ← 씬에 원래 그렇게 저장돼 있었다
+BtnConfirmNickname | interactable = False   ← 위를 복제해서 만들었으니 따라왔다
+```
+
+`BtnEnterRoom`은 예전부터 `interactable = false`였다. onClick이 하나도 없어 아무 일도 못 하던 버튼이라
+누군가 회색으로 꺼 둔 것으로 보인다. **`PopupNickname`을 `PopupFindRoom`에서 복제해 만들면서
+그 상태까지 그대로 물려받았다.** uGUI는 `interactable = false`인 버튼의 클릭을 **레이캐스트 단계에서 그냥 버린다** —
+눌린 표시도, 콜백도 없다. 증상이 정확히 그랬다.
+
+둘 다 켜서 해결했다. 씬 전체를 훑어 `interactable = false`인 버튼은 이 둘뿐이었고,
+onClick이 0개인 버튼도 이제 없다.
+
+> ⚠️ **복제로 UI를 만들 때는 `interactable`을 확인할 것.** 위치·크기·문구는 눈에 보이지만
+> 이 값은 보이지 않는다.
+
+##### 조사 중 헛짚은 것 두 가지 (기록용)
+
+1. **"다른 UI가 가린다"** — 레이캐스트를 쏘니 버튼 대신 `Canvas/Start_Bot`이 잡혔다. 가려짐이 아니라
+   **창을 켠 바로 그 프레임에 레이캐스트를 쏜 탓**이었다. 그 프레임에는 `Graphic.depth`가 아직 `-1`이라
+   `GraphicRaycaster`가 통째로 건너뛴다. 한 프레임 뒤에 재니 `depth=19`로 정상적으로 맨 앞에 잡혔다.
+   **UI 레이캐스트를 코드로 검사할 때는 켠 프레임과 재는 프레임을 나눌 것.**
+2. 그 잘못된 레이캐스트 결과(`Start_Bot`)를 그대로 눌러 **봇전 씬으로 넘어가 버렸다.**
+   검사 스크립트가 레이캐스트로 찾은 대상을 무턱대고 누르지 않게 할 것.
+
+##### 진짜 클릭 경로로 확인한 결과
+
+레이캐스트로 대상을 찾아 그것을 누르는, 실제 마우스와 같은 경로로 확인했다.
+
+| 확인 | 결과 |
+| ---- | ---- |
+| [이름] → 닉네임 창 | ✅ 열린다 |
+| [확인] | ✅ 레이캐스트가 이 버튼을 고르고, 눌러서 저장·창 닫힘까지 |
+| [입장] | ✅ 레이캐스트가 이 버튼을 고른다 |
+| 없는 번호 `0000` 입장 | ✅ **`PopupRoomNotFound`가 뜬다** — 이 창이 실제로 쓰인 첫 사례다 |
+| 실패 후 방 찾기 창 | ✅ 열린 채로 남아 번호를 고쳐 다시 시도할 수 있다 |
+| 콘솔 | ✅ 에러 0건 |
+
+#### 바뀐 파일
+
+| 파일 | 내용 |
+| ---- | ---- |
+| `Assets/Scripts/Utils/PlayerProfile.cs` | **신규** |
+| `Assets/Scripts/NicknameUI.cs` | **신규** |
+| `Assets/Scripts/CustomRoomUI.cs` | **전면 재작성** |
+| `Assets/Scripts/Server Scripts/session_manage.cs` | 게터 · 콜백 4종 · `KickGuest` · `JoinRoomByCode` · 커스텀 모드 · 리스너 중복 방지 |
+| `Assets/Scripts/Server Scripts/firebase_network.cs` | `OnGuestLeft` · `TryJoinSession` · `SessionExists` |
+| `Assets/Scripts/Server Scripts/session_data.cs` | `JoinResult` |
+| `Assets/Scenes/MainMenu.unity` | [퇴장] · 닉네임 UI · onClick 9개 · 필드 17개 |
+
+엔진(`Assets/TCG_Project/`)은 건드리지 않았다 → 콘솔 회귀는 그대로다.
+
+#### 남은 것
+
+- 배치가 임시값이다 — `BtnKickGuest`, `PopupNickname`, `Canvas/Nickname`은 인스펙터에서 자리를 잡아야 한다
+- **두 기기로 실제 대전까지 가 보지 않았다.** 게스트 입장은 서버 쪽에서 흉내 냈다
+- `TxtDeck2`(상대 덱 이름)는 비워 둔 채다
+
+### [2026-09-07] 관전 종료 · 상대 대기 안내 · 용병 사용 표시를 흑백으로
+
+세 가지를 손봤고, 조사 중에 **온라인 버그를 하나 찾아 같이 고쳤다.**
+
+#### ⚠️ 먼저 — 게스트가 호스트에게 온 질문에 답하고 있었다
+
+`EventService`는 카드 선택·예/아니오 요청을 **양쪽 플레이어 것 모두** `events` 노드로 방송한다.
+누구에게 묻는지는 `PlayerName`(`"HOST"` / `"GUEST"`)에 적혀 있다.
+
+그런데 `OnlineGuestBoardAdapter`는 그 `PlayerName`을 **대상 확인에 쓰지 않았다** — 지문 계산에만 썼다.
+그래서 **호스트에게 물은 질문에도 게스트가 창을 띄우고 답을 보냈다.** 호스트도 자기 화면에서 답하므로
+**먼저 도착한 쪽이 이겼다.** 카드 선택이 엉뚱하게 결정될 수 있는 자리다.
+
+```csharp
+private static bool IsForMe(string playerName)
+    => string.IsNullOrEmpty(playerName) || playerName == GameData.MyRole;
+```
+
+`HandleCardPickRequested` / `HandleOptionalRequested` / `HandleStackRequested` 첫머리에서 이것을 본다.
+남의 것이면 **창을 열지 않고 안내만 띄운다**(아래 ②). 이름이 비어 있으면 예전처럼 받는다 —
+낡은 서버 빌드와 붙어도 죽지 않게 하려는 보수적 기본값이다.
+
+#### ① 봇 vs 봇 관전 — 톱니바퀴로 나간다
+
+관전에는 조작 주체가 없어 `_human`이 null이었고, `SetGearVisible(_human != null)` 탓에
+**톱니바퀴가 아예 뜨지 않았다.** 패널을 열 수 없으니 **중간에 나갈 방법도 없었다.**
+
+| 대상 | 대전 | 관전 |
+| ---- | ---- | ---- |
+| 톱니바퀴 | 뜬다 | **뜬다**(고침) |
+| 덱 격자 | 내 덱 | **p1(아래 보드) 덱** |
+| 제목 | `내 덱 (…)` | `아래 보드 덱 (…)` |
+| 버튼 | `항복` → `정말 항복?` | `관전 종료` → `정말 나갈까요?` |
+| 2차 클릭 | `Surrender()` | `SceneManager.LoadScene(mainMenuSceneName)` |
+
+관전 판정은 **로컬 플레이인데 조작 주체가 없다**이다 —
+`_human == null && !OnlineMatchStarter.IsOnlineSessionActive`. 온라인은 항상 주체가 있어 해당하지 않는다.
+
+두 번 눌러 확인하는 절차(`_surrenderArmed`)와 라벨·색 전환은 **그대로 재사용**했다.
+봇전에는 항복할 주체가 없으므로 게임을 끝내는 것이 아니라 **화면을 떠난다** — 씬을 새로 부르면 보드도 엔진도 정리된다.
+씬 이름은 인스펙터 필드 `mainMenuSceneName`(기본 `"MainMenu"`)이다.
+
+#### ② 상대가 고르는 동안 왜 멈췄는지 알린다
+
+지금까지 상대가 카드를 고르는 몇십 초 동안 이쪽 화면은 **아무 설명 없이 멈춰 있었다.**
+
+**새 컴포넌트를 만들지 않았다.** `GameStatusPanelUI`가 이미 필요한 것을 전부 구독하고 있었다 —
+Require 5종(띄울 신호)과 페이즈·로그·카드 이동·종료(내릴 신호).
+Require를 카운트다운에만 쓰고 `IsMine`이 아니면 버리던 그 `else`를 채웠다.
+
+| 이벤트 | 문구 |
+| ---- | ---- |
+| `OnRequireSetPhaseAction` | 상대가 세트 중… |
+| `OnRequireOpenPhaseAction` | 상대가 공개/폐기 중… |
+| `OnRequireCardPick` | 상대가 카드 N장 선택 중… |
+| `OnRequireOptionalAction` | 상대가 용병 능력 결정 중… |
+| `OnRequireIndirectStackResponse` | 상대가 스택 카드 선택 중… |
+
+**내리는 조건이 까다롭다 — "답변이 끝났다"는 알림이 없기 때문이다.**
+대신 **게임이 한 걸음 나아갔다는 신호**로 내린다: 페이즈 변경 · `OnCardSet` · `OnCardMove` · `OnGameSet`,
+그리고 **나에게 온 Require**(내 차례가 왔다 = 상대가 끝냈다).
+그 신호를 하나도 못 받는 경우를 대비해 **시간 제한**(`GameRules.ChooseWaitTime`)도 함께 둬서
+안내가 화면에 눌어붙지 않게 했다.
+
+표시 자리는 `GameStatusPanelRoot`에 새로 둔 `OpponentWaitText`(상단 중앙, 상대 보드 쪽)이고
+`GameStatusPanelView.opponentWaitText`로 잇는다. **프리팹에 넣었으므로 배치는 인스펙터에서 조절한다.**
+
+#### ③ 용병 사용 표시 — 회전 대신 흑백
+
+##### 회전을 그냥 없애면 안 되는 이유
+
+`CharacterFieldBroadcast.GetRotationZ`에서 회전이 **두 가지를 겸하고 있다.**
+
+```csharp
+float baseZ = isBottom ? 0f : 180f;          // 상대 보드는 원래 뒤집혀 있다
+return used ? (baseZ + 180f) % 360f : baseZ; // 사용하면 여기에 180을 더한다
+```
+
+`180°`가 **위쪽 보드의 정상 방향**이다. 회전을 통째로 없애면 상대 용병이 거꾸로 서지 않게 된다.
+없앨 것은 **`used`가 더하는 180°뿐**이다.
+
+##### 엔진은 건드리지 않았다
+
+화면 표현은 UI의 몫이다. `CharacterFieldUI`가 방향을 직접 계산한다.
+
+```
+회전  = 아래 보드면 0, 위 보드면 180   (snapshot.RotationZ 는 쓰지 않는다)
+흑백  = snapshot.AbilityUsed           (이미 있는데 안 쓰고 있던 필드다)
+```
+
+`CharacterSlotSnapshot.RotationZ`는 **온라인 DTO 호환을 위해 남긴다.** 주석만 현실에 맞게 고쳤다.
+
+##### 덤으로 잡은 것 — p1/p2 판별이 회전값에 기대고 있었다
+
+`CachePlayersFromSnapshots`가 `RotationZ == 0f` / `== 180f`로 위아래를 가렸다.
+**능력을 쓴 용병은 거기에 180이 더해져 있어서**, 이미 쓴 상태로 첫 동기화가 오면 **위아래가 뒤바뀐다.**
+더해진 180을 `AbilityUsed`로 되돌려 원래 방향만 남기도록 고쳤다.
+
+##### 흑백 셰이더
+
+이 프로젝트에 커스텀 셰이더가 하나도 없었고, 렌더 파이프라인은 **빌트인**이다(`m_CustomRenderPipeline: 0`).
+`Image.color` 틴트로는 어둡게만 될 뿐 채도를 못 없앤다.
+
+| 파일 | 내용 |
+| ---- | ---- |
+| `Assets/Shaders/UIGrayscale.shader` | **신규.** `UI/Default`를 그대로 베끼고 프래그먼트 끝에서 채도만 0으로 |
+| `Assets/Resources/Materials/UIGrayscale.mat` | **신규.** 그 셰이더를 쓰는 머티리얼 (`_GrayAmount = 1`) |
+
+**스텐실·클리핑(`_ClipRect`)·알파 컷은 손대지 않았다** — 그걸 빼면 Mask 안에서 잘리지 않거나 정렬이 어긋난다.
+밝기는 Rec. 601 가중치(`0.299, 0.587, 0.114`)를 따른다. 단순 평균을 쓰면 빨강이 너무 밝게 뜬다.
+
+`CharacterFieldUI`에 인스펙터 필드로 잇고, 비어 있으면 `Resources.Load<Material>("Materials/UIGrayscale")`로 찾는다.
+사용함 → `slot.material = grayscale`, 아니면 `slot.material = null`(기본). **빈 칸도 null로 되돌린다** —
+안 그러면 용병이 빠진 자리에 흑백이 남는다.
+
+#### 실기 확인에서 나온 것 — 관전 패널이 열리다 말고 죽었다
+
+톱니바퀴는 떴는데 누르면 아무 일도 안 일어나고 콘솔에 이것이 찍혔다.
+
+```
+NullReferenceException
+DeckInfoPanelUI.RebuildGrid () (at Assets/Scripts/InGameCard/DeckInfoPanelUI.cs:252)
+DeckInfoPanelUI.OpenPanel ()   (at …:221)
+DeckInfoPanelUI.TogglePanel () (at …:212)
+```
+
+**버튼은 멀쩡했다.** `TogglePanel`까지 들어왔으니 배선은 맞았고,
+`RebuildGrid`가 `_view.panel.SetActive(true)` **전에** 터져서 패널이 안 열린 것뿐이다.
+그래서 "톱니바퀴가 안 눌린다"처럼 보였고, 설정 메뉴를 못 여니 나갈 수도 없었다.
+
+원인은 이 라운드에서 관전 지원을 넣을 때의 **누락**이다.
+가드는 `subject`로 바꿔 놓고 바로 아래 순회는 `_human`을 그대로 뒀다 —
+관전에서는 `_human`이 null이므로 그 줄에서 죽는다.
+
+```csharp
+Player subject = DeckSubject;
+if (subject == null || _view == null || _view.grid == null) return;   // ← 여기는 고쳤는데
+…
+foreach (var card in _human.Deck)                                     // ← 여기를 안 고쳤다
+```
+
+`_human` → `subject` 한 줄이 수정 전부다. `DeckSubject`가 대전이면 `_human`을 돌려주므로 사람 대전 동작은 그대로다.
+
+**에디터에 실제로 붙어 확인했다** (Unity CLI/Pipeline로 Play Mode를 몰아서):
+
+| 확인 | 결과 |
+| ---- | ---- |
+| 관전 판정 | `_spectating=True` · `_human=null` · `_spectateSubject=있음` · 스냅샷 20장 |
+| 톱니바퀴 | `activeInHierarchy=True` |
+| 눌렀을 때 | 패널 열림 · 칸 20개 · 제목 `아래 보드 덱 (7 / 20장 남음)` · 버튼 `관전 종료` |
+| 1차 클릭 | 라벨이 `정말 나갈까요?` 로 |
+| 2차 클릭 | 활성 씬이 `MainMenu` 로 전환 |
+| 콘솔 | 100건 중 에러 0건 (⚔ 글리프 폴백 경고 1건뿐 — 기존 문제) |
+
+#### 덤 — Play Mode마다 뜨던 Pipeline 에러 2건
+
+게임과 무관한 개발 환경 쪽 문제다.
+
+```
+Pipeline: Runtime initialization failed: Prefix already in use.
+  at System.Net.EndPointListener.AddSpecial …
+  at Unity.Pipeline.RuntimePipelineDriver.StartServer ()
+```
+
+`com.unity.pipeline`은 **에디터용 서버**와 **런타임(플레이어용) 서버**를 각각 띄우는데
+둘 다 포트가 `10`으로 잡혀 있었다. Play Mode는 에디터와 **같은 프로세스**라
+런타임 쪽이 이미 등록된 `http://127.0.0.1:10/` 을 또 등록하려다 Mono의 `HttpListener`에서 거절당한다.
+
+런타임 쪽 포트만 **`7900`**으로 옮겨 해결했다(`unity cmd set_runtime_pipeline_settings --settings '{"port":7900}'`).
+★ 처음엔 `11`로 둔 것을 `7900`으로 다시 고쳤다 — 패키지가 콘솔에 "Port 11 is outside recommended runtime range 7900-7999"라고 경고했기 때문이다.
+에디터 서버는 `10` 그대로라 CLI/MCP 연결에 영향이 없고, 위 검증 세션에서 이 에러는 더 이상 찍히지 않았다.
+
+> ⚠️ **출시 전 끌 것 — 체크리스트에 넣었다**: 같은 설정의 `enableInBuilds`가 **true**다.
+> `RuntimePipelineDriver.Start()`의 `StartServer()` 호출은 **`#if DEVELOPMENT_BUILD` 안에 없어서**,
+> 릴리스 빌드에도 HTTP 서버(→ `eval` 임의 코드 실행)가 그대로 실린다.
+> 에디터 빌드는 확인 대화상자가 뜨지만 **배치/CI는 경고만 찍고 통과한다.**
+>
+> 또 `enableInBuilds`를 꺼도 **용량은 안 줄어든다** — Roslyn DLL 약 9.4MB는
+> 패키지 설치 자체가 끌고 오고, PluginImporter를 직접 조회해 보니 **안드로이드·iOS에도 포함**된다.
+>
+> 이 설정은 `ProjectSettings/Packages/com.unity.pipeline/`에 있고 아직 **커밋되지 않았다.**
+> 체크리스트는 루트 `README.md`의 "공통 · 출시 전" 표에 두 항목으로 들어있다.
+
+#### 후속 — 상대 대기 안내가 손패에 가려지던 문제 ✅
+
+"대전 중에 안 보인다"는 신고. 배선은 멀쩡했고 **정렬 순서가 빠져 있었다.**
+
+`GameStatusPanelRoot`는 자체 Canvas가 없어 **부모 캔버스의 형제 순서**로만 그려진다.
+
+```
+Canvas 자식 순서 (뒤일수록 위)
+   3. GameStatusPanelRoot   ← 상태 패널
+   5. EnemyField (EnemyHand)
+   7. MyField   (MyHand)    ← 손패가 더 뒤 = 위에 그려진다
+```
+
+형제인 `StatusHeader`와 `StatusLog`는 **각각 `UiSortingLayer(100)`을 달고** 이 순서를 넘어서고 있었다.
+내가 추가한 `OpponentWaitText`에만 그것이 없어 혼자 손패 밑에 깔렸다.
+
+```
+StatusHeader     ★[UiSortingLayer order=100]
+StatusLog        ★[UiSortingLayer order=100]
+ResultOverlay    [Canvas ord=900 ovr=True]
+OpponentWaitText                             ← 없었다
+```
+
+프리팹의 `OpponentWaitText`에 `UiSortingLayer(order=100, needsClicks=false)`를 붙여 해결했다.
+**씬 인스턴스가 아니라 프리팹 원본에 붙였으므로** `TestGameScene`과 `GameScene` 둘 다 따라온다.
+
+| 확인 (Play Mode) | 결과 |
+| ---- | ---- |
+| Canvas 자동 부착 | ✅ `overrideSorting=True` · `sortingOrder=100` |
+| 손패 소속 Canvas | 기본 `0` (집어 든 카드는 10) |
+| 판정 | ✅ **안내 100 > 손패 10 → 위에 그려진다** |
+
+사다리상 100은 그대로 아래에 있어야 할 것들(420 존 말풍선 · 450 설정 · 500 카드 선택 · 600 톱니 ·
+700 덱 리스트 · 780/800 폐기존 · 850 확대 · 900 결과 · 950 대전 설정)에는 여전히 가려진다 — 의도대로다.
+
+> **교훈**: `GameStatusPanelRoot` 아래에 화면에 보여야 할 것을 새로 넣을 때는
+> **자식 각각에 `UiSortingLayer`를 붙여야 한다.** 루트에는 없다.
+> `UiSortingLayer.cs`의 사다리 주석과 `GameStatusPanelUI.cs` 머리말에 적어 뒀다.
+
+#### 바뀐 파일
+
+| 파일 | 내용 |
+| ---- | ---- |
+| `Assets/Scripts/InGameCard/DeckInfoPanelUI.cs` | 관전 모드 — 톱니 노출 · p1 덱 · [관전 종료] · RebuildGrid의 `_human` → `subject` |
+| `Assets/Scripts/InGameCard/GameStatusPanelUI.cs` | 상대 대기 안내 (띄우기·내리기·시간 제한) |
+| `Assets/Scripts/InGameCard/GameStatusPanelView.cs` | `opponentWaitText` 필드 |
+| `Assets/Resources/Build/GameStatusPanelRoot.prefab` | `OpponentWaitText` 추가 + View 연결 |
+| `Assets/Scripts/InGameCard/OnlineGuestBoardAdapter.cs` | **`PlayerName` 대상 필터(버그 수정)** + 남의 요청은 안내만 |
+| `Assets/Scripts/InGameCard/CharacterFieldUI.cs` | 회전은 방향만 · 사용 여부는 흑백 · p1/p2 판별 보정 |
+| `Assets/Shaders/UIGrayscale.shader` · `Assets/Resources/Materials/UIGrayscale.mat` | **신규** |
+| `Assets/TCG_Project/Scripts/Utils/CharacterFieldBroadcast.cs` | 주석만 (회전이 더 이상 화면 표시가 아니다) |
+
+엔진 동작은 그대로다 → **콘솔 회귀 결과가 바뀌지 않는 것이 정상**이고, 실제로 그대로다.
+
+#### 사람이 확인할 것
+
+1. 봇 vs 봇으로 시작 → 톱니바퀴가 뜨고, [관전 종료]로 두 번 눌러 메인 메뉴로 나가는가
+2. **사람 vs 봇에서는 여전히 [항복]**이고 그대로 동작하는가
+3. 온라인에서 상대가 고르는 동안 상단 중앙에 이유가 뜨고, 진행되면 사라지는가
+4. **게스트에서, 호스트에게 온 질문에 창이 뜨지 않는가** ← 버그 수정 확인 지점
+5. 능력을 쓴 용병이 **회전하지 않고 흑백**이 되는가
+6. **상대(위쪽) 용병이 여전히 180도 돌아 있는가** ← 방향까지 없애 버리지 않았는지 보는 지점
 
 ### [2026-09-03] 중앙 팝업이 가려지던 문제 + 덱 리스트·선택창 카드 클릭 확대
 

@@ -12,6 +12,17 @@ public class firebase_network : MonoBehaviour
     private static DatabaseReference dbRef;
 
     public event Action<string> OnGuestJoined;
+
+    /// <summary>
+    /// guest 칸이 <b>비워졌을 때</b> 발화한다. 게스트가 스스로 나갔거나 호스트가 퇴장시킨 경우다.
+    ///
+    /// ★ 예전에는 이 경우가 조용히 무시됐다. ListenForGuest가 값이 비지 <b>않았을 때만</b>
+    ///   OnGuestJoined를 쐈기 때문이다. 그래서 호스트는 상대가 나간 것을 영영 모르고,
+    ///   퇴장당한 게스트도 자기가 쫓겨난 것을 몰랐다.
+    ///   (ListenForSessionExit은 <b>방이 통째로 사라질 때만</b> 발화하므로 이 경우를 못 잡는다)
+    /// </summary>
+    public event Action OnGuestLeft;
+
     public event Action OnGameReady;
 
     private EventHandler<ChildChangedEventArgs> eventHandler;
@@ -39,6 +50,21 @@ public class firebase_network : MonoBehaviour
         var task = dbRef.Child("sessions").Child(sessioncode).SetRawJsonValueAsync(json);
         await task;
         return task.IsCompleted;
+    }
+
+    /// <summary>
+    /// 이 방 번호를 이미 누가 쓰고 있는가.
+    ///
+    /// ★ CreateSession은 SetRawJsonValueAsync라 <b>무조건 덮어쓴다.</b>
+    ///   방 번호는 네 자리(9000가지)뿐이라 같은 번호가 나오는 순간
+    ///   <b>남의 방이 조용히 사라진다.</b> 뽑기 전에 이걸로 확인한다.
+    /// </summary>
+    public async Task<bool> SessionExists(string sessioncode)
+    {
+        if (dbRef == null || string.IsNullOrEmpty(sessioncode)) return false;
+
+        DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
+        return snapshot.Exists;
     }
 
     public async Task<List<string>> GetPublicSession()  //공개된 세션 가져옴
@@ -72,13 +98,49 @@ public class firebase_network : MonoBehaviour
 
     public async Task<bool> JoinSession(string sessioncode, string myID)    //세션에 들어가는 함수
     {
-        // 세션 존재 여부 확인
-        DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
-        if (!snapshot.Exists) return false;
+        return await TryJoinSession(sessioncode, myID) == JoinResult.Success;
+    }
 
-        var JoinSession = dbRef.Child("sessions").Child(sessioncode).Child("guest").SetValueAsync(myID);
-        await JoinSession;
-        return JoinSession.IsCompleted;
+    /// <summary>이 방에 적힌 표시 이름을 읽는다. <paramref name="key"/>는 hostName 또는 guestName.</summary>
+    public async Task<string> GetPlayerName(string sessioncode, string key)
+    {
+        if (dbRef == null || string.IsNullOrEmpty(sessioncode)) return null;
+
+        DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode).Child(key).GetValueAsync();
+        return snapshot.Exists ? snapshot.Value?.ToString() : null;
+    }
+
+    /// <summary>
+    /// 입장을 시도하고 <b>왜 실패했는지</b>까지 알려 준다.
+    ///
+    /// ★ 예전 JoinSession은 <b>방이 있는지만</b> 봤다. 이미 게스트가 앉아 있어도 그 위에 덮어썼다 —
+    ///   진행 중인 방에 제3자가 끼어들어 원래 게스트를 밀어낼 수 있었다.
+    ///   "방이 없다"와 "자리가 찼다"를 가르지 못해 화면에 안내도 못 띄웠다
+    ///   (PopupRoomNotFound / PopupRoomFull이 씬에 있는데 켜는 코드가 없던 이유다).
+    /// </summary>
+    public async Task<JoinResult> TryJoinSession(string sessioncode, string myID, string myName = null)
+    {
+        DataSnapshot snapshot = await dbRef.Child("sessions").Child(sessioncode).GetValueAsync();
+        if (!snapshot.Exists) return JoinResult.NotFound;
+
+        // 이미 다른 사람이 앉아 있으면 자리가 없다. 내가 그 자리면 재입장이므로 통과시킨다.
+        string guestId = snapshot.HasChild("guest") ? snapshot.Child("guest").Value?.ToString() : null;
+        if (!string.IsNullOrEmpty(guestId) && guestId != myID) return JoinResult.Full;
+
+        // 사람을 찾는 중인 방에만 들어갈 수 있다. READY/PLAYING은 이미 짝이 맞은 방이다.
+        string state = snapshot.HasChild("state") ? snapshot.Child("state").Value?.ToString() : null;
+        if (state != SessionStatus.STATE_WAITING) return JoinResult.Full;
+
+        // 신원과 표시 이름을 함께 쓴다. 호스트가 보는 것은 이름 쪽이다.
+        var updates = new Dictionary<string, object>
+        {
+            ["guest"] = myID,
+            ["guestName"] = string.IsNullOrEmpty(myName) ? myID : myName,
+        };
+
+        var join = dbRef.Child("sessions").Child(sessioncode).UpdateChildrenAsync(updates);
+        await join;
+        return join.IsCompleted ? JoinResult.Success : JoinResult.Failed;
     }
 
     public async Task<bool> ExitSession(string sessioncode, string myID)    //세션에서 나가는 함수
@@ -106,6 +168,7 @@ public class firebase_network : MonoBehaviour
     {
         var updates = new Dictionary<string, object>();
         updates["guest"] = "";
+        updates["guestName"] = "";
         updates["state"] = SessionStatus.STATE_WAITING;
 
         var task = dbRef.Child("sessions").Child(sessioncode).UpdateChildrenAsync(updates);
@@ -194,19 +257,25 @@ public class firebase_network : MonoBehaviour
         await dbRef.Child("sessions").Child(sessioncode).Child("state").SetValueAsync(SessionStatus.STATE_PLAYING);
     }
 
+    /// <summary>
+    /// guest 칸의 변화를 지켜본다. 채워지면 <see cref="OnGuestJoined"/>, 비워지면 <see cref="OnGuestLeft"/>.
+    ///
+    /// ValueChanged는 <b>지속 리스너</b>라 한 번 걸어 두면 퇴장 뒤에도 살아 있다 —
+    /// 새 게스트가 들어오면 다시 발화하므로 호스트 쪽에서 재무장할 필요가 없다.
+    /// 게스트도 이것을 걸어 두면 자기가 퇴장당한 순간을 알 수 있다.
+    /// </summary>
     public void ListenForGuest(string sessioncode)  //게스트 입장 감지
     {
         dbRef.Child("sessions").Child(sessioncode).Child("guest").ValueChanged += (sender, args) =>
         {
-            if (args.Snapshot.Exists && args.Snapshot.Value != null)
-            {
-                string guestID = args.Snapshot.Value.ToString();
-                if (!string.IsNullOrEmpty(guestID))
-                {
-                    OnGuestJoined?.Invoke(guestID);
-                }
+            string guestID = args.Snapshot.Exists && args.Snapshot.Value != null
+                ? args.Snapshot.Value.ToString()
+                : null;
 
-            }
+            if (!string.IsNullOrEmpty(guestID))
+                OnGuestJoined?.Invoke(guestID);
+            else
+                OnGuestLeft?.Invoke();
         };
     }
 

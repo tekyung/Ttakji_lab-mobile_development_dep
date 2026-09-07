@@ -939,10 +939,39 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
         _subscribedClient = null;
     }
 
+    /// <summary>
+    /// 이 알림이 <b>나에게</b> 온 질문인가.
+    ///
+    /// ★ EventService는 <b>양쪽 플레이어의 질문을 모두</b> events 노드로 방송한다.
+    ///   누구에게 묻는지는 PlayerName("HOST"/"GUEST")에 적혀 있는데,
+    ///   예전에는 그것을 지문 계산에만 쓰고 <b>대상 확인에는 쓰지 않았다.</b>
+    ///   그래서 호스트에게 물은 질문에도 게스트가 창을 띄우고 답을 보냈다 —
+    ///   호스트도 자기 화면에서 답하므로 먼저 도착한 쪽이 이기는 상태였다.
+    ///
+    ///   PlayerName이 비어 있으면(구버전 호스트) 예전처럼 내 것으로 본다.
+    /// </summary>
+    private static bool IsForMe(string playerName)
+        => string.IsNullOrEmpty(playerName) || playerName == GameData.MyRole;
+
+    /// <summary>남에게 온 질문이면 창 대신 "상대가 …중" 안내만 띄운다.</summary>
+    private static void NoticeOpponentIsChoosing(string label)
+    {
+        if (GameStatusPanelUI.Instance != null)
+            GameStatusPanelUI.Instance.ShowOpponentWait($"상대가 {label} 중…");
+    }
+
     /// <summary>N장 선택 요청 → 선택 다이얼로그 → 고른 카드를 호스트로 전송.</summary>
     private void HandleCardPickRequested(RequireCardPickNotification noti)
     {
         if (noti == null || _mine == null) return;
+
+        if (!IsForMe(noti.PlayerName))
+        {
+            int asked = Mathf.Max(1, noti.RequiredCount);
+            NoticeOpponentIsChoosing(asked > 1 ? $"카드 {asked}장 선택" : "카드 선택");
+            return;
+        }
+
         if (IsDuplicateRequest("CardPick", noti.RequestId)) return;
 
         List<Card> candidates = RestoreCards(noti.PresentedCardInstanceIds, noti.PresentedCardDataIds);
@@ -986,6 +1015,13 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     private void HandleOptionalRequested(RequireOptionalNotification noti)
     {
         if (noti == null || _mine == null) return;
+
+        if (!IsForMe(noti.PlayerName))
+        {
+            NoticeOpponentIsChoosing("용병 능력 결정");
+            return;
+        }
+
         if (IsDuplicateRequest("Optional", noti.ActionId)) return;
 
         string message = string.IsNullOrEmpty(noti.Message) ? "효과를 발동하시겠습니까?" : noti.Message;
@@ -1007,6 +1043,13 @@ public class OnlineGuestBoardAdapter : MonoBehaviour
     private void HandleStackRequested(RequireStackNotification noti)
     {
         if (noti == null || _mine == null) return;
+
+        if (!IsForMe(noti.PlayerName))
+        {
+            NoticeOpponentIsChoosing("스택 카드 선택");
+            return;
+        }
+
         if (IsDuplicateRequest("Stack", noti.StackCardInstanceId + "|" + noti.OpponentCardInstanceId)) return;
 
         Card stackCard = ResolveCard(noti.StackCardInstanceId, noti.StackCardDataId);

@@ -45,6 +45,9 @@ public class DeckInfoPanelUI : MonoBehaviour
     [Tooltip("[항복] 버튼의 평소 색.")]
     public Color surrenderColor = new Color(0.80f, 0.25f, 0.25f, 1f);
 
+    [Tooltip("[관전 종료]로 나갈 씬 이름. Build Settings에 있어야 한다.")]
+    public string mainMenuSceneName = "MainMenu";
+
     [Tooltip("한 번 눌러 '정말 항복?'이 된 상태의 색.")]
     public Color surrenderConfirmColor = new Color(0.95f, 0.35f, 0.20f, 1f);
 
@@ -118,16 +121,34 @@ public class DeckInfoPanelUI : MonoBehaviour
 
     // ─── 게임 흐름 ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// 관전 중인가 — <b>봇 vs 봇</b>이다.
+    ///
+    /// ★ 관전에는 조작 주체가 없어 <c>_human</c>이 null이고, 그래서 예전에는
+    ///   톱니바퀴가 아예 뜨지 않았다. 패널을 열 수 없으니 <b>중간에 나갈 방법도 없었다.</b>
+    ///   온라인은 항상 조작 주체가 있으므로 여기 해당하지 않는다.
+    /// </summary>
+    private bool _spectating;
+
+    /// <summary>관전 중 덱 격자에 보여 줄 플레이어(아래 보드 주인).</summary>
+    private Player _spectateSubject;
+
+    /// <summary>격자·제목이 다룰 플레이어. 대전이면 나, 관전이면 아래 보드.</summary>
+    private Player DeckSubject => _human ?? _spectateSubject;
+
     private void HandleGameStart(Player p1, Player p2)
     {
         _human = PlayerUIManager.ResolveHumanPlayer(p1, p2);
 
+        _spectating = _human == null && !OnlineMatchStarter.IsOnlineSessionActive;
+        _spectateSubject = _spectating ? p1 : null;
+
         // 시작 드로우 이전이라 이 시점의 Deck이 온전한 덱 구성이다
         _deckSnapshot.Clear();
-        if (_human != null) _deckSnapshot.AddRange(_human.Deck);
+        if (DeckSubject != null) _deckSnapshot.AddRange(DeckSubject.Deck);
 
         EnsureUI();
-        SetGearVisible(_human != null);
+        SetGearVisible(DeckSubject != null);
         ClosePanel();
         WireLegacySurrenderButton();
     }
@@ -223,11 +244,12 @@ public class DeckInfoPanelUI : MonoBehaviour
         foreach (var go in _cells) if (go != null) Destroy(go);
         _cells.Clear();
 
-        if (_human == null || _view == null || _view.grid == null) return;
+        Player subject = DeckSubject;
+        if (subject == null || _view == null || _view.grid == null) return;
 
         // 덱에 아직 남아 있는 수를 카드 ID별로 센다 (같은 카드가 2장이므로 개수 기반으로 판정)
         var remaining = new Dictionary<string, int>();
-        foreach (var card in _human.Deck)
+        foreach (var card in subject.Deck)
         {
             if (card == null) continue;
             remaining.TryGetValue(card.Id, out int n);
@@ -252,7 +274,9 @@ public class DeckInfoPanelUI : MonoBehaviour
         }
 
         if (_view.titleText != null)
-            _view.titleText.text = $"내 덱  ({_human.Deck.Count} / {shown}장 남음)";
+            _view.titleText.text = _spectating
+                ? $"아래 보드 덱  ({subject.Deck.Count} / {shown}장 남음)"
+                : $"내 덱  ({subject.Deck.Count} / {shown}장 남음)";
     }
 
     /// <summary>
@@ -365,13 +389,21 @@ public class DeckInfoPanelUI : MonoBehaviour
         {
             // 1차 클릭: 확인 요청 (오조작 방지)
             _surrenderArmed = true;
-            if (_view.surrenderLabel != null) _view.surrenderLabel.text = "정말 항복?";
+            if (_view.surrenderLabel != null)
+                _view.surrenderLabel.text = _spectating ? "정말 나갈까요?" : "정말 항복?";
             if (_view.surrenderImage != null) _view.surrenderImage.color = surrenderConfirmColor;
             return;
         }
 
-        // 2차 클릭: 실제 항복
+        // 2차 클릭
         ClosePanel();
+
+        if (_spectating)
+        {
+            LeaveSpectating();
+            return;
+        }
+
         Surrender();
     }
 
@@ -419,12 +451,27 @@ public class DeckInfoPanelUI : MonoBehaviour
         Debug.LogWarning("[DeckInfoPanel] 세션 매니저를 찾지 못해 항복을 보내지 못했다.");
     }
 
+    /// <summary>
+    /// 관전을 끝내고 메인 메뉴로 돌아간다.
+    ///
+    /// 봇 vs 봇에는 항복할 주체가 없으므로 <b>게임을 끝내는 것이 아니라 화면을 떠난다.</b>
+    /// 씬을 새로 불러오면 보드도 엔진도 함께 정리된다.
+    /// </summary>
+    private void LeaveSpectating()
+    {
+        string scene = string.IsNullOrWhiteSpace(mainMenuSceneName) ? "MainMenu" : mainMenuSceneName;
+
+        Debug.Log($"[DeckInfoPanel] 관전을 끝내고 '{scene}' 으로 돌아갑니다.");
+        SceneManager.LoadScene(scene);
+    }
+
     private void DisarmSurrender()
     {
         _surrenderArmed = false;
         if (_view == null) return;
 
-        if (_view.surrenderLabel != null) _view.surrenderLabel.text = "항복";
+        if (_view.surrenderLabel != null)
+            _view.surrenderLabel.text = _spectating ? "관전 종료" : "항복";
         if (_view.surrenderImage != null) _view.surrenderImage.color = surrenderColor;
     }
 

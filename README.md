@@ -2,7 +2,7 @@
 
 실물 보드게임 **"전투! 용병의 시대"**를 Unity 모바일 온라인 게임으로 구현하는 프로젝트입니다.
 
-최종 갱신: 2026-09-03 · 현재 브랜치: `M2_milestone`
+최종 갱신: 2026-09-07 · 현재 브랜치: `M2_milestone`
 
 ---
 
@@ -59,9 +59,47 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
 | 전송·프로토콜 (Firebase) | ✅ 실전 검증됨 |
 | 호스트 진행(엔진) · 화면 | ✅ 동작 |
 | 게스트 화면 | ✅ 보드 미러링·진행 로그·용병 슬롯 (`OnlineGuestBoardAdapter`) |
-| 게스트 입력 | ✅ 세트·오픈·카드 선택·예/아니오·스택 응답 모두 연결됨 |
+| 게스트 입력 | ✅ 세트·오픈·카드 선택·예/아니오·스택 응답 모두 연결됨. **자기 앞으로 온 요청만 받는다**(`PlayerName` 필터, 2026-09-07 수정) |
+| 매칭 — 랜덤 | ✅ 동작 (`RandomMatchUI` → `OnClickRandomMatch`) |
+| 매칭 — **커스텀(방 번호)** | ✅ **2026-09-07 연결됨.** 방 만들기·참가·[시작]·[퇴장]·[나가기]. 그전에는 UI만 있고 서버와 이어지지 않았다 |
 | 덱·용병 주입 | ✅ 고른 덱과 용병이 그대로 올라간다 (`session_manage` → `UploadDeck` → `AssignCharacters`) |
 | 끊김·재접속 | 🔶 이탈 감지·방 정리·20초 시작 감시까지. **재접속은 없다** |
+
+### ⚠️ 한 PC에서 2인 대전을 테스트할 때
+
+`PlayerPrefs`와 `persistentDataPath`는 **기기 + 제품** 단위다.
+그대로 두면 두 클라이언트가 **같은 칸**을 보기 때문에,
+고른 덱도 닉네임도 공유되어 두 사람이 **같은 덱으로 시작**한다.
+
+**빌드를 서로 다른 폴더에 풀면 자동으로 갈라진다. 인자는 필요 없다.**
+
+```
+C:\TestA\Game.exe     ← 자기만의 닉네임 · 자기만의 덱 선택
+C:\TestB\Game.exe     ← 위와 별개
+```
+
+스탠드얼론 빌드는 설치 폴더에서 이름표를 뽑는다(`profile_TestA_a3f91c2b.json` 꼴).
+**에디터는 기본 칸에 남으므로** 지금 쓰던 프로필과 덱 선택이 그대로 보존되고,
+빌드들과도 저절로 갈린다 — 에디터 + 빌드 조합도 그대로 된다.
+
+폴더를 나누지 않고 강제로 지정하려면 인자를 쓴다(폴더보다 세다).
+
+```bash
+Game.exe -profile B
+```
+
+**갈라지는 것은 덱 선택과 프로필뿐이고, 덱 파일은 그대로 공유된다** —
+그래야 빌드 쪽에서 덱을 새로 만들지 않고도 서로 다른 덱을 고를 수 있다.
+
+> **모바일은 자동 구분에서 제외된다.** 안드로이드의 APK 경로는 앱을 업데이트할 때 바뀌므로,
+> 경로로 이름표를 만들면 업데이트마다 플레이어의 닉네임과 덱 선택이 리셋된다.
+
+> 빌드 두 개를 동시에 띄우면 **두 번째 인스턴스의 Pipeline 서버가 포트를 못 잡아** 에러 2줄을 남긴다
+> (게임은 정상). 거슬리면 테스트 빌드 전에 `enableInBuilds`를 끈다 — 출시 전 체크리스트 항목이기도 하다.
+
+자세한 것은 `Assets/Scripts/Utils/PlayerStorage.cs` 상단 주석과 `HANDOFF.md` 2026-09-07 항목.
+
+---
 
 ### 지금 상태에서 "정상인데 이상해 보이는 것"
 
@@ -71,6 +109,8 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
   스냅샷이 네트워크 간격으로 오기 때문이다. `OnlineGuestBoardAdapter`가 이동 사이에
   간격(`moveIntervalSeconds`)을 두어 호스트와 비슷한 리듬을 만든다
 - 새 덱을 만들면 카드 목록이 **비어 보인다.** 용병을 먼저 골라야 그 용병 카드가 나타난다
+- 능력을 쓴 용병은 **흑백**으로 보인다 (예전에는 180도 돌려 표시했다). 상대 보드 용병이 원래 뒤집힌 것은 정상이다
+- 봇 vs 봇 관전 중에는 톱니바퀴 → **[관전 종료]**로 나간다 (항복할 주체가 없으므로 게임을 끝내는 것이 아니라 씨을 떠난다)
 
 ---
 
@@ -88,9 +128,9 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
 > | 파일 | 무엇 |
 > | ---- | ---- |
 > | `ServerGameManager` | 단판제 · `OnGameStart`를 시작 드로우 **앞으로** 이동 |
-> | `session_manage` | 덱·용병 업로드 경로 · `IsHost` 접근자 · 20초 시작 감시(`WatchReadyStart`) |
+> | `session_manage` | 덱·용병 업로드 경로 · `IsHost` 접근자 · 20초 시작 감시(`WatchReadyStart`) · **커스텀 방**(`OnClickCreateCustomRoom`·`JoinRoomByCode`·`KickGuest`, 자동 파기·시작 감시 제외) · **이름을 난수 대신 `PlayerProfile`로** |
 > | `session_game_manage` | 덱·용병 주입 · 게스트 입력 배선 · **연출 재생을 어댑터에 양보**(`IsDrivingBoard`) |
-> | `firebase_network` | `onDisconnect` 기반 방 정리 (`ArmDisconnectCleanup` 등) |
+> | `firebase_network` | `onDisconnect` 기반 방 정리 (`ArmDisconnectCleanup` 등) · **`TryJoinSession`**(자리 차면 거절 — 예전엔 덮어썼다) · **`OnGuestLeft`**(퇴장 감지) · **`SessionExists`**(방 번호 중복 회피) |
 > | `EventService` | `board_state`에 용병 ID 기입 |
 
 ### 클라이언트·UI 담당
@@ -115,6 +155,8 @@ TCG_Project/                 콘솔 실행 미러. 빌드 시 자동 동기화�
 | ---- | ---- |
 | **Firebase 인증** | 현재 **인증이 전혀 없다.** DB가 전면 공개 상태이고, 테스트 규칙이면 만료 시 접속이 통째로 끊긴다. **가장 급하다** |
 | **임시 설정 되돌리기** | `choose_wait_time` 2분(원래 10초), `OnlineMatchStarter.UnlimitedInputForTesting = true` |
+| **Pipeline 서버 끄기** | `Project Settings > Pipeline > Runtime`의 **`enableInBuilds`를 `false`로**. 켜진 채 릴리스하면 **임의 코드 실행(`eval`)을 포함한 HTTP 서버**가 앱에 실려 나가고, 모든 네트워크 인터페이스(`http://+:7900/`)에 바인딩된다. 에디터 빌드는 확인 대화상자가 뜨지만 **배치/CI 빌드는 경고만 찍고 그냥 통과한다**. 자세한 근거는 `HANDOFF.md` 2026-09-07 항목 |
+| **Pipeline 패키지 빼기(선택)** | 위에서 서버만 끄면 **용량은 그대로다.** `com.unity.pipeline`은 Roslyn DLL **약 9.4MB**를 전 플랫폼(안드로이드 포함)으로 끌고 들어온다. APK 크기가 중요하면 에디터 자동화 작업이 끝난 뒤 패키지를 제거한다 |
 | 안드로이드 실기 | 코드는 준비됨(가로 고정 · `SafeAreaFitter` · 터치 탭 경로 · CanvasScaler 1920×1080). **기기 검증만 남았다** |
 | ~~Android 패키지명~~ | ✅ 해결 — `applicationIdentifier.Android: com.Ttakji.server`가 `google-services.json`과 일치한다 |
 

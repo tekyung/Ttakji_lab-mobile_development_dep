@@ -122,8 +122,7 @@ public class DeckBuilderManager : MonoBehaviour
     // 화면에 떠 있는 카드 슬롯들을 관리하는 리스트 (Collection 쪽)
     private List<CardUI> collectionSlots = new List<CardUI>();
 
-    /// <summary>메인 화면(DeckSelector)과 공유하는 "지금 고른 덱" 키.</summary>
-    private const string SELECTED_DECK_PREF = "SelectedDeckName";
+    // ★ "지금 고른 덱"은 PlayerStorage가 들고 있다. 메인 화면(DeckSelect)과 같은 칸을 본다.
 
     void Start()
     {
@@ -155,7 +154,7 @@ public class DeckBuilderManager : MonoBehaviour
 
         // 3. ★ 메인 화면에서 고른 덱을 그대로 연다.
         //   focusDeckName 인자는 원래 있었는데 아무도 넘기지 않아, 늘 목록 맨 위 덱이 열렸다.
-        RefreshDeckList(PlayerPrefs.GetString(SELECTED_DECK_PREF, ""));
+        RefreshDeckList(PlayerStorage.GetSelectedDeck());
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -282,8 +281,7 @@ public class DeckBuilderManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(deckName) || deckName == EMPTY_DECK_LABEL) return;
 
-        PlayerPrefs.SetString(SELECTED_DECK_PREF, deckName);
-        PlayerPrefs.Save();
+        PlayerStorage.SetSelectedDeck(deckName);
     }
 
     // ---------------------------------------------------
