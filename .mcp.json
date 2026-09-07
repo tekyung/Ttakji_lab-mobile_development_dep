@@ -2,7 +2,7 @@
   "mcpServers": {
     "unity-ttakji": {
       "type": "stdio",
-      "command": "C:\\Users\\tekyung\\AppData\\Local\\Unity\\bin\\unity.exe",
+      "command": "unity",
       "args": [
         "mcp",
         "--no-banner",
